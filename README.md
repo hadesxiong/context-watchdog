@@ -27,7 +27,7 @@ npm run test      # 运行测试套件（50 项断言）
   └─ entropy:     高熵字符串（阈值随 Profile 灵敏度档位变化）
   │
   ▼（级联触发，仅处理正则未覆盖片段）
-GLiNER 模型（@huggingface/transformers + onnxruntime-web，可选）
+GLiNER 模型（gliner + @xenova/transformers + onnxruntime-web，可选）
   ├─ 高置信(>0.65) → 验证后采纳
   ├─ uncertain(0.35-0.65) → 回流正则复检
   └─ 复检不中 → 低置信保留（默认仅提示）
@@ -116,5 +116,5 @@ npm run test:watch    # 监听模式
 
 - Vue 3 + Pinia + Tailwind CSS 4 + Reka UI
 - @crxjs/vite-plugin（Manifest V3 构建）
-- @huggingface/transformers + gliner + onnxruntime-web（GLiNER 模型，WASM，可选增强）
-- 模型远程加载（hf-mirror），失败时静默降级为纯正则（UI 显示降级状态）
+- gliner + @xenova/transformers + onnxruntime-web（GLiNER 模型，WASM，可选增强）
+- 模型远程加载（主源 ModelScope 镜像，回退 huggingface.co；失败时静默降级为纯正则，UI 显示降级状态）
