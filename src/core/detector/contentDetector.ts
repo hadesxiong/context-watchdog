@@ -16,11 +16,11 @@ const SECRET_LABELS = [
   'token'
 ]
 
-// 置信度分类阈值
+// 置信度分类阈值（Phase 2 下调：GLiNER-small 在密钥/PII 场景超 0.8 的比例很低）
 export const CONFIDENCE_THRESHOLDS = {
-  SENSITIVE: 0.8,      // > 0.8 → 显然敏感
-  UNCERTAIN: 0.3,      // < 0.3 → 显然不敏感
-  // 0.3 - 0.8 → 不确定
+  SENSITIVE: 0.65,     // > 0.65 → 显然敏感
+  UNCERTAIN: 0.35,     // < 0.35 → 显然不敏感
+  // 0.35 - 0.65 → 不确定（回流正则复检）
 }
 
 // 内容实体接口
@@ -72,7 +72,8 @@ export const loadContentModel = async (): Promise<void> => {
         allowLocalModels: false,
         useBrowserCache: true
       },
-      maxWidth: 12,
+      // Phase 2: 12 → 256，长连接串/长 PII 不再被切成多个块
+      maxWidth: 256,
       modelType: 'gliner'
     })
 
@@ -89,9 +90,11 @@ export const loadContentModel = async (): Promise<void> => {
 }
 
 // 检测内容实体
+// labels: 零样本实体标签集（由 Profile 提供，级联触发时只送未被正则覆盖的片段）
 export const detectContent = async (
   text: string,
-  scene: SceneType
+  scene: SceneType,
+  labels: string[] = SECRET_LABELS
 ): Promise<ContentEntity[]> => {
   if (!ready || !glinerInstance) {
     return []
@@ -100,8 +103,8 @@ export const detectContent = async (
   try {
     const results = await glinerInstance.inference({
       texts: [text],
-      entities: SECRET_LABELS,
-      threshold: 0.2,
+      entities: labels,
+      threshold: 0.25,
       multiLabel: true
     })
 

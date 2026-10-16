@@ -12,8 +12,16 @@ export const WEAK_PASSWORDS = [
 export const MIN_PASSWORD_LENGTH = 4
 
 // 检查是否是弱密码（大小写不敏感）
+// 兼容 "password123"、"admin888" 这类弱词+数字后缀的常见弱口令
 export const isWeakPassword = (value: string): boolean => {
-  return WEAK_PASSWORDS.includes(value.toLowerCase())
+  const lower = value.toLowerCase()
+  if (WEAK_PASSWORDS.includes(lower)) return true
+
+  // 剥离纯数字后缀后再查表（后缀长度不限，如 password123、admin2024x? 不处理非数字后缀）
+  const stripped = lower.replace(/\d+$/, '')
+  if (stripped.length >= 4 && WEAK_PASSWORDS.includes(stripped)) return true
+
+  return false
 }
 
 // 检查值是否太短

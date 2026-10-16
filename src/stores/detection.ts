@@ -1,7 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { DetectionItem, ReplaceConfig, MappingTable } from '../core/types'
+import type { DetectionItem, ReplaceConfig, MappingTable, ProfileConfig } from '../core/types'
 import { detect, preloadModels } from '../core/detector'
+import { BUILTIN_PROFILES, getProfileById, DEFAULT_PROFILE_ID } from '../core/detector/profiles'
 import { getReplacer } from '../core/replacer'
 
 // 模型状态类型
@@ -9,9 +10,25 @@ type ModelStatus = 'idle' | 'loading' | 'success' | 'error' | 'timeout' | 'disab
 
 // 检测引擎状态
 interface DetectionEngineStatus {
-    sceneModel: boolean        // 场景识别模型
+    sceneModel: boolean        // 场景识别（启发式）
     contentModel: boolean      // 内容检测模型
     regexRules: boolean        // 正则规则
+}
+
+// Profile 持久化 key
+const PROFILE_STORAGE_KEY = 'pasteguard.activeProfile'
+
+// 计算某检测项的默认替换动作：Profile 显式配置 > 置信度分层 > 替换
+const resolveDefaultAction = (
+    profile: ProfileConfig,
+    type: DetectionItem['type'],
+    confidence: DetectionItem['confidence']
+): 'replace' | 'keep' => {
+    const explicit = profile.defaultActions[type]
+    if (explicit) return explicit
+    // tierLowConfidence：中低置信度降为仅提示（keep）
+    if (profile.tierLowConfidence && confidence !== 'high') return 'keep'
+    return 'replace'
 }
 
 export const useDetectionStore = defineStore('detection', () => {
@@ -19,7 +36,6 @@ export const useDetectionStore = defineStore('detection', () => {
     const originalText = ref('')
     const detections = ref<DetectionItem[]>([])
     const replaceConfigs = ref<ReplaceConfig[]>([])
-    const mappingTable = ref<MappingTable>({})
     const isProcessing = ref(false)
 
     // 模型状态（向后兼容旧变量名）
@@ -28,6 +44,19 @@ export const useDetectionStore = defineStore('detection', () => {
     const nerError = ref<string | null>(null)
     const nerRetryCount = ref(0)
     let progressInterval: ReturnType<typeof setInterval> | null = null
+
+    // 激活的检测配置档案（Tab 切换，持久化）
+    const activeProfileId = ref<string>(DEFAULT_PROFILE_ID)
+    const activeProfile = computed(() => getProfileById(activeProfileId.value))
+
+    // 从 chrome.storage 恢复上次选择
+    const storageLocal = typeof chrome !== 'undefined' ? chrome.storage?.local : undefined
+    storageLocal?.get(PROFILE_STORAGE_KEY, (result: Record<string, unknown>) => {
+        const saved = result?.[PROFILE_STORAGE_KEY]
+        if (typeof saved === 'string' && BUILTIN_PROFILES.some(p => p.id === saved)) {
+            activeProfileId.value = saved
+        }
+    })
 
     // 检测引擎状态
     const engineStatus = ref<DetectionEngineStatus>({
@@ -54,6 +83,20 @@ export const useDetectionStore = defineStore('detection', () => {
         return result
     })
 
+    // 映射表由检测结果 + 替换配置派生（纯计算，修复原先在 apply 之前读取旧值的时序问题）
+    const mappingTable = computed<MappingTable>(() => {
+        if (!originalText.value || detections.value.length === 0) {
+            return {}
+        }
+
+        const replacer = getReplacer()
+        return replacer.apply(
+            originalText.value,
+            detections.value,
+            replaceConfigs.value
+        ).mappingTable
+    })
+
     const detectionCount = computed(() => detections.value.length)
 
     const highConfidenceCount = computed(
@@ -68,22 +111,18 @@ export const useDetectionStore = defineStore('detection', () => {
         console.log('[PasteGuard] Starting detection for text:', text.substring(0, 100) + '...')
 
         try {
-        const result = await detect(text)
+        const result = await detect(text, activeProfile.value)
         detections.value = result.items
 
         console.log('[PasteGuard] Detection completed. Found', result.items.length, 'items:')
 
-        // 初始化替换配置（默认全部替换）
+        // 初始化替换配置（按 Profile 分类型默认策略 + 置信度分层）
         replaceConfigs.value = result.items.map(item => ({
             itemId: item.id,
-            action: 'replace' as const
+            action: resolveDefaultAction(activeProfile.value, item.type, item.confidence)
         }))
 
-        // 更新映射表
-        const replacer = getReplacer()
-        mappingTable.value = replacer.getMappingTable()
-
-        console.log('[PasteGuard] Mapping table updated:', mappingTable.value)
+        console.log('[PasteGuard] Detection configs initialized')
         } catch (error) {
         console.error('[PasteGuard] Detection failed:', error)
         detections.value = []
@@ -104,6 +143,18 @@ export const useDetectionStore = defineStore('detection', () => {
         }
     }
 
+    // 切换检测配置档案（Tab），持久化并对已有文本重新检测
+    const setActiveProfile = async (profileId: string) => {
+        if (profileId === activeProfileId.value) return
+        activeProfileId.value = profileId
+        storageLocal?.set({ [PROFILE_STORAGE_KEY]: profileId })
+        console.log('[PasteGuard] Profile switched to:', profileId)
+
+        if (originalText.value) {
+            await detectText(originalText.value)
+        }
+    }
+
     const replaceAll = () => {
         replaceConfigs.value = detections.value.map(item => ({
         itemId: item.id,
@@ -119,16 +170,13 @@ export const useDetectionStore = defineStore('detection', () => {
     }
 
     const clearMapping = () => {
-        mappingTable.value = {}
-        const replacer = getReplacer()
-        replacer.clearMapping()
+        // 映射表现在由 computed 派生，无需手动清空；保留方法以兼容现有 UI 调用
     }
 
     const clearAll = () => {
         originalText.value = ''
         detections.value = []
         replaceConfigs.value = []
-        mappingTable.value = {}
     }
 
     const copySanitizedText = async () => {
@@ -227,6 +275,12 @@ export const useDetectionStore = defineStore('detection', () => {
         replaceConfigs,
         mappingTable,
         isProcessing,
+
+        // Profile
+        activeProfileId,
+        activeProfile,
+        profiles: BUILTIN_PROFILES,
+        setActiveProfile,
 
         // 模型状态
         nerStatus,

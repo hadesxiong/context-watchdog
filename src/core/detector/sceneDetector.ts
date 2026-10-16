@@ -1,9 +1,10 @@
-// 场景识别器 - 使用 MobileBERT 零样本分类
+// 场景识别器 - 确定性启发式（Phase 2：移除 MobileBERT 零样本分类模型）
+// 扫描前若干行的结构特征打分：KEY=VALUE / KEY: value / JSON 语法 / 时间戳 / 代码
+// 优点：0ms、可单测、离线可用、无模型下载
 
-// HuggingFace 镜像地址（中国大陆可访问）
-const HF_MIRROR = 'https://hf-mirror.com'
+import type { SceneType } from '../types'
 
-export type SceneType = 'yaml' | 'env' | 'code' | 'log' | 'json' | 'plain'
+export type { SceneType }
 
 export interface SceneResult {
   type: SceneType
@@ -11,107 +12,54 @@ export interface SceneResult {
   scores: Record<SceneType, number>
 }
 
-// 零样本分类标签
-const SCENE_LABELS = [
-  'YAML configuration file with key-value pairs',
-  'environment variables file with KEY=VALUE format',
-  'source code with functions and imports',
-  'log file with timestamps and messages',
-  'JSON data file',
-  'plain text'
-]
-
-// 标签到场景类型的映射
-const LABEL_MAP: Record<string, SceneType> = {
-  'YAML configuration file with key-value pairs': 'yaml',
-  'environment variables file with KEY=VALUE format': 'env',
-  'source code with functions and imports': 'code',
-  'log file with timestamps and messages': 'log',
-  'JSON data file': 'json',
-  'plain text': 'plain'
+// 各场景的结构特征
+const PATTERNS: Record<Exclude<SceneType, 'plain'>, RegExp> = {
+  env: /^[A-Z0-9_]+=[^\s]/m,
+  yaml: /^[ \t]*[\w.-]+\s*:\s*\S/m,
+  json: /^\s*[{[]|"[^"]+"\s*:\s*"/m,
+  log: /\d{4}[-/]\d{2}[-/]\d{2}[ T]\d{2}:\d{2}:\d{2}|^\[[A-Z]{4,}\]|^\d{4}-\d{2}-\d{2}/m,
+  code: /\b(function|def|class|import|const|let|var|public|void|#include)\b/m
 }
 
-// 模型单例
-let classifierPipeline: any = null
-let loading = false
-let ready = false
-
-// 加载场景识别模型
-export const loadSceneModel = async (): Promise<void> => {
-  if (loading || ready) return
-  loading = true
-
-  try {
-    const transformers = await import('@xenova/transformers')
-    const ort = await import('onnxruntime-web')
-
-    const { env } = transformers
-    env.allowLocalModels = false
-    env.useBrowserCache = true
-    env.remoteHost = HF_MIRROR
-    env.backends.onnx.wasm.numThreads = 1
-
-    ort.env.wasm.numThreads = 1
-    ort.env.wasm.proxy = false
-
-    classifierPipeline = await transformers.pipeline(
-      'zero-shot-classification',
-      'Xenova/mobilebert-uncased-mnli',
-      {
-        quantized: true,
-        progress_callback: (progress: any) => {
-          if (progress.status === 'done') {
-            console.log('[PasteGuard] Scene model loaded')
-          }
-        }
-      }
-    )
-
-    ready = true
-    loading = false
-    console.log('[PasteGuard] Scene detector ready')
-  } catch (error) {
-    loading = false
-    console.error('[PasteGuard] Failed to load scene model:', error)
-    throw error
-  }
+const SCENE_WEIGHTS: Record<Exclude<SceneType, 'plain'>, number> = {
+  env: 1.2,   // KEY=VALUE 形态辨识度高，加权
+  yaml: 1.0,
+  json: 1.0,
+  log: 1.1,
+  code: 0.8
 }
 
-// 检测场景类型
+// 启发式场景检测
 export const detectScene = async (text: string): Promise<SceneResult> => {
-  if (!ready || !classifierPipeline) {
-    // 模型未就绪，返回默认值
-    return { type: 'plain', confidence: 0, scores: {} as any }
+  // 只分析前 50 行，避免长文本上的无谓扫描
+  const sample = text.split('\n').slice(0, 50).join('\n')
+
+  const scores: Record<string, number> = {}
+  let total = 0
+
+  for (const [scene, pattern] of Object.entries(PATTERNS)) {
+    const matches = sample.match(new RegExp(pattern.source, pattern.flags + 'g'))
+    const count = matches ? matches.length : 0
+    // 饱和计分：出现 3 次即视为该场景的强特征
+    const score = Math.min(count, 3) / 3 * SCENE_WEIGHTS[scene as Exclude<SceneType, 'plain'>]
+    scores[scene] = score
+    total += score
   }
 
-  try {
-    const result = await classifierPipeline(text, SCENE_LABELS, {
-      multi_label: false
-    })
+  if (total === 0) {
+    return { type: 'plain', confidence: 1, scores }
+  }
 
-    const scores: Record<string, number> = {}
-    result.labels.forEach((label: string, i: number) => {
-      scores[LABEL_MAP[label] || 'plain'] = result.scores[i]
-    })
-
-    const topLabel = result.labels[0] as string
-    const sceneType = LABEL_MAP[topLabel] || 'plain'
-
-    return {
-      type: sceneType,
-      confidence: result.scores[0],
-      scores: scores as Record<SceneType, number>
-    }
-  } catch (error) {
-    console.error('[PasteGuard] Scene detection failed:', error)
-    return { type: 'plain', confidence: 0, scores: {} as any }
+  const top = Object.entries(scores).sort((a, b) => b[1] - a[1])[0]
+  return {
+    type: top[0] as SceneType,
+    confidence: top[1] / total,
+    scores: scores as Record<SceneType, number>
   }
 }
 
-// 检查模型是否就绪
-export const isSceneModelReady = (): boolean => ready
+// 启发式无需模型：恒为就绪（保留函数名以兼容 pipeline 调用）
+export const isSceneModelReady = (): boolean => true
 
-// 预加载模型
-export const preloadSceneModel = async (): Promise<void> => {
-  await loadSceneModel()
-}
+// 预留的预加载入口（无操作）
+export const preloadSceneModel = async (): Promise<void> => {}

@@ -1,15 +1,19 @@
 // 扫描器 - 执行所有正则规则并合并结果
 
-import type { DetectionRule, DetectionItem } from '../../types'
+import type { DetectionRule, DetectionItem, DetectionType } from '../../types'
 import { SENSITIVE_KEYWORDS, NON_SENSITIVE_KEYWORDS, FUNCTION_PATTERNS } from './constants'
 import { detectHighEntropy } from './highEntropyRules'
-
-// 生成唯一ID
-let idCounter = 0
-const generateId = (): string => `det_${++idCounter}_${Date.now()}`
+import { generateId } from '../../utils/id'
 
 // 扫描正则规则
-export const scanRegexRules = (text: string, rules: DetectionRule[]): DetectionItem[] => {
+// options.enableEntropy: 是否附带高熵检测（Profile 停用 entropy 类别时传 false）
+// options.entropyThresholds: 高熵阈值（来自 Profile 类别灵敏度）
+export const scanRegexRules = (
+  text: string,
+  rules: DetectionRule[],
+  options: { enableEntropy?: boolean; entropyThresholds?: { minLength: number; minEntropy: number } } = {}
+): DetectionItem[] => {
+  const { enableEntropy = true, entropyThresholds } = options
   const items: DetectionItem[] = []
 
   console.log('[PasteGuard] Scanning regex rules...')
@@ -95,14 +99,16 @@ export const scanRegexRules = (text: string, rules: DetectionRule[]): DetectionI
           )
 
           if (existingItem) {
-            // 合并检测类型
-            const newType = isSensitive ? 'ENV_PASSWORD' : rule.type
+            // 合并检测类型（保留规则自身类型 + 敏感变量名的 ENV_PASSWORD 归类）
+            const newTypes: DetectionType[] = isSensitive ? [rule.type, 'ENV_PASSWORD'] : [rule.type]
             if (!existingItem.detectionTypes) {
               existingItem.detectionTypes = [existingItem.type]
             }
-            if (!existingItem.detectionTypes.includes(newType)) {
-              existingItem.detectionTypes.push(newType)
-              console.log('[PasteGuard] Merged detection types:', existingItem.detectionTypes)
+            for (const t of newTypes) {
+              if (!existingItem.detectionTypes.includes(t)) {
+                existingItem.detectionTypes.push(t)
+                console.log('[PasteGuard] Merged detection types:', existingItem.detectionTypes)
+              }
             }
           } else {
             items.push({
@@ -155,29 +161,31 @@ export const scanRegexRules = (text: string, rules: DetectionRule[]): DetectionI
   }
 
   // 添加高熵字符串检测
-  console.log('[PasteGuard] Detecting high entropy strings...')
-  const highEntropyItems = detectHighEntropy(text)
-  console.log('[PasteGuard] Found', highEntropyItems.length, 'high entropy strings')
-  for (const item of highEntropyItems) {
-    // 检查是否已有相同位置的检测项
-    const existingItem = items.find(
-      existing => existing.startIndex <= item.startIndex && existing.endIndex >= item.endIndex
-    )
+  if (enableEntropy) {
+    console.log('[PasteGuard] Detecting high entropy strings...')
+    const highEntropyItems = detectHighEntropy(text, entropyThresholds)
+    console.log('[PasteGuard] Found', highEntropyItems.length, 'high entropy strings')
+    for (const item of highEntropyItems) {
+      // 检查是否已有相同位置的检测项
+      const existingItem = items.find(
+        existing => existing.startIndex <= item.startIndex && existing.endIndex >= item.endIndex
+      )
 
-    if (existingItem) {
-      // 合并检测类型
-      if (!existingItem.detectionTypes) {
-        existingItem.detectionTypes = [existingItem.type]
+      if (existingItem) {
+        // 合并检测类型
+        if (!existingItem.detectionTypes) {
+          existingItem.detectionTypes = [existingItem.type]
+        }
+        if (!existingItem.detectionTypes.includes('HIGH_ENTROPY')) {
+          existingItem.detectionTypes.push('HIGH_ENTROPY')
+          console.log('[PasteGuard] Merged detection types:', existingItem.detectionTypes)
+        }
+      } else {
+        items.push({
+          ...item,
+          detectionTypes: ['HIGH_ENTROPY']
+        })
       }
-      if (!existingItem.detectionTypes.includes('HIGH_ENTROPY')) {
-        existingItem.detectionTypes.push('HIGH_ENTROPY')
-        console.log('[PasteGuard] Merged detection types:', existingItem.detectionTypes)
-      }
-    } else {
-      items.push({
-        ...item,
-        detectionTypes: ['HIGH_ENTROPY']
-      })
     }
   }
 

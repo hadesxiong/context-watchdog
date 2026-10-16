@@ -6,9 +6,10 @@ import { shouldSkipValue } from './valueFilters'
 
 export const envPasswordRules: DetectionRule[] = [
   // 环境变量赋值（优先级最高）
+  // 注意：= 两侧用 [\t ]* 而非 \s*，防止 \s 跨行吞掉下一行赋值（如 EMPTY_PASSWORD=\nNEXT=xxx）
   {
     type: 'ENV_PASSWORD',
-    pattern: /^([A-Z0-9_]+)\s*=\s*(.+)$/gm,
+    pattern: /^([A-Z0-9_]+)[\t ]*=[\t ]*(.+)$/gm,
     confidence: 'high',
     extractor: (match) => {
       const varName = match[1]

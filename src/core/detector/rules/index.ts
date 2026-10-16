@@ -5,14 +5,27 @@ import { envPasswordRules } from './envPasswordRules'
 import { dbPasswordRules } from './dbPasswordRules'
 import { apiKeyRules } from './apiKeyRules'
 import { privateKeyRules } from './privateKeyRules'
+import { emailRules } from './emailRules'
+import { piiRules } from './piiRules'
+import { kvPasswordRules } from './kvRules'
 
 // 所有正则规则（按优先级排列）
 export const regexRules: DetectionRule[] = [
   ...envPasswordRules,
+  ...kvPasswordRules,
   ...dbPasswordRules,
   ...apiKeyRules,
-  ...privateKeyRules
+  ...privateKeyRules,
+  ...piiRules,
+  ...emailRules
 ]
+
+// 按类别分组的规则集（Profile 按类别启用）
+export const rulesByCategory = {
+  secret: [...envPasswordRules, ...kvPasswordRules, ...dbPasswordRules, ...apiKeyRules, ...privateKeyRules],
+  pii: [...piiRules, ...emailRules],
+  entropy: [] // 高熵检测独立于 regexRules，由 scanner 特殊处理
+}
 
 // 重新导出扫描器
 export { scanRegexRules } from './scanner'

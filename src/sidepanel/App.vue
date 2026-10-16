@@ -4,6 +4,7 @@ import { useDetectionStore } from '../stores/detection'
 import InputArea from '../components/InputArea.vue'
 import DetectionList from '../components/DetectionList.vue'
 import ActionBar from '../components/ActionBar.vue'
+import ProfileTabs from '../components/ProfileTabs.vue'
 import { Button, LoadingOverlay } from '../ui'
 
 const store = useDetectionStore()
@@ -78,19 +79,19 @@ const openInNewTab = () => {
 const engineStatusItems = computed(() => [
     {
         name: '正则规则',
-        description: '环境变量、API Key、JWT、私钥、连接串密码',
+        description: '密钥、连接串、PII（手机/身份证/银行卡）等模式匹配',
         enabled: store.engineStatus.regexRules,
         icon: 'regex'
     },
     {
         name: '场景识别',
-        description: '自动识别文本类型（YAML/ENV/Code/Log）',
+        description: '启发式识别文本类型（零延迟，离线可用）',
         enabled: store.engineStatus.sceneModel,
         icon: 'scene'
     },
     {
-        name: '内容检测',
-        description: 'AI模型识别密钥、密码、Token等敏感信息',
+        name: 'AI 模型',
+        description: '姓名、地址等无固定格式实体（需联网加载模型）',
         enabled: store.engineStatus.contentModel,
         icon: 'content'
     }
@@ -305,6 +306,8 @@ const engineStatusItems = computed(() => [
                     min-[820px]:border-gray-300 
                     dark:min-[820px]:border-gray-700 `
                 ]">
+                <!-- 场景 Tab -->
+                <ProfileTabs />
                 <!-- 输入项 -->
                 <div :class="['px-3 pt-3',
                     hasResults && `

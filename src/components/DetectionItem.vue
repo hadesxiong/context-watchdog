@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { DetectionItem, DetectionType } from '../core/types'
+import type { DetectionItem } from '../core/types'
 import { useDetectionStore } from '../stores/detection'
-import { getPlaceholderDisplayText } from '../core/replacer/placeholder'
+import { getPlaceholderDisplayText, getTypeDisplayName } from '../core/replacer/placeholder'
 import { Badge, Card, Switch } from '../ui'
 
 const props = defineProps<{
@@ -35,20 +35,9 @@ const confidenceConfig = computed(() => {
     }
 })
 
-const typeNames: Record<DetectionType, string> = {
-    ENV_PASSWORD: '环境变量',
-    API_KEY: 'API Key',
-    DB_PASSWORD: '数据库密码',
-    JWT: 'JWT',
-    PRIVATE_KEY: '私钥',
-    HIGH_ENTROPY: '高熵字符串',
-    EMAIL: '邮箱',
-    PHONE: '电话'
-}
-
 const detectionTypesDisplay = computed(() => {
     const types = props.item.detectionTypes || [props.item.type]
-    return types.map(t => typeNames[t]).join(' + ')
+    return types.map(t => getTypeDisplayName(t)).join(' + ')
 })
 </script>
 

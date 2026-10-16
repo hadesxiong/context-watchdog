@@ -1,18 +1,18 @@
 import type { DetectionItem, ReplaceConfig, MappingTable } from '../types'
-import { getMappingManager } from './mapping'
+import { getMappingManager, MappingManager } from './mapping'
 
 // 替换引擎
 export class Replacer {
-  private mappingManager = getMappingManager()
-
-  // 应用替换
+  // 应用替换（纯函数：每次使用局部 MappingManager，不修改单例状态，
+  // 避免 sanitizedText computed 因副作用反复触发导致映射表错乱）
   apply(
     text: string,
     detections: DetectionItem[],
     configs: ReplaceConfig[]
   ): { sanitizedText: string; mappingTable: MappingTable } {
-    // 构建映射表
-    const mappingTable = this.mappingManager.applyConfigs(configs, detections)
+    // 构建映射表（局部实例）
+    const mappingManager = new MappingManager()
+    const mappingTable = mappingManager.applyConfigs(configs, detections)
 
     // 按位置排序检测项（从后往前替换，避免索引偏移）
     const sortedDetections = [...detections].sort(
@@ -29,8 +29,8 @@ export class Replacer {
         continue
       }
 
-      // 获取占位符
-      const placeholder = this.mappingManager.getPlaceholder(detection.original)
+      // 获取占位符（同 original 值共享同一占位符）
+      const placeholder = mappingManager.getPlaceholder(detection.original)
       if (placeholder) {
         // 替换文本
         sanitizedText =
@@ -71,14 +71,14 @@ export class Replacer {
     }
   }
 
-  // 清空映射表
+  // 清空映射表（清空单例；apply 已不再依赖单例）
   clearMapping(): void {
-    this.mappingManager.clear()
+    getMappingManager().clear()
   }
 
-  // 获取当前映射表
+  // 获取当前映射表（返回单例快照；apply 的映射表请以返回值为准）
   getMappingTable(): MappingTable {
-    return this.mappingManager.getMappings()
+    return getMappingManager().getMappings()
   }
 }
 

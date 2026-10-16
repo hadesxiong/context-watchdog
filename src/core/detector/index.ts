@@ -1,4 +1,4 @@
-import type { DetectionResult } from '../types'
+import type { DetectionResult, ProfileConfig } from '../types'
 
 // 新管线配置
 interface DetectorConfig {
@@ -7,13 +7,15 @@ interface DetectorConfig {
   enableRegexFallback: boolean
 }
 
-// 主检测函数 - 委托给新管线
+// 主检测函数 - 委托给新管线（profile 为检测配置档案，缺省用"不限"）
 export const detect = async (
   text: string,
+  profile?: ProfileConfig,
   config: Partial<DetectorConfig> = {}
 ): Promise<DetectionResult> => {
   const { detect: pipelineDetect } = await import('./pipeline')
-  return pipelineDetect(text, config)
+  const { getProfileById, DEFAULT_PROFILE_ID } = await import('./profiles')
+  return pipelineDetect(text, profile || getProfileById(DEFAULT_PROFILE_ID), config)
 }
 
 // 预加载所有模型
