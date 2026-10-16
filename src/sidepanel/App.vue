@@ -210,7 +210,7 @@ const progressLabel = computed(() => {
                 <!-- 加载进度 -->
                 <div v-if="store.nerStatus === 'loading'" class="mt-2 w-full">
                     <div class="flex justify-between text-xs text-muted-foreground mb-1">
-                        <span>下载模型中...</span>
+                        <span>{{ store.nerWaitingOtherWindow ? '另一窗口下载中...' : '下载模型中...' }}</span>
                         <span>{{ progressLabel }}</span>
                     </div>
                     <div class="w-full bg-muted rounded-full h-1.5">
@@ -258,7 +258,7 @@ const progressLabel = computed(() => {
                     border border-primary/30">
                 <div class="flex justify-between items-start w-full">
                     <p class="text-sm font-medium text-foreground">
-                        正在加载NER模型...</p>
+                        {{ store.nerWaitingOtherWindow ? '另一窗口下载中，等待同步...' : '正在加载NER模型...' }}</p>
                     <div class="mt-1">
                         <svg class="w-4 h-4 text-primary animate-spin" fill="none" viewBox="0 0 24 24">
                             <circle class="opacity-25" cx="12" cy="12" r="10"

@@ -49,6 +49,8 @@ export const useDetectionStore = defineStore('detection', () => {
     // 已下载字节 / 总字节：未知总长时 UI 展示「xx.x / 183 MB」而不是干转圈
     const nerLoadBytes = ref(0)
     const nerLoadTotal = ref(0)
+    // 另一窗口正在下载模型、本窗口等待中（UI 显示「另一窗口下载中」，见 modelDownload 的多窗口锁）
+    const nerWaitingOtherWindow = ref(false)
     const nerError = ref<string | null>(null)
     const nerRetryCount = ref(0)
     // AI 增强检测开关（用户显式启用后才会下载模型）
@@ -294,6 +296,7 @@ export const useDetectionStore = defineStore('detection', () => {
         nerIndeterminate.value = false
         nerLoadBytes.value = 0
         nerLoadTotal.value = 0
+        nerWaitingOtherWindow.value = false
         nerError.value = null
 
         try {
@@ -331,9 +334,14 @@ export const useDetectionStore = defineStore('detection', () => {
                 }
             }
 
-            const loadPromise = preloadModels(onProgress).then(() => {
+            const onWaiting = (waiting: boolean) => {
+                nerWaitingOtherWindow.value = waiting
+            }
+
+            const loadPromise = preloadModels(onProgress, onWaiting).then(() => {
                 settled = true
                 if (timeoutTimer) clearTimeout(timeoutTimer)
+                nerWaitingOtherWindow.value = false
                 // 以模型真实状态为准：promise resolve 但模型没就绪 → 视为失败（防假成功）
                 if (!isContentModelReady()) {
                     throw new Error('模型加载结果异常：模型未就绪，请重试')
@@ -349,6 +357,7 @@ export const useDetectionStore = defineStore('detection', () => {
                 console.warn('[PasteGuard] Model preload failed (optional feature):', error)
                 settled = true
                 if (timeoutTimer) clearTimeout(timeoutTimer)
+                nerWaitingOtherWindow.value = false
                 nerStatus.value = 'error'
                 nerError.value = error instanceof Error ? error.message : '网络请求被阻止或模型下载失败'
                 engineStatus.value.sceneModel = false
@@ -361,6 +370,7 @@ export const useDetectionStore = defineStore('detection', () => {
             if (!settled && nerStatus.value === 'loading') {
                 if (timeoutTimer) clearTimeout(timeoutTimer)
                 nerStatus.value = 'timeout'
+                nerWaitingOtherWindow.value = false
                 nerError.value = '模型下载超时（60 秒无进展），请检查网络连接'
                 engineStatus.value.sceneModel = false
                 engineStatus.value.contentModel = false
@@ -388,6 +398,7 @@ export const useDetectionStore = defineStore('detection', () => {
             nerIndeterminate.value = false
             nerLoadBytes.value = 0
             nerLoadTotal.value = 0
+            nerWaitingOtherWindow.value = false
             nerError.value = null
             engineStatus.value.sceneModel = false
             engineStatus.value.contentModel = false
@@ -407,6 +418,7 @@ export const useDetectionStore = defineStore('detection', () => {
         nerIndeterminate.value = false
         nerLoadBytes.value = 0
         nerLoadTotal.value = 0
+        nerWaitingOtherWindow.value = false
         engineStatus.value.sceneModel = false
         engineStatus.value.contentModel = false
         console.log('[PasteGuard] Models disabled')
@@ -438,6 +450,7 @@ export const useDetectionStore = defineStore('detection', () => {
         nerIndeterminate,
         nerLoadBytes,
         nerLoadTotal,
+        nerWaitingOtherWindow,
         nerError,
         nerRetryCount,
         aiEnabled,

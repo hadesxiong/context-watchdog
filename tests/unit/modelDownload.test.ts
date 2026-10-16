@@ -1,6 +1,7 @@
 // 单元用例 - 模型下载器
-// 覆盖：多源回退 / Range 断点续传 / 指数退避与 Retry-After / 传输完整性校验 /
-//       Cache Storage 落盘 / 停滞看门狗 / 单飞门闩（重试复用在飞加载）
+// 覆盖：多源回退 / 会话内+跨会话断点续传 / 指数退避与 Retry-After / 传输完整性校验 /
+//       Cache Storage 落盘 / 缓存版本探测（1 字节）与离线降级 / 多窗口锁与等待方 /
+//       停滞看门狗 / 单飞门闩（重试复用在飞加载）
 import { describe, it, expect } from 'vitest'
 import {
   MODEL_SOURCES,
@@ -12,9 +13,16 @@ import {
   backoffDelayMs,
   progressPercent,
   mergeChunks,
+  isWeakEtag,
+  compareCachedVersion,
+  probeRemoteVersion,
+  createModelLock,
   createSingleFlight,
   downloadModel,
-  type ModelCache
+  type ModelCache,
+  type PartialStore,
+  type PartialModelMeta,
+  type RemoteVersion
 } from '../../src/core/detector/modelDownload'
 
 const encoder = new TextEncoder()
@@ -95,16 +103,50 @@ const makeHangingResponse = (
   } as unknown as Response
 }
 
-// 内存版缓存（替代 Cache Storage）
-const createMemoryCache = (initial?: ArrayBuffer) => {
-  let stored: ArrayBuffer | null = initial ?? null
+// 内存版完整缓存（替代 Cache Storage 的完整模型条目）
+const createMemoryCache = (initial?: ArrayBuffer, etag?: string | null) => {
+  let stored: { buffer: ArrayBuffer; etag: string | null; total: number; savedAt: number } | null = initial
+    ? { buffer: initial, etag: etag ?? null, total: initial.byteLength, savedAt: Date.now() }
+    : null
   const cache: ModelCache = {
     match: async () => stored,
-    put: async buffer => {
-      stored = buffer
+    put: async (buffer, meta) => {
+      stored = { buffer, etag: meta?.etag ?? null, total: buffer.byteLength, savedAt: Date.now() }
+    },
+    clear: async () => {
+      stored = null
     }
   }
   return { cache, read: () => stored }
+}
+
+// 内存版部分文件（替代 Cache Storage 的 partial 条目）
+const createMemoryPartial = (initial?: { buffer: ArrayBuffer; meta: PartialModelMeta }) => {
+  let stored: { buffer: ArrayBuffer; meta: PartialModelMeta } | null = initial ?? null
+  const store: PartialStore = {
+    load: async () => stored,
+    save: async (buffer, meta) => {
+      stored = { buffer, meta }
+    },
+    clear: async () => {
+      stored = null
+    }
+  }
+  return { store, read: () => stored }
+}
+
+// 内存版 KV（替代 chrome.storage.local，供多窗口锁使用）
+const createMemoryStorage = () => {
+  const map = new Map<string, unknown>()
+  return {
+    map,
+    storage: {
+      get: async (key: string) => (map.has(key) ? { [key]: map.get(key) } : {}),
+      set: async (items: Record<string, unknown>) => {
+        for (const [key, value] of Object.entries(items)) map.set(key, value)
+      }
+    }
+  }
 }
 
 const noSleep = async (): Promise<void> => undefined
@@ -155,6 +197,85 @@ describe('纯函数', () => {
     expect(mergeChunks([toBytes('ab')]).byteLength).toBe(2) // 未给 total 时按分片求和
     expect(() => mergeChunks([toBytes('ab')], 5)).toThrow(/不完整/)
   })
+
+  it('isWeakEtag：弱校验值不能用于 If-Range', () => {
+    expect(isWeakEtag(null)).toBe(true)
+    expect(isWeakEtag('')).toBe(true)
+    expect(isWeakEtag('W/"abc"')).toBe(true)
+    expect(isWeakEtag('"abc"')).toBe(false)
+  })
+
+  it('compareCachedVersion：etag 优先、长度兜底、探测失败用缓存', () => {
+    const remote = (etag: string | null, total: number): RemoteVersion => ({ etag, total, source: 'x' })
+    expect(compareCachedVersion({ etag: 'A', total: 10 }, remote('A', 999))).toBe('current')
+    expect(compareCachedVersion({ etag: 'A', total: 10 }, remote('B', 10))).toBe('stale')
+    expect(compareCachedVersion({ etag: null, total: 10 }, remote('B', 10))).toBe('current')
+    expect(compareCachedVersion({ etag: null, total: 10 }, remote(null, 11))).toBe('stale')
+    expect(compareCachedVersion({ etag: 'A', total: 10 }, null)).toBe('unknown')
+    expect(compareCachedVersion({ etag: null, total: 0 }, remote(null, 0))).toBe('unknown')
+  })
+})
+
+describe('版本探测（1 字节）', () => {
+  it('206 响应取 total 与 etag，正文立即丢弃', async () => {
+    const { fetchImpl, calls } = createFakeFetch(() =>
+      makeResponse(206, { 'content-range': 'bytes 0-0/183403734', etag: '"abc"' }, [new Uint8Array(1)])
+    )
+    const version = await probeRemoteVersion({ fetchImpl })
+    expect(version).toEqual({ etag: '"abc"', total: 183403734, source: new URL(MODEL_SOURCES[0]).host })
+    expect(calls[0].headers.range).toBe('bytes=0-0')
+  })
+
+  it('首源失败时换次源；全失败返回 null（调用方据此沿用缓存）', async () => {
+    const { fetchImpl, calls } = createFakeFetch((call, index) => {
+      if (index === 0) throw new Error('offline')
+      return makeResponse(206, { 'content-range': 'bytes 0-0/100', etag: '"hf"' }, [new Uint8Array(1)])
+    })
+    const version = await probeRemoteVersion({ fetchImpl })
+    expect(version?.source).toBe(new URL(MODEL_SOURCES[1]).host)
+    expect(calls).toHaveLength(2)
+
+    const dead = createFakeFetch(() => {
+      throw new Error('offline')
+    })
+    expect(await probeRemoteVersion({ fetchImpl: dead.fetchImpl })).toBeNull()
+  })
+})
+
+describe('多窗口下载锁', () => {
+  it('未过期时他人抢不到；过期后可接管；release 后可再抢', async () => {
+    const { storage } = createMemoryStorage()
+    let clock = 1_000
+    const now = () => clock
+    const a = createModelLock(storage, { now, ttlMs: 30_000 })
+    const b = createModelLock(storage, { now, ttlMs: 30_000 })
+
+    expect(await a.tryAcquire()).toBe(true)
+    expect(await b.tryAcquire()).toBe(false)
+
+    clock += 30_001 // 心跳 TTL 过期
+    expect(await b.tryAcquire()).toBe(true)
+
+    await b.release()
+    expect(await createModelLock(storage, { now }).tryAcquire()).toBe(true)
+  })
+
+  it('心跳写入进度；非持有者心跳失败', async () => {
+    const { storage } = createMemoryStorage()
+    const a = createModelLock(storage)
+    const b = createModelLock(storage)
+    await a.tryAcquire()
+
+    expect(await a.heartbeat({ percent: 42, received: 42, total: 100 })).toBe(true)
+    expect(await b.heartbeat({ percent: 1, received: 1, total: 100 })).toBe(false)
+    expect(await b.read()).toMatchObject({ percent: 42, received: 42, total: 100 })
+  })
+
+  it('无 storage（node/无 chrome）时锁退化为始终可抢', async () => {
+    const lock = createModelLock(null)
+    expect(await lock.tryAcquire()).toBe(true)
+    expect(await lock.read()).toBeNull()
+  })
 })
 
 describe('单飞门闩（修复「卡住后点重试假成功/永久卡 loading」）', () => {
@@ -190,7 +311,7 @@ describe('downloadModel', () => {
 
   it('正常下载：进度单调推进、结果写入缓存、只请求一次', async () => {
     const { fetchImpl, calls } = createFakeFetch(() =>
-      makeResponse(200, { 'content-length': String(sample.length) }, [sample])
+      makeResponse(200, { 'content-length': String(sample.length), etag: '"v1"' }, [sample])
     )
     const progress: number[] = []
     const { cache, read } = createMemoryCache()
@@ -198,6 +319,8 @@ describe('downloadModel', () => {
     const buffer = await downloadModel({
       fetchImpl,
       cache,
+      partial: null,
+      lock: null,
       sleep: noSleep,
       onProgress: percent => progress.push(percent)
     })
@@ -207,11 +330,11 @@ describe('downloadModel', () => {
     expect(new Uint8Array(buffer)).toEqual(sample)
     expect(progress[progress.length - 1]).toBe(100)
     expect([...progress].sort((a, b) => a - b)).toEqual(progress) // 单调不减
-    expect(read()).not.toBeNull() // 已落盘
+    expect(read()?.etag).toBe('"v1"') // ETag 已随条目保存，供版本探测比对
   })
 
-  it('缓存命中：零网络请求', async () => {
-    const { cache } = createMemoryCache(toBytes('cached-model').buffer as ArrayBuffer)
+  it('缓存命中 + 探测一致：零网络请求', async () => {
+    const { cache } = createMemoryCache(toBytes('cached-model').buffer as ArrayBuffer, '"v1"')
     let fetched = 0
     const progress: number[] = []
 
@@ -221,6 +344,9 @@ describe('downloadModel', () => {
         throw new Error('不应发起网络请求')
       },
       cache,
+      partial: null,
+      lock: null,
+      probe: async () => ({ etag: '"v1"', total: 12, source: 'modelscope.cn' }),
       sleep: noSleep,
       onProgress: percent => progress.push(percent)
     })
@@ -228,6 +354,47 @@ describe('downloadModel', () => {
     expect(fetched).toBe(0)
     expect(decoder.decode(buffer)).toBe('cached-model')
     expect(progress).toEqual([100])
+  })
+
+  it('缓存命中但探测失败（离线）：沿用缓存（离线优先）', async () => {
+    const { cache, read } = createMemoryCache(toBytes('cached-model').buffer as ArrayBuffer)
+    let fetched = 0
+
+    const buffer = await downloadModel({
+      fetchImpl: async () => {
+        fetched++
+        throw new Error('offline')
+      },
+      cache,
+      partial: null,
+      lock: null,
+      probe: async () => null,
+      sleep: noSleep
+    })
+
+    expect(fetched).toBe(0)
+    expect(decoder.decode(buffer)).toBe('cached-model')
+    expect(read()).not.toBeNull()
+  })
+
+  it('缓存命中但远端已更新：清缓存并重新下载', async () => {
+    const fresh = encoder.encode('fresh-model')
+    const { cache, read } = createMemoryCache(toBytes('old-model').buffer as ArrayBuffer, '"old"')
+    const { fetchImpl } = createFakeFetch(() =>
+      makeResponse(200, { 'content-length': String(fresh.length), etag: '"new"' }, [fresh])
+    )
+
+    const buffer = await downloadModel({
+      fetchImpl,
+      cache,
+      partial: null,
+      lock: null,
+      probe: async () => ({ etag: '"new"', total: fresh.length, source: 'modelscope.cn' }),
+      sleep: noSleep
+    })
+
+    expect(decoder.decode(buffer)).toBe('fresh-model')
+    expect(read()?.etag).toBe('"new"')
   })
 
   it('传输截断：不入缓存，下次带 Range 从断点续传', async () => {
@@ -240,19 +407,54 @@ describe('downloadModel', () => {
         : makeResponse(206, { 'content-length': '60', 'content-range': 'bytes 40-99/100' }, [tail])
     )
     const delays: number[] = []
-    const { cache, read } = createMemoryCache()
 
-    const buffer = await downloadModel({
-      fetchImpl,
-      cache,
-      sleep: async ms => { delays.push(ms) }
-    })
+    const buffer = await downloadModel({ fetchImpl, cache: null, partial: null, lock: null, sleep: async ms => { delays.push(ms) } })
 
     expect(calls.length).toBe(2)
     expect(calls[1].headers.range).toBe('bytes=40-')
     expect(delays).toEqual([RETRY_BASE_DELAY_MS])
     expect(new Uint8Array(buffer)).toEqual(sample)
-    expect(read()).not.toBeNull()
+  })
+
+  it('跨会话续传：读上次的部分文件，同源带 Range + If-Range，完成后清除', async () => {
+    const head = sample.slice(0, 40)
+    const tail = sample.slice(40)
+    const { store, read } = createMemoryPartial({
+      buffer: head.buffer as ArrayBuffer,
+      meta: { total: 100, etag: '"v1"', source: new URL(MODEL_SOURCES[0]).host, savedAt: Date.now() }
+    })
+    const { fetchImpl, calls } = createFakeFetch(() =>
+      makeResponse(206, { 'content-length': '60', 'content-range': 'bytes 40-99/100', etag: '"v1"' }, [tail])
+    )
+
+    const buffer = await downloadModel({ fetchImpl, cache: null, partial: store, lock: null, sleep: noSleep })
+
+    expect(calls[0].headers.range).toBe('bytes=40-')
+    expect(calls[0].headers['if-range']).toBe('"v1"') // 同源 + 强 etag → 带 If-Range
+    expect(new Uint8Array(buffer)).toEqual(sample)
+    expect(read()).toBeNull() // 完成后部分文件被清除
+  })
+
+  it('跨源续传：不发 If-Range，总长不符时重置基准重下', async () => {
+    const head = sample.slice(0, 40)
+    const { store } = createMemoryPartial({
+      buffer: head.buffer as ArrayBuffer,
+      meta: { total: 100, etag: '"old"', source: 'huggingface.co', savedAt: Date.now() }
+    })
+    // 第 1 次落到 ModelScope：206 声称总长 999 ≠ 已存 100 → 判定上游换了文件 → 重置
+    // 第 2 次从头 200 下全
+    const { fetchImpl, calls } = createFakeFetch((_call, index) =>
+      index === 0
+        ? makeResponse(206, { 'content-length': '60', 'content-range': 'bytes 40-1098/999' }, [sample.slice(40)])
+        : makeResponse(200, { 'content-length': '100' }, [sample])
+    )
+
+    const buffer = await downloadModel({ fetchImpl, cache: null, partial: store, lock: null, sleep: noSleep })
+
+    expect(calls[0].headers.range).toBe('bytes=40-')
+    expect(calls[0].headers['if-range']).toBeUndefined() // 跨源不带 If-Range（etg 形态不同必然判不匹配）
+    expect(calls[1].headers.range).toBeUndefined() // 已重置 → 从头
+    expect(new Uint8Array(buffer)).toEqual(sample)
   })
 
   it('源站忽略 Range（返回 200）：重置基准从头下载，结果仍然正确', async () => {
@@ -263,7 +465,7 @@ describe('downloadModel', () => {
         : makeResponse(200, { 'content-length': '100' }, [sample])
     )
 
-    const buffer = await downloadModel({ fetchImpl, cache: null, sleep: noSleep })
+    const buffer = await downloadModel({ fetchImpl, cache: null, partial: null, lock: null, sleep: noSleep })
 
     expect(calls[1].headers.range).toBe('bytes=40-') // 确实尝试过续传
     expect(new Uint8Array(buffer)).toEqual(sample) // 重置后不产生错位拼接
@@ -278,10 +480,28 @@ describe('downloadModel', () => {
         : makeResponse(206, { 'content-length': '100', 'content-range': 'bytes 0-99/100' }, [sample])
     )
 
-    const buffer = await downloadModel({ fetchImpl, cache: null, sleep: noSleep })
+    const buffer = await downloadModel({ fetchImpl, cache: null, partial: null, lock: null, sleep: noSleep })
 
     expect(calls[1].headers.range).toBe('bytes=40-')
     expect(new Uint8Array(buffer)).toEqual(sample)
+  })
+
+  it('全部尝试失败时保留部分文件（供下次跨会话续传）', async () => {
+    const head = sample.slice(0, 40)
+    const { fetchImpl } = createFakeFetch(() =>
+      makeResponse(200, { 'content-length': '100', etag: '"v1"' }, [head])
+    )
+    const { store, read } = createMemoryPartial()
+
+    await expect(
+      downloadModel({ fetchImpl, cache: null, partial: store, lock: null, sleep: noSleep })
+    ).rejects.toThrow(/模型下载失败/)
+
+    const saved = read()
+    expect(saved?.buffer.byteLength).toBe(40)
+    expect(saved?.meta.total).toBe(100)
+    expect(saved?.meta.etag).toBe('"v1"')
+    expect(saved?.meta.source).toBe(new URL(MODEL_SOURCES[0]).host)
   })
 
   it('429 + Retry-After：按 Retry-After 退避后重试成功', async () => {
@@ -292,11 +512,7 @@ describe('downloadModel', () => {
     )
     const delays: number[] = []
 
-    const buffer = await downloadModel({
-      fetchImpl,
-      cache: null,
-      sleep: async ms => { delays.push(ms) }
-    })
+    const buffer = await downloadModel({ fetchImpl, cache: null, partial: null, lock: null, sleep: async ms => { delays.push(ms) } })
 
     expect(delays).toEqual([3000])
     expect(calls.length).toBe(2)
@@ -317,6 +533,8 @@ describe('downloadModel', () => {
     const buffer = await downloadModel({
       fetchImpl,
       cache: null,
+      partial: null,
+      lock: null,
       sleep: async ms => { delays.push(ms) },
       stallTimeoutMs: 5
     })
@@ -334,6 +552,8 @@ describe('downloadModel', () => {
     const buffer = await downloadModel({
       fetchImpl,
       cache: null,
+      partial: null,
+      lock: null,
       sleep: noSleep,
       onProgress: percent => progress.push(percent)
     })
@@ -348,7 +568,7 @@ describe('downloadModel', () => {
 
     let message = ''
     try {
-      await downloadModel({ fetchImpl, cache: null, sleep: noSleep })
+      await downloadModel({ fetchImpl, cache: null, partial: null, lock: null, sleep: noSleep })
     } catch (error) {
       message = error instanceof Error ? error.message : String(error)
     }
@@ -358,9 +578,77 @@ describe('downloadModel', () => {
     expect(message).toContain('huggingface.co')
     expect(message).toContain('HTTP 404')
     expect(calls.length).toBe(MAX_ATTEMPTS)
-    // 按 MODEL_SOURCES 轮换
     expect(calls[0].url).toBe(MODEL_SOURCES[0])
     expect(calls[1].url).toBe(MODEL_SOURCES[1])
     expect(calls[2].url).toBe(MODEL_SOURCES[0])
+  })
+
+  it('多窗口：抢不到锁则等待，对方写完缓存后直接命中，全程零网络', async () => {
+    const { storage } = createMemoryStorage()
+    const otherWindow = createModelLock(storage)
+    await otherWindow.tryAcquire()
+    await otherWindow.heartbeat({ percent: 50, received: 50, total: 100 })
+
+    const { cache } = createMemoryCache()
+    const forwarded: number[] = []
+    const waitingEvents: boolean[] = []
+    let fetchCount = 0
+    let polls = 0
+
+    const buffer = await downloadModel({
+      fetchImpl: async () => {
+        fetchCount++
+        throw new Error('不应发起网络请求')
+      },
+      cache,
+      lock: createModelLock(storage),
+      partial: null,
+      probe: async () => null,
+      lockPollMs: 1,
+      sleep: async () => {
+        polls++
+        if (polls === 2) {
+          // 模拟对方窗口下载完成：写缓存 + 完成心跳
+          await cache.put(sample.buffer as ArrayBuffer)
+          await otherWindow.heartbeat({ percent: 100, received: 100, total: 100 })
+        }
+      },
+      onProgress: (percent, received, total) => { if (percent >= 0) forwarded.push(percent) },
+      onWaiting: value => waitingEvents.push(value)
+    })
+
+    expect(fetchCount).toBe(0)
+    expect(new Uint8Array(buffer)).toEqual(sample)
+    expect(forwarded).toContain(50) // 等待方转发了对方的进度
+    expect(waitingEvents).toEqual([true, false])
+  })
+
+  it('多窗口：对方锁已过期 → 直接接管继续下载', async () => {
+    const { storage, map } = createMemoryStorage()
+    // 对方 30 秒没心跳（关面板/崩溃），锁已过期
+    map.set('pasteguard.modelLock', {
+      owner: 'other-dead',
+      expiresAt: Date.now() - 1,
+      percent: 30,
+      received: 30,
+      total: 100
+    })
+    const { fetchImpl } = createFakeFetch(() =>
+      makeResponse(200, { 'content-length': String(sample.length) }, [sample])
+    )
+    const waitingEvents: boolean[] = []
+
+    const buffer = await downloadModel({
+      fetchImpl,
+      cache: null,
+      partial: null,
+      lock: createModelLock(storage),
+      probe: async () => null,
+      sleep: noSleep,
+      onWaiting: value => waitingEvents.push(value)
+    })
+
+    expect(new Uint8Array(buffer)).toEqual(sample)
+    expect(waitingEvents).toEqual([]) // 无需等待
   })
 })

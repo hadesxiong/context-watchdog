@@ -44,9 +44,20 @@ let ready = false
 // 修复「卡住后点重试立刻 resolve（假成功）／永久卡 loading」）
 const loadGate = createSingleFlight()
 
+// 记录一次 JS 堆快照（用于实测内存峰值，见 TODO 遗留项 A-4）。
+// performance.memory 为 Chromium 专有且已废弃但仍可用；其他环境静默跳过
+const reportHeapSnapshot = (stage: string): void => {
+  const memory = (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory
+  if (!memory?.usedJSHeapSize) return
+  console.log(`[PasteGuard] 内存快照（${stage}）：JS 堆 ${(memory.usedJSHeapSize / 1048576).toFixed(1)} MB`)
+}
+
 // 实际加载流程（由 loadGate 保证同一时刻只跑一份）
 // 模型以 ArrayBuffer 传入 gliner（其 modelPath 支持二进制），因此能拿到真实字节进度
-const runLoad = async (onProgress?: ModelProgress): Promise<void> => {
+const runLoad = async (
+  onProgress?: ModelProgress,
+  onWaiting?: (waiting: boolean) => void
+): Promise<void> => {
   try {
     // 注意：gliner 内部用的是 @xenova/transformers（node_modules/gliner/dist/index.mjs 首行
     // `import { env, AutoTokenizer } from '@xenova/transformers'`），tokenizer/config 由它下载，
@@ -58,9 +69,10 @@ const runLoad = async (onProgress?: ModelProgress): Promise<void> => {
     transformers.env.allowLocalModels = false
     transformers.env.useBrowserCache = true
 
-    // 下载模型：多源回退 + Range 断点续传 + 退避重试 + 停滞看门狗 + Cache Storage 落盘，
-    // 细节见 modelDownload.ts（命中缓存时零网络请求）
-    const modelBuffer = await downloadModel({ onProgress })
+    // 下载模型：多源回退 + 会话内/跨会话断点续传 + 退避重试 + 停滞看门狗 + Cache Storage 落盘
+    // + 多窗口去重 + 缓存版本自动探测，细节见 modelDownload.ts
+    const modelBuffer = await downloadModel({ onProgress, onWaiting })
+    reportHeapSnapshot('模型下载完成')
 
     const { Gliner } = await import('gliner')
     const ort = await import('onnxruntime-web')
@@ -68,13 +80,22 @@ const runLoad = async (onProgress?: ModelProgress): Promise<void> => {
     ort.env.wasm.numThreads = 1
     ort.env.wasm.proxy = false
 
+    // gliner 会把 onnxSettings 原样留在实例上（gliner/src/web/ONNXWebWrapper.ts:61 用 settings.modelPath 建会话），
+    // 内联传 modelBuffer 会让 183MB 引用在整个会话期可达 → 峰值内存接近翻倍。
+    // 这里持本地引用，等 ORT 把数据拷进 wasm 堆后再断开（见下方释放）
+    const onnxSettings: {
+      modelPath: string | ArrayBufferLike
+      executionProvider: 'wasm'
+      multiThread: false
+    } = {
+      modelPath: modelBuffer,
+      executionProvider: 'wasm',
+      multiThread: false
+    }
+
     glinerInstance = new Gliner({
       tokenizerPath: 'onnx-community/gliner_small-v2',
-      onnxSettings: {
-        modelPath: modelBuffer,
-        executionProvider: 'wasm',
-        multiThread: false
-      },
+      onnxSettings,
       transformersSettings: {
         allowLocalModels: false,
         useBrowserCache: true
@@ -86,20 +107,30 @@ const runLoad = async (onProgress?: ModelProgress): Promise<void> => {
 
     await glinerInstance.initialize()
 
+    // 释放 JS 侧 183MB 模型引用（ORT session 已持有 wasm 堆副本，推理不受影响）
+    onnxSettings.modelPath = ''
+    reportHeapSnapshot('初始化完成并释放模型引用')
+
     ready = true
     console.log('[PasteGuard] Content detector ready')
   } catch (error) {
     // 降噪：AI 增强为可选功能，失败仅警告（基础正则检测不受影响）
     console.warn('[PasteGuard] Failed to load content model (optional feature):', error)
     throw error
+  } finally {
+    onWaiting?.(false)
   }
 }
 
 // 加载 GLiNER 模型
 // onProgress: 真实下载进度（percent < 0 表示未知总长；received/total 供 UI 展示 MB）
-export const loadContentModel = (onProgress?: ModelProgress): Promise<void> => {
+// onWaiting: 另一窗口正在下载，本窗口处于等待状态（UI 据此显示「另一窗口下载中」）
+export const loadContentModel = (
+  onProgress?: ModelProgress,
+  onWaiting?: (waiting: boolean) => void
+): Promise<void> => {
   if (ready) return Promise.resolve()
-  return loadGate.run(() => runLoad(onProgress))
+  return loadGate.run(() => runLoad(onProgress, onWaiting))
 }
 
 // 检测内容实体
@@ -155,7 +186,8 @@ export const isContentModelReady = (): boolean => ready
 
 // 预加载模型
 export const preloadContentModel = async (
-  onProgress?: ModelProgress
+  onProgress?: ModelProgress,
+  onWaiting?: (waiting: boolean) => void
 ): Promise<void> => {
-  await loadContentModel(onProgress)
+  await loadContentModel(onProgress, onWaiting)
 }

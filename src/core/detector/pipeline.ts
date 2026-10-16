@@ -504,7 +504,8 @@ export const detect = async (
 
 // 预加载所有模型（仅在用户显式启用 AI 增强后由 store 调用）
 export const preloadModels = async (
-  onProgress?: ModelProgress
+  onProgress?: ModelProgress,
+  onWaiting?: (waiting: boolean) => void
 ): Promise<void> => {
-  await preloadContentModel(onProgress)
+  await preloadContentModel(onProgress, onWaiting)
 }
