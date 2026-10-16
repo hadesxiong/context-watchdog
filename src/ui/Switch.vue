@@ -62,7 +62,7 @@ const thumbTranslate = computed(() => {
   >
     <SwitchThumb
       :class="[
-        'pointer-events-none block bg-white shadow-lg ring-0 transition-all duration-200',
+        'pointer-events-none block bg-background shadow-lg ring-0 transition-all duration-200',
         thumbClasses,
         thumbTranslate,
         loading && 'scale-75'

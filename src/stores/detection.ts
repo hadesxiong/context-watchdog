@@ -52,7 +52,6 @@ export const useDetectionStore = defineStore('detection', () => {
     // 另一窗口正在下载模型、本窗口等待中（UI 显示「另一窗口下载中」，见 modelDownload 的多窗口锁）
     const nerWaitingOtherWindow = ref(false)
     const nerError = ref<string | null>(null)
-    const nerRetryCount = ref(0)
     // AI 增强检测开关（用户显式启用后才会下载模型）
     const aiEnabled = ref(false)
 
@@ -347,7 +346,6 @@ export const useDetectionStore = defineStore('detection', () => {
                     throw new Error('模型加载结果异常：模型未就绪，请重试')
                 }
                 nerStatus.value = 'success'
-                nerRetryCount.value = 0
                 nerLoadProgress.value = 100
                 engineStatus.value.sceneModel = true
                 engineStatus.value.contentModel = true
@@ -452,7 +450,6 @@ export const useDetectionStore = defineStore('detection', () => {
         nerLoadTotal,
         nerWaitingOtherWindow,
         nerError,
-        nerRetryCount,
         aiEnabled,
         setAiEnabled,
 

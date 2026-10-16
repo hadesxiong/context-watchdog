@@ -30,8 +30,3 @@ export const preloadModels = async (
 
 // 模型是否真正就绪（store 用它校验「成功」状态，避免假成功）
 export { isContentModelReady }
-
-// 向后兼容：预加载 NER（已废弃，现在预加载所有模型）
-export const preloadNER = async (): Promise<void> => {
-  await preloadModels()
-}
