@@ -41,25 +41,25 @@ watch(() => props.detections, () => {
     <div class="space-y-4">
         <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
-                <h2 class="text-base font-bold text-gray-700 dark:text-gray-300">
+                <h2 class="text-base font-bold text-foreground">
                     识别结果</h2>
                 <span class="px-1.5 my-0.5 self-stretch text-xs leading-normal font-medium rounded-sm 
-                        bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 ">
+                        bg-primary/10 text-primary ">
                     {{ detections.length }}</span>
             </div>
         </div>
         <div v-if="detections.length === 0" class="text-center py-12">
             <div
-                class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 dark:bg-gray-800 mb-4">
-                <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-success/10 mb-4">
+                <svg class="w-8 h-8 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
                         d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
             </div>
-            <p class="text-gray-500 dark:text-gray-400 text-sm">
-                未检测到敏感信息</p>
-            <p class="text-gray-400 dark:text-gray-500 text-xs mt-1">
-                请粘贴包含敏感信息的文本</p>
+            <p class="text-foreground text-sm font-medium">
+                未检测到需要替换的内容</p>
+            <p class="text-muted-foreground text-xs mt-1">
+                文本中未发现敏感信息，可放心发送</p>
         </div>
 
         <AccordionRoot v-else v-model="openTypes" type="multiple" :collapsible="true" class="flex flex-col gap-3">
@@ -68,18 +68,18 @@ watch(() => props.detections, () => {
                 :key="type" :value="type as string">
                 <AccordionHeader>
                     <AccordionTrigger
-                        class="flex items-center justify-between w-full px-0 pb-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                        class="flex items-center justify-between w-full px-0 pb-3 text-left hover:bg-muted/50 transition-colors">
                         <div class="flex items-center gap-2">
-                            <span class="w-2 h-2 rounded-full bg-blue-500"></span>
-                            <span class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                            <span class="w-2 h-2 rounded-full bg-primary"></span>
+                            <span class="text-sm font-medium text-muted-foreground uppercase tracking-wide">
                                 {{ typeNames[type as string] || type }}
                             </span>
                             <span
-                                class="px-1.5 py-0.5 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 rounded">
+                                class="px-1.5 py-0.5 text-xs font-medium bg-muted text-muted-foreground rounded">
                                 {{ items.length }}
                             </span>
                         </div>
-                        <svg class="w-4 h-4 text-gray-400 transition-transform duration-200 shrink-0 data-[state=open]:rotate-180"
+                        <svg class="w-4 h-4 text-muted-foreground transition-transform duration-200 shrink-0 data-[state=open]:rotate-180"
                             fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                         </svg>

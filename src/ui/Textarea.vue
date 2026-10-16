@@ -24,11 +24,11 @@ const modelValue = useVModel(props, 'modelValue', emit)
 
 const textareaClasses = computed(() => [
   'w-full px-4 py-3 text-sm font-mono rounded-lg transition-all duration-200 resize-none',
-  'bg-gray-50 dark:bg-gray-900 border',
-  'text-gray-900 dark:text-gray-100',
-  'placeholder-gray-400 dark:placeholder-gray-500',
-  'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent',
-  'border-gray-200 dark:border-gray-700',
+  'bg-background border',
+  'text-foreground',
+  'placeholder:text-muted-foreground',
+  'focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent',
+  'border-input',
   props.disabled && 'opacity-50 cursor-not-allowed'
 ])
 </script>

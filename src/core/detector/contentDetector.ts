@@ -43,10 +43,16 @@ let ready = false
 
 // HuggingFace 镜像地址（中国大陆可访问）
 const HF_MIRROR = 'https://hf-mirror.com'
-const MODEL_URL = `${HF_MIRROR}/onnx-community/gliner_small-v2/resolve/main/model.onnx`
+// 注意：模型文件在 onnx/ 子目录下（仓库根目录没有 model.onnx，直接请求会 404）。
+// 选 model_quantized.onnx（int8 量化，约 183MB）：全量 model.onnx 达 611MB，不适合浏览器扩展
+const MODEL_URL = `${HF_MIRROR}/onnx-community/gliner_small-v2/resolve/main/onnx/model_quantized.onnx`
 
 // 加载 GLiNER 模型
-export const loadContentModel = async (): Promise<void> => {
+// onProgress: 真实下载进度回调（0-100）；model_quantized.onnx 约 183MB，自行流式下载后
+// 以 ArrayBuffer 传入 gliner（其 modelPath 支持二进制），从而获得真实字节数进度
+export const loadContentModel = async (
+  onProgress?: (percent: number) => void
+): Promise<void> => {
   if (loading || ready) return
   loading = true
 
@@ -54,7 +60,38 @@ export const loadContentModel = async (): Promise<void> => {
     // 设置 HuggingFace 镜像（在导入 gliner 之前）
     const transformers = await import('@huggingface/transformers')
     transformers.env.remoteHost = HF_MIRROR
-    
+
+    // 流式下载模型，报告真实进度
+    const response = await fetch(MODEL_URL)
+    if (!response.ok) {
+      throw new Error(`模型下载失败：HTTP ${response.status}`)
+    }
+    const contentLength = Number(response.headers.get('content-length')) || 0
+    const reader = response.body?.getReader()
+
+    let modelBuffer: ArrayBuffer
+    if (reader && contentLength > 0) {
+      const chunks: Uint8Array[] = []
+      let received = 0
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        chunks.push(value)
+        received += value.length
+        onProgress?.(Math.min(99, Math.round((received / contentLength) * 100)))
+      }
+      modelBuffer = new Uint8Array(received).buffer
+      let offset = 0
+      for (const chunk of chunks) {
+        new Uint8Array(modelBuffer).set(chunk, offset)
+        offset += chunk.length
+      }
+    } else {
+      // 无法获取 Content-Length 时退化为不定进度
+      onProgress?.(-1)
+      modelBuffer = await response.arrayBuffer()
+    }
+
     const { Gliner } = await import('gliner')
     const ort = await import('onnxruntime-web')
 
@@ -64,7 +101,7 @@ export const loadContentModel = async (): Promise<void> => {
     glinerInstance = new Gliner({
       tokenizerPath: 'onnx-community/gliner_small-v2',
       onnxSettings: {
-        modelPath: MODEL_URL,
+        modelPath: modelBuffer,
         executionProvider: 'wasm',
         multiThread: false
       },
@@ -84,7 +121,8 @@ export const loadContentModel = async (): Promise<void> => {
     console.log('[PasteGuard] Content detector ready')
   } catch (error) {
     loading = false
-    console.error('[PasteGuard] Failed to load content model:', error)
+    // 降噪：AI 增强为可选功能，失败仅警告（基础正则检测不受影响）
+    console.warn('[PasteGuard] Failed to load content model (optional feature):', error)
     throw error
   }
 }
@@ -121,7 +159,7 @@ export const detectContent = async (
       scene
     }))
   } catch (error) {
-    console.error('[PasteGuard] Content detection failed:', error)
+    console.warn('[PasteGuard] Content detection failed:', error)
     return []
   }
 }
@@ -141,6 +179,8 @@ export const categorizeEntity = (entity: ContentEntity): EntityCategory => {
 export const isContentModelReady = (): boolean => ready
 
 // 预加载模型
-export const preloadContentModel = async (): Promise<void> => {
-  await loadContentModel()
+export const preloadContentModel = async (
+  onProgress?: (percent: number) => void
+): Promise<void> => {
+  await loadContentModel(onProgress)
 }

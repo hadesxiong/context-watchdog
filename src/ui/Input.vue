@@ -26,13 +26,13 @@ const modelValue = useVModel(props, 'modelValue', emit)
 
 const inputClasses = computed(() => [
   'w-full px-4 py-2.5 text-sm rounded-lg transition-all duration-200',
-  'bg-gray-50 dark:bg-gray-900 border',
-  'text-gray-900 dark:text-gray-100',
-  'placeholder-gray-400 dark:placeholder-gray-500',
-  'focus:outline-none focus:ring-2 focus:ring-offset-0',
+  'bg-background border',
+  'text-foreground',
+  'placeholder:text-muted-foreground',
+  'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-0',
   props.error
-    ? 'border-red-500 focus:ring-red-500 focus:border-red-500'
-    : 'border-gray-200 dark:border-gray-700 focus:ring-blue-500 focus:border-blue-500',
+    ? 'border-destructive focus:ring-destructive focus:border-destructive'
+    : 'border-input focus:ring-ring focus:border-ring',
   props.disabled && 'opacity-50 cursor-not-allowed'
 ])
 </script>

@@ -23,24 +23,24 @@ defineEmits<{ (e: 'click', value: MouseEvent): void }>()
 
 const variantClasses = computed(() => {
   if (props.variant === 'disabled') {
-    return 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 border-transparent'
+    return 'bg-muted text-muted-foreground border-transparent'
   }
 
   const colors = {
     primary: {
-      normal: 'bg-blue-500 text-white hover:bg-blue-600 focus-visible:ring-blue-500 shadow-sm',
-      outline: 'bg-transparent text-blue-500 dark:text-blue-400 border-blue-500 dark:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 focus-visible:ring-blue-500',
-      text: 'bg-transparent text-blue-500 dark:text-blue-400 hover:text-blue-800 dark:text-blue-200 focus-visible:ring-blue-500 shadow-none'
+      normal: 'bg-primary text-primary-foreground hover:bg-primary/90 focus-visible:ring-ring shadow-sm',
+      outline: 'bg-transparent text-foreground border-input hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring',
+      text: 'bg-transparent text-foreground/70 hover:text-foreground focus-visible:ring-ring shadow-none'
     },
     secondary: {
-      normal: 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 focus-visible:ring-gray-500 shadow-sm',
-      outline: 'bg-transparent text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800 focus-visible:ring-gray-500',
-      text: 'bg-transparent text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 focus-visible:ring-gray-500 shadow-none'
+      normal: 'bg-secondary text-secondary-foreground hover:bg-secondary/80 focus-visible:ring-ring shadow-sm',
+      outline: 'bg-transparent text-foreground/80 border-input hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring',
+      text: 'bg-transparent text-muted-foreground hover:text-foreground focus-visible:ring-ring shadow-none'
     },
     danger: {
-      normal: 'bg-red-500 text-white hover:bg-red-600 focus-visible:ring-red-500 shadow-sm',
-      outline: 'bg-transparent text-red-500 dark:text-red-400 border-red-500 dark:border-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 focus-visible:ring-red-500',
-      text: 'bg-transparent text-red-500 dark:text-red-400 hover:text-red-800 dark:text:bg-red-200 focus-visible:ring-red-500 shadow-none'
+      normal: 'bg-destructive text-destructive-foreground hover:bg-destructive/90 focus-visible:ring-destructive shadow-sm',
+      outline: 'bg-transparent text-destructive border-destructive/40 hover:bg-destructive/10 focus-visible:ring-destructive',
+      text: 'bg-transparent text-destructive hover:text-destructive/80 focus-visible:ring-destructive shadow-none'
     }
   }
 
@@ -63,9 +63,9 @@ const sizeClasses = computed(() => {
     }[props.size]
   }
   return {
-    sm: 'h-8 px-3 text-xs rounded-sm gap-1.5',
-    md: 'h-auto px-3 py-1.5 text-sm rounded-sm gap-2',
-    lg: 'h-12 px-6 text-base rounded-sm gap-2.5'
+    sm: 'h-8 px-3 text-xs rounded-md gap-1.5',
+    md: 'h-auto px-3 py-1.5 text-sm rounded-md gap-2',
+    lg: 'h-12 px-6 text-base rounded-md gap-2.5'
   }[props.size]
 })
 </script>
@@ -76,7 +76,7 @@ const sizeClasses = computed(() => {
     :as-child="asChild"
     :class="[
       'inline-flex items-center justify-center font-medium transition-all duration-200',
-      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2',
+      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
       'disabled:pointer-events-none disabled:opacity-50',
       'active:scale-[0.98]',
       variantClasses,

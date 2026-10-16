@@ -2,7 +2,7 @@
 
 import type { DetectionItem, DetectionResult, DetectionType, Confidence, ProfileConfig } from '../types'
 import { detectScene, type SceneResult } from './sceneDetector'
-import { detectContent, categorizeEntity, type ContentEntity, isContentModelReady } from './contentDetector'
+import { detectContent, categorizeEntity, preloadContentModel, type ContentEntity, isContentModelReady } from './contentDetector'
 import { scanRegexRules, rulesByCategory } from './regexRules'
 import { scanCustomRules } from './rules/customRules'
 import { getProfileById, DEFAULT_PROFILE_ID, getSensitivity, ENTROPY_THRESHOLDS } from './profiles'
@@ -501,13 +501,9 @@ export const detect = async (
   return { items, text }
 }
 
-// 预加载所有模型
-export const preloadModels = async (): Promise<void> => {
-  const { preloadSceneModel } = await import('./sceneDetector')
-  const { preloadContentModel } = await import('./contentDetector')
-  
-  await Promise.all([
-    preloadSceneModel().catch(e => console.warn('[PasteGuard] Scene model preload failed:', e)),
-    preloadContentModel().catch(e => console.warn('[PasteGuard] Content model preload failed:', e))
-  ])
+// 预加载所有模型（仅在用户显式启用 AI 增强后由 store 调用）
+export const preloadModels = async (
+  onProgress?: (percent: number) => void
+): Promise<void> => {
+  await preloadContentModel(onProgress)
 }

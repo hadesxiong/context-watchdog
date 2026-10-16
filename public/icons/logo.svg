@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <!-- PasteGuard logo: 盾牌 + 四点掩码 -->
+  <!-- 盾牌实心主体 -->
+  <path d="M16 2.5 L5 6.5 V15 C5 22.2 9.8 27.9 16 29.5 C22.2 27.9 27 22.2 27 15 V6.5 Z"
+        fill="#18181B"/>
+  <!-- 内描边（细线装饰，提升小尺寸层次） -->
+  <path d="M16 5.2 L7.6 8.2 V15 C7.6 20.8 11.3 25.6 16 27 C20.7 25.6 24.4 20.8 24.4 15 V8.2 Z"
+        stroke="#FAFAFA" stroke-width="1" stroke-opacity="0.25" fill="none"/>
+  <!-- 四点掩码 •••• -->
+  <circle cx="10.5" cy="16" r="1.7" fill="#FAFAFA"/>
+  <circle cx="14.2" cy="16" r="1.7" fill="#FAFAFA"/>
+  <circle cx="17.9" cy="16" r="1.7" fill="#FAFAFA"/>
+  <circle cx="21.6" cy="16" r="1.7" fill="#FAFAFA"/>
+</svg>

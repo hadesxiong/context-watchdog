@@ -52,12 +52,12 @@ const thumbTranslate = computed(() => {
     :disabled="disabled || loading"
     :class="[
       'peer inline-flex shrink-0 cursor-pointer items-center transition-colors duration-200',
-      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2',
+      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
       'disabled:cursor-not-allowed disabled:opacity-50',
       sizeClasses,
       checked
-        ? 'bg-blue-500'
-        : 'bg-gray-200 dark:bg-gray-700'
+        ? 'bg-primary'
+        : 'bg-input'
     ]"
   >
     <SwitchThumb
@@ -70,7 +70,7 @@ const thumbTranslate = computed(() => {
     >
       <svg
         v-if="loading"
-        class="animate-spin h-full w-full text-blue-500"
+        class="animate-spin h-full w-full text-primary"
         xmlns="http://www.w3.org/2000/svg"
         fill="none"
         viewBox="0 0 24 24"

@@ -1,4 +1,6 @@
 import type { DetectionResult, ProfileConfig } from '../types'
+import { detect as pipelineDetect, preloadModels as pipelinePreload } from './pipeline'
+import { getProfileById, DEFAULT_PROFILE_ID } from './profiles'
 
 // 新管线配置
 interface DetectorConfig {
@@ -13,15 +15,14 @@ export const detect = async (
   profile?: ProfileConfig,
   config: Partial<DetectorConfig> = {}
 ): Promise<DetectionResult> => {
-  const { detect: pipelineDetect } = await import('./pipeline')
-  const { getProfileById, DEFAULT_PROFILE_ID } = await import('./profiles')
   return pipelineDetect(text, profile || getProfileById(DEFAULT_PROFILE_ID), config)
 }
 
-// 预加载所有模型
-export const preloadModels = async (): Promise<void> => {
-  const { preloadModels: pipelinePreload } = await import('./pipeline')
-  await pipelinePreload()
+// 预加载所有模型（仅在用户显式启用 AI 增强后由 store 调用）
+export const preloadModels = async (
+  onProgress?: (percent: number) => void
+): Promise<void> => {
+  await pipelinePreload(onProgress)
 }
 
 // 向后兼容：预加载 NER（已废弃，现在预加载所有模型）

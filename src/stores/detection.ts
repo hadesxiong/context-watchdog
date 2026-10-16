@@ -18,6 +18,8 @@ interface DetectionEngineStatus {
 
 // Profile 持久化 key
 const PROFILE_STORAGE_KEY = 'pasteguard.activeProfile'
+// AI 增强检测显式开关（Phase UI：默认关闭，零网络请求零报错）
+const AI_ENABLED_KEY = 'pasteguard.aiEnabled'
 
 // 计算某检测项的默认替换动作：Profile 显式配置 > 置信度分层 > 替换
 const resolveDefaultAction = (
@@ -42,9 +44,12 @@ export const useDetectionStore = defineStore('detection', () => {
     // 模型状态（向后兼容旧变量名）
     const nerStatus = ref<ModelStatus>('disabled')
     const nerLoadProgress = ref(0)
+    // 不定进度（服务端未返回 Content-Length 时为 true，进度条走循环动画）
+    const nerIndeterminate = ref(false)
     const nerError = ref<string | null>(null)
     const nerRetryCount = ref(0)
-    let progressInterval: ReturnType<typeof setInterval> | null = null
+    // AI 增强检测开关（用户显式启用后才会下载模型）
+    const aiEnabled = ref(false)
 
     // 激活的检测配置档案（Tab 切换，持久化）
     const activeProfileId = ref<string>(DEFAULT_PROFILE_ID)
@@ -81,6 +86,14 @@ export const useDetectionStore = defineStore('detection', () => {
         userProfilesVersion.value++
         if (pendingActiveId && profileManager.get(pendingActiveId)) {
             activeProfileId.value = pendingActiveId
+        }
+    })
+
+    // 恢复 AI 增强开关：仅在用户此前显式启用时才加载模型（默认零网络请求）
+    storageLocal?.get(AI_ENABLED_KEY, (result: Record<string, unknown>) => {
+        if (result?.[AI_ENABLED_KEY] === true) {
+            aiEnabled.value = true
+            initNER()
         }
     })
 
@@ -270,33 +283,47 @@ export const useDetectionStore = defineStore('detection', () => {
         }
     }
 
-    // 后台预加载模型
+    // 后台加载模型（仅在用户显式启用 AI 增强后调用）
     const initNER = async () => {
         console.log('[PasteGuard] Initializing models...')
         nerStatus.value = 'loading'
         nerLoadProgress.value = 0
+        nerIndeterminate.value = false
         nerError.value = null
 
-        if (progressInterval) { clearInterval(progressInterval) }
-
         try {
-            const timeout = 30000 // 30秒超时
+            // 停滞超时：只要下载进度还在更新就不算超时（183MB 模型慢网下可能需要数分钟）；
+            // 60 秒内无任何进度推进才判定超时
+            const STALL_TIMEOUT = 60000
+            let timeoutTimer: ReturnType<typeof setTimeout> | null = null
+            let resetTimeout: () => void = () => {}
+            let settled = false
 
             const timeoutPromise = new Promise<void>((resolve) => {
-                setTimeout(() => {
-                    console.warn('[PasteGuard] Model load timeout')
-                    resolve()
-                }, timeout)
+                const arm = () => {
+                    if (timeoutTimer) clearTimeout(timeoutTimer)
+                    timeoutTimer = setTimeout(() => {
+                        console.warn('[PasteGuard] Model load timeout (no progress for 60s)')
+                        resolve()
+                    }, STALL_TIMEOUT)
+                }
+                resetTimeout = arm
+                arm()
             })
 
-            progressInterval = setInterval(() => {
-                // 模拟进度
-                if (nerLoadProgress.value < 90) {
-                    nerLoadProgress.value += 5
+            // 真实下载进度：-1 表示无法获取 Content-Length（不定进度）
+            const onProgress = (percent: number) => {
+                resetTimeout()
+                if (percent < 0) {
+                    nerIndeterminate.value = true
+                } else {
+                    nerLoadProgress.value = percent
                 }
-            }, 500)
+            }
 
-            const loadPromise = preloadModels().then(() => {
+            const loadPromise = preloadModels(onProgress).then(() => {
+                settled = true
+                if (timeoutTimer) clearTimeout(timeoutTimer)
                 nerStatus.value = 'success'
                 nerRetryCount.value = 0
                 nerLoadProgress.value = 100
@@ -304,31 +331,48 @@ export const useDetectionStore = defineStore('detection', () => {
                 engineStatus.value.contentModel = true
                 console.log('[PasteGuard] Models loaded successfully')
             }).catch(error => {
-                console.error('[PasteGuard] Model preload failed:', error)
-                if (nerRetryCount.value >= 3) {
-                    nerStatus.value = 'error'
-                    nerError.value = error instanceof Error ? error.message : '网络请求被阻止或模型下载失败'
-                }
+                // 降噪：warn 而非 error（AI 增强为可选功能，基础检测不受影响）
+                console.warn('[PasteGuard] Model preload failed (optional feature):', error)
+                settled = true
+                if (timeoutTimer) clearTimeout(timeoutTimer)
+                nerStatus.value = 'error'
+                nerError.value = error instanceof Error ? error.message : '网络请求被阻止或模型下载失败'
                 engineStatus.value.sceneModel = false
                 engineStatus.value.contentModel = false
-            }).finally(() => {
-                if (progressInterval) { clearInterval(progressInterval) }
             })
 
             await Promise.race([loadPromise, timeoutPromise])
 
-            if (nerStatus.value === 'loading') {
-                if (nerRetryCount.value >= 3) {
-                    nerStatus.value = 'timeout'
-                    nerError.value = '模型下载超时，请检查网络连接'
-                }
+            // 仍在加载 = 停滞超时触发（成功/失败已在上面各自处理）
+            if (!settled && nerStatus.value === 'loading') {
+                if (timeoutTimer) clearTimeout(timeoutTimer)
+                nerStatus.value = 'timeout'
+                nerError.value = '模型下载超时（60 秒无进展），请检查网络连接'
                 engineStatus.value.sceneModel = false
                 engineStatus.value.contentModel = false
             }
         } catch (error) {
-            console.error('[PasteGuard] Model initialization failed:', error)
+            console.warn('[PasteGuard] Model initialization failed (optional feature):', error)
             nerStatus.value = 'error'
             nerError.value = error instanceof Error ? error.message : '未知错误'
+            engineStatus.value.sceneModel = false
+            engineStatus.value.contentModel = false
+        }
+    }
+
+    // AI 增强开关（持久化）：开启才下载模型；关闭则卸载状态并回退纯正则
+    const setAiEnabled = async (enabled: boolean) => {
+        aiEnabled.value = enabled
+        storageLocal?.set({ [AI_ENABLED_KEY]: enabled })
+        console.log('[PasteGuard] AI enhancement', enabled ? 'enabled' : 'disabled')
+
+        if (enabled) {
+            await initNER()
+        } else {
+            nerStatus.value = 'disabled'
+            nerLoadProgress.value = 0
+            nerIndeterminate.value = false
+            nerError.value = null
             engineStatus.value.sceneModel = false
             engineStatus.value.contentModel = false
         }
@@ -371,8 +415,11 @@ export const useDetectionStore = defineStore('detection', () => {
         // 模型状态
         nerStatus,
         nerLoadProgress,
+        nerIndeterminate,
         nerError,
         nerRetryCount,
+        aiEnabled,
+        setAiEnabled,
 
         // 引擎状态
         engineStatus,

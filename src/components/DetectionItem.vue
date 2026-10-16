@@ -50,13 +50,13 @@ const detectionTypesDisplay = computed(() => {
                     <Badge :variant="confidenceConfig.variant" size="sm">
                         {{ confidenceConfig.label }}
                     </Badge>
-                    <span class="text-sm font-medium text-gray-500 dark:text-gray-400">
+                    <span class="text-sm font-medium text-muted-foreground">
                         {{ detectionTypesDisplay }}
                     </span>
                 </div>
                 <!-- 切换: 保留/替换 -->
                 <div class="flex items-center gap-2 shrink-0 pt-1">
-                    <span class="text-xs font-medium text-gray-600 dark:text-gray-300">
+                    <span class="text-xs font-medium text-foreground/80">
                         {{ isReplace ? '替换' : '保留' }}
                     </span>
                     <Switch v-model="isReplace" type="square" />
@@ -64,20 +64,20 @@ const detectionTypesDisplay = computed(() => {
             </div>
             <!-- 原文 -->
             <div class="flex flex-col gap-1.5">
-                <span class="text-xs text-gray-600 dark:text-gray-700">原文:</span>
-                <p class="text-sm font-mono text-gray-900 dark:text-gray-100 truncate bg-gray-50 dark:bg-gray-900 rounded px-2 py-1">
+                <span class="text-xs text-muted-foreground">原文:</span>
+                <p class="text-sm font-mono text-foreground truncate bg-muted/50 rounded px-2 py-1">
                     {{ item.original }}
                 </p>
             </div>
             <!-- 替换 -->
             <div class="flex flex-col gap-1.5">
-                <span class="text-xs text-gray-600 dark:text-gray-700">替换为:</span>
-                <p class="text-sm font-mono text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 rounded px-2 py-1 mt-1">
+                <span class="text-xs text-muted-foreground">替换为:</span>
+                <p class="text-sm font-mono text-primary bg-primary/10 rounded px-2 py-1 mt-1">
                     {{ getPlaceholderDisplayText(item.placeholder) }}
                 </p>
             </div>
             <!-- 匹配到的内容 -->
-            <div v-if="item.context" class="text-xs text-gray-600 dark:text-gray-500 truncate">
+            <div v-if="item.context" class="text-xs text-muted-foreground truncate">
                 {{ item.context }}
             </div>   
         </div>

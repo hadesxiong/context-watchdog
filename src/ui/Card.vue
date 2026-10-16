@@ -12,9 +12,9 @@ withDefaults(defineProps<Props>(), {
 
 <template>
     <div :class="[
-        'bg-white dark:bg-gray-800 rounded-sm border border-gray-200 dark:border-gray-700',
+        'bg-card text-card-foreground rounded-lg border border-border',
         'shadow-xs transition-all duration-200',
-        hover && 'hover:shadow-md hover:border-gray-300 dark:hover:border-gray-600',
+        hover && 'hover:shadow-md hover:border-border/60',
         padding && 'px-3 py-3']">
         <slot></slot>
     </div>
