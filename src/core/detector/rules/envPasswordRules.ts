@@ -6,14 +6,18 @@ import { shouldSkipValue } from './valueFilters'
 
 export const envPasswordRules: DetectionRule[] = [
   // 环境变量赋值（优先级最高）
-  // 注意：= 两侧用 [\t ]* 而非 \s*，防止 \s 跨行吞掉下一行赋值（如 EMPTY_PASSWORD=\nNEXT=xxx）
+  // 注意 1：= 两侧用 [\t ]* 而非 \s*，防止 \s 跨行吞掉下一行赋值（如 EMPTY_PASSWORD=\nNEXT=xxx）
+  // 注意 2：值支持引号包裹（含空格）或非空白串（空格即截断），防止吞掉行内后续文本
+  //         如 API_KEY=xxx 与 support@example.com（整行吞值会导致邮箱漏检）
   {
     type: 'ENV_PASSWORD',
-    pattern: /^([A-Z0-9_]+)[\t ]*=[\t ]*(.+)$/gm,
+    pattern: /^([A-Z0-9_]+)[\t ]*=[\t ]*("([^"\n]*)"|'([^'\n]*)'|[^\s]+)/gm,
     confidence: 'high',
     extractor: (match) => {
       const varName = match[1]
-      const value = match[2].trim()
+      // 引号值取内层；裸值取非空白串
+      const quotedInner = match[3] ?? match[4]
+      const value = (quotedInner !== undefined ? quotedInner : match[2]).trim()
 
       // 检查是否在白名单中
       if (NON_SENSITIVE_KEYWORDS.some(kw => varName.includes(kw))) {

@@ -30,11 +30,27 @@ export type SceneType = 'yaml' | 'env' | 'code' | 'log' | 'json' | 'plain'
 // 灵敏度档位（Profile 内每类别的阈值组合）
 export type Sensitivity = 'loose' | 'standard' | 'strict'
 
+// 用户自定义正则规则（Phase 5）
+export interface CustomRule {
+  id: string
+  // 规则名称（UI 展示）
+  name: string
+  // 正则源串（不含分隔符；编译时统一加 g flag）
+  pattern: string
+  // 命中后归类的检测类型
+  type: DetectionType
+  confidence: Confidence
+  // 是否启用（可临时停用而不删除）
+  enabled: boolean
+}
+
 // 检测配置档案
 export interface ProfileConfig {
   id: string
   name: string
   description: string
+  // 是否内置档案（内置不可删除/改名；用户自定义档案可 CRUD）
+  builtin?: boolean
   // 启用的规则类别
   enabledCategories: RuleCategory[]
   // 各类别灵敏度（未指定的类别用 standard）
@@ -45,6 +61,10 @@ export interface ProfileConfig {
   tierLowConfidence: boolean
   // 送 GLiNER 的零样本实体标签
   glinerLabels: string[]
+  // 值白名单：精确匹配的值不检测不替换（如公司域名、测试账号）
+  whitelist?: string[]
+  // 用户自定义正则规则（Phase 5，经 ReDoS 校验）
+  customRules?: CustomRule[]
 }
 
 // 检测项

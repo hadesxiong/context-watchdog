@@ -30,6 +30,7 @@ export const BUILTIN_PROFILES: ProfileConfig[] = [
     id: 'universal',
     name: '不限',
     description: '全规则并集 + 仲裁：凭据类直接替换，中低置信度仅提示',
+    builtin: true,
     enabledCategories: ['secret', 'pii', 'entropy'],
     sensitivity: { entropy: 'standard' },
     defaultActions: { EMAIL: 'keep', HIGH_ENTROPY: 'keep', IP_ADDRESS: 'keep' },
@@ -40,6 +41,7 @@ export const BUILTIN_PROFILES: ProfileConfig[] = [
     id: 'text',
     name: '通用文本',
     description: 'PII 检测为主，高熵收紧，适合聊天、文档、工单',
+    builtin: true,
     enabledCategories: ['secret', 'pii', 'entropy'],
     sensitivity: { entropy: 'strict' },
     defaultActions: { EMAIL: 'keep', HIGH_ENTROPY: 'keep', IP_ADDRESS: 'keep' },
@@ -50,6 +52,7 @@ export const BUILTIN_PROFILES: ProfileConfig[] = [
     id: 'code',
     name: '代码开发',
     description: '密钥检测全开，高熵放宽，PII 仅提示，适合配置与代码',
+    builtin: true,
     enabledCategories: ['secret', 'pii', 'entropy'],
     sensitivity: { entropy: 'loose' },
     defaultActions: {

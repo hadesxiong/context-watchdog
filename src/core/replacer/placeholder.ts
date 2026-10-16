@@ -19,10 +19,22 @@ const PLACEHOLDER_NAMES: Record<DetectionType, string> = {
   'ADDRESS': '地址'
 }
 
-// 反向映射（名称 → 类型）
-const NAME_TO_TYPE: Record<string, DetectionType> = Object.fromEntries(
-  Object.entries(PLACEHOLDER_NAMES).map(([type, name]) => [name, type as DetectionType])
-)
+// 反向映射（名称 → 类型），含旧英文格式别名（兼容历史映射表）
+const NAME_TO_TYPE: Record<string, DetectionType> = {
+  ...Object.fromEntries(
+    Object.entries(PLACEHOLDER_NAMES).map(([type, name]) => [name, type as DetectionType])
+  ),
+  // 旧格式别名
+  'SECRET': 'HIGH_ENTROPY',
+  'ENV_PASSWORD': 'ENV_PASSWORD',
+  'API_KEY': 'API_KEY',
+  'DB_PASSWORD': 'DB_PASSWORD',
+  'JWT': 'JWT',
+  'PRIVATE_KEY': 'PRIVATE_KEY',
+  'HIGH_ENTROPY': 'HIGH_ENTROPY',
+  'EMAIL': 'EMAIL',
+  'PHONE': 'PHONE'
+}
 
 // 生成占位符（首条不带序号，便于阅读）
 export const generatePlaceholder = (

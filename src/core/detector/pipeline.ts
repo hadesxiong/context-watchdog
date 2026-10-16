@@ -4,6 +4,7 @@ import type { DetectionItem, DetectionResult, DetectionType, Confidence, Profile
 import { detectScene, type SceneResult } from './sceneDetector'
 import { detectContent, categorizeEntity, type ContentEntity, isContentModelReady } from './contentDetector'
 import { scanRegexRules, rulesByCategory } from './regexRules'
+import { scanCustomRules } from './rules/customRules'
 import { getProfileById, DEFAULT_PROFILE_ID, getSensitivity, ENTROPY_THRESHOLDS } from './profiles'
 import { generatePlaceholder } from '../replacer/placeholder'
 import { generateId } from '../utils/id'
@@ -272,6 +273,18 @@ const propagateKnownValues = (items: DetectionItem[], text: string): DetectionIt
   return [...items, ...propagated]
 }
 
+// 值白名单过滤：精确匹配的值不检测不替换（Phase 4 自定义档案）
+// 放在值传播之后：白名单值的所有出现（含传播产生的）一并移除
+const applyWhitelist = (items: DetectionItem[], whitelist?: string[]): DetectionItem[] => {
+  if (!whitelist || whitelist.length === 0) return items
+  const set = new Set(whitelist)
+  const filtered = items.filter(item => !set.has(item.original))
+  if (filtered.length !== items.length) {
+    console.log('[PasteGuard] Whitelist filtered', items.length - filtered.length, 'items')
+  }
+  return filtered
+}
+
 // 重新生成占位符：相同 original 值共享同一占位符（同值必同占位符）
 const regeneratePlaceholders = (items: DetectionItem[]): DetectionItem[] => {
   const placeholderByValue = new Map<string, string>()
@@ -395,6 +408,17 @@ export const detect = async (
     })
   }
 
+  // Step 2b: 用户自定义正则（ReDoS 校验 + 时间预算，Phase 5）
+  const customRules = (profile.customRules || []).filter(r => r.enabled)
+  if (customRules.length > 0) {
+    const custom = scanCustomRules(text, customRules)
+    console.log('[PasteGuard] Custom rules found', custom.items.length, 'items')
+    for (const warning of custom.warnings) {
+      console.warn('[PasteGuard]', warning)
+    }
+    items.push(...custom.items)
+  }
+
   // Step 3-4: GLiNER 级联触发（仅处理正则未覆盖片段，如果模型可用）
   if (mergedConfig.enableContentDetection && isContentModelReady()) {
     try {
@@ -462,11 +486,12 @@ export const detect = async (
     console.log('[PasteGuard] Model not ready, using regex only')
   }
 
-  // 去重 → 排序 → 重叠归并 → 值传播 → 按值聚合 → 占位符按值共享
+  // 去重 → 排序 → 重叠归并 → 值传播 → 白名单过滤 → 按值聚合 → 占位符按值共享
   items = deduplicateByPosition(items)
   items.sort((a, b) => a.startIndex - b.startIndex)
   items = resolveOverlaps(items)
   items = propagateKnownValues(items, text)
+  items = applyWhitelist(items, profile.whitelist)
   items.sort((a, b) => a.startIndex - b.startIndex)
   items = aggregateByValue(items)
   items = regeneratePlaceholders(items)

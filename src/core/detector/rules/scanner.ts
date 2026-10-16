@@ -64,10 +64,12 @@ export const scanRegexRules = (
         const startIndex = match.index!
         const endIndex = startIndex + original.length
 
-        // 检查是否是环境变量赋值
+        // 检查是否是环境变量赋值的值位：
+        // 仅当 '=' 与匹配之间只有空白（即匹配就是 env 值本身）才重归类为 ENV_PASSWORD
+        // 防止同行后续文本被误标（如 `API_KEY=xxx 与 support@example.com` 中的邮箱）
         const lineStart = text.lastIndexOf('\n', startIndex) + 1
-        const line = text.substring(lineStart, endIndex)
-        const varMatch = line.match(/^([A-Z0-9_]+)\s*=/)
+        const prefix = text.substring(lineStart, startIndex)
+        const varMatch = prefix.match(/^([A-Z0-9_]+)[\t ]*=[\t ]*$/)
 
         if (varMatch) {
           const varName = varMatch[1]
@@ -119,7 +121,7 @@ export const scanRegexRules = (
               startIndex,
               endIndex,
               confidence: isSensitive ? 'high' : rule.confidence,
-              context: line.trim(),
+              context: prefix + original,
               detectionTypes: [isSensitive ? 'ENV_PASSWORD' : rule.type]
             })
           }

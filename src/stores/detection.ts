@@ -2,7 +2,8 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { DetectionItem, ReplaceConfig, MappingTable, ProfileConfig } from '../core/types'
 import { detect, preloadModels } from '../core/detector'
-import { BUILTIN_PROFILES, getProfileById, DEFAULT_PROFILE_ID } from '../core/detector/profiles'
+import { getProfileById, DEFAULT_PROFILE_ID } from '../core/detector/profiles'
+import { UserProfileManager, createChromeStorage } from '../core/detector/userProfiles'
 import { getReplacer } from '../core/replacer'
 
 // 模型状态类型
@@ -47,14 +48,39 @@ export const useDetectionStore = defineStore('detection', () => {
 
     // 激活的检测配置档案（Tab 切换，持久化）
     const activeProfileId = ref<string>(DEFAULT_PROFILE_ID)
-    const activeProfile = computed(() => getProfileById(activeProfileId.value))
 
-    // 从 chrome.storage 恢复上次选择
+    // 用户自定义档案管理器（内置 + 用户，CRUD 持久化于 chrome.storage.local）
+    const profileManager = new UserProfileManager(createChromeStorage())
+    const userProfilesVersion = ref(0)
+
+    const profiles = computed(() => {
+        void userProfilesVersion.value  // 依赖追踪：用户档案变更后重算
+        return profileManager.getAll()
+    })
+
+    const activeProfile = computed(() => {
+        void userProfilesVersion.value
+        return profileManager.get(activeProfileId.value) || getProfileById(activeProfileId.value)
+    })
+
+    // 从 chrome.storage 恢复上次选择（用户档案加载完成后校验 id 仍存在）
     const storageLocal = typeof chrome !== 'undefined' ? chrome.storage?.local : undefined
+    let pendingActiveId: string | null = null
     storageLocal?.get(PROFILE_STORAGE_KEY, (result: Record<string, unknown>) => {
         const saved = result?.[PROFILE_STORAGE_KEY]
-        if (typeof saved === 'string' && BUILTIN_PROFILES.some(p => p.id === saved)) {
-            activeProfileId.value = saved
+        if (typeof saved === 'string') {
+            pendingActiveId = saved
+            if (profileManager.get(saved)) {
+                activeProfileId.value = saved
+            }
+        }
+    })
+
+    // 异步加载用户档案，完成后二次校验激活 id（防止已删除档案残留）
+    profileManager.load().then(() => {
+        userProfilesVersion.value++
+        if (pendingActiveId && profileManager.get(pendingActiveId)) {
+            activeProfileId.value = pendingActiveId
         }
     })
 
@@ -153,6 +179,60 @@ export const useDetectionStore = defineStore('detection', () => {
         if (originalText.value) {
             await detectText(originalText.value)
         }
+    }
+
+    // ---- 用户自定义档案 CRUD（Phase 4） ----
+
+    // 当前激活档案是否为用户自定义（内置档案不显示编辑/删除入口）
+    const isActiveProfileCustom = computed(() => {
+        void userProfilesVersion.value
+        return profileManager.isUserOwned(activeProfileId.value)
+    })
+
+    // 基于指定档案（缺省当前激活）新建，自动命名「自定义 N」并激活
+    const createUserProfile = async (baseId?: string): Promise<ProfileConfig> => {
+        const base = profileManager.get(baseId ?? activeProfileId.value) || getProfileById(DEFAULT_PROFILE_ID)
+        const existingNames = new Set(profileManager.getAll().map(p => p.name))
+        let n = 1
+        while (existingNames.has(`自定义 ${n}`)) n++
+
+        const profile = await profileManager.create(base, `自定义 ${n}`)
+        userProfilesVersion.value++
+        await setActiveProfile(profile.id)
+        return profile
+    }
+
+    // 更新用户档案；若为当前激活档案则重新检测
+    const updateUserProfile = async (profile: ProfileConfig) => {
+        const updated = await profileManager.update(profile)
+        userProfilesVersion.value++
+        console.log('[PasteGuard] User profile updated:', updated.id)
+        if (updated.id === activeProfileId.value && originalText.value) {
+            await detectText(originalText.value)
+        }
+    }
+
+    // 删除用户档案；若为当前激活档案则回落到默认档案
+    const deleteUserProfile = async (id: string) => {
+        await profileManager.remove(id)
+        userProfilesVersion.value++
+        console.log('[PasteGuard] User profile deleted:', id)
+        if (id === activeProfileId.value) {
+            await setActiveProfile(DEFAULT_PROFILE_ID)
+        }
+    }
+
+    // 导出全部用户档案为 JSON（无可导出时返回 null）
+    const exportProfilesJson = (): string | null => {
+        const json = profileManager.exportJson()
+        return json.includes('"profiles": []') ? null : json
+    }
+
+    // 从 JSON 导入用户档案，返回导入数量
+    const importProfilesJson = async (json: string): Promise<number> => {
+        const imported = await profileManager.importFromJson(json)
+        userProfilesVersion.value++
+        return imported.length
     }
 
     const replaceAll = () => {
@@ -279,8 +359,14 @@ export const useDetectionStore = defineStore('detection', () => {
         // Profile
         activeProfileId,
         activeProfile,
-        profiles: BUILTIN_PROFILES,
+        profiles,
         setActiveProfile,
+        isActiveProfileCustom,
+        createUserProfile,
+        updateUserProfile,
+        deleteUserProfile,
+        exportProfilesJson,
+        importProfilesJson,
 
         // 模型状态
         nerStatus,

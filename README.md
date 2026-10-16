@@ -1,321 +1,120 @@
 # PasteGuard - AI脱敏助手
 
-Chrome 浏览器扩展（Manifest V3），在用户粘贴文本到 AI 对话平台前，自动检测并替换敏感信息（API Key、密码、连接串等）。所有处理在本地完成，无网络请求。
+Chrome 浏览器扩展（Manifest V3），在用户将文本发送给 AI 前，自动检测并替换敏感信息。**双轨检测**：通用文本 PII（手机号/身份证/银行卡/邮箱/车牌/IP）与开发场景密钥（API Key/密码/连接串/JWT/私钥）并重。所有处理在本地完成。
 
-## 开发
+## 快速开始
 
 ```bash
 npm install
-npm run dev
+npm run build     # 构建后加载 dist/ 到 chrome://extensions
+npm run test      # 运行测试套件（50 项断言）
 ```
 
-在 Chrome 中打开 `chrome://extensions/`，开启"开发者模式"，点击"加载已解压的扩展程序"，选择 `dist` 目录。
+## 架构
 
-## 构建
+### 检测管线
 
-```bash
-npm run build
 ```
+输入文本
+  │
+  ▼
+场景启发式（env/yaml/json/log/code/plain，零延迟离线可用）
+  │
+  ▼
+正则规则（按 Profile 启用类别）
+  ├─ secret 类别: ENV/YAML/JSON/连接串/API Key/JWT/私钥
+  ├─ pii 类别:    手机号/身份证(校验位)/银行卡(Luhn)/IP/车牌/邮箱
+  └─ entropy:     高熵字符串（阈值随 Profile 灵敏度档位变化）
+  │
+  ▼（级联触发，仅处理正则未覆盖片段）
+GLiNER 模型（@huggingface/transformers + onnxruntime-web，可选）
+  ├─ 高置信(>0.65) → 验证后采纳
+  ├─ uncertain(0.35-0.65) → 回流正则复检
+  └─ 复检不中 → 低置信保留（默认仅提示）
+  │
+  ▼
+去重 → 重叠归并仲裁 → 值传播 → 占位符按值共享
+  │
+  ▼
+语义化中文占位符: <<手机号>> / <<密码:2>> / <<API密钥>>
+```
+
+### Profile（场景 Tab）
+
+| Profile | 定位 | 特点 |
+|---------|------|------|
+| 不限（默认） | 全场景 | 规则并集 + 仲裁，中低置信度仅提示 |
+| 通用文本 | 聊天/文档/工单 | PII 为主，高熵 strict（30 字符） |
+| 代码开发 | 配置/代码/日志 | 密钥全开，高熵 loose（20 字符），PII 仅提示 |
+
+新增场景 = 在 `src/core/detector/profiles.ts` 加一条配置，无新代码路径。Profile 选择持久化于 `chrome.storage.local`。
+
+### 自定义档案（Phase 4/5）
+
+Tab 栏「＋」基于当前档案克隆出用户自定义档案（⚙ 按钮编辑），可配置：
+
+- **检测类别开关**：密钥凭据 / 个人信息 / 高熵字符串
+- **高熵灵敏度**：宽松（20 字符）/ 标准（25）/ 严格（30）
+- **分类型默认策略**：10 种类型逐项选择替换/保留
+- **值白名单**：每行一个精确值，命中不检测不替换（含值传播的所有出现）
+- **AI 模型检测目标**：GLiNER 标签集（个人信息集/密钥集/全部/自定义）
+- **自定义正则规则**（Phase 5）：零样本之外补位，带 ReDoS 双层防护——静态拒绝嵌套量词（星号高度检查）+ 运行时 50ms/条执行预算与匹配上限；结果走完整管线（去重/重叠归并/值传播/白名单）
+- **JSON 导入导出**（Phase 5）：全部自定义档案经剪贴板导入导出；导入时重新生成 id、重名加序号、危险正则被 sanitize 过滤
+
+自定义档案持久化于 `chrome.storage.local`（`pasteguard.userProfiles`），内置档案不可改删；数据经 sanitize 校验，存储损坏自动丢弃。详见 `docs/phase4-verification.md`、`docs/phase5-verification.md`。
+
+### 防泄漏保证
+
+- **同值必同占位符**：同一敏感值出现 N 处 → N 处全部替换为同一占位符（值传播覆盖无上下文的裸露出现）
+- **区间不重叠**：重叠检测项经仲裁归并（类型优先级：凭据 > PII > 高熵），替换输出永不互切
+- **校验防误报**：身份证过 ISO 7064 校验位，银行卡过 Luhn，弱口令字典（含数字后缀变体）过滤
 
 ## 项目结构
 
 ```
 src/
 ├── core/
-│   ├── detector/          # 检测引擎
-│   │   ├── regexRules.ts      # 正则规则（环境变量、API Key、连接串等）
-│   │   ├── semanticRules.ts   # 语义过滤（关键词、去重）
-│   │   ├── nerDetector.ts     # NER 模型检测（@xenova/transformers）
-│   │   └── index.ts           # 检测入口（两阶段：正则→NER）
-│   ├── replacer/          # 替换引擎
-│   │   ├── placeholder.ts     # 占位符生成与解析
-│   │   ├── mapping.ts         # 映射表管理
-│   │   └── index.ts           # 替换入口
-│   └── types/             # TypeScript 类型定义
-├── components/            # Vue 组件
-├── composables/           # Vue 组合式函数
-├── stores/                # Pinia 状态管理
-├── sidepanel/             # Side Panel 主界面
-├── popup/                 # 弹出窗口
-├── background/            # Service Worker
-└── ui/                    # UI 基础组件（Reka UI）
+│   ├── detector/
+│   │   ├── pipeline.ts        # 主管线（级联调度 + 仲裁 + 值传播）
+│   │   ├── profiles.ts        # Profile 注册表（场景配置）
+│   │   ├── sceneDetector.ts   # 场景启发式（纯规则，无模型）
+│   │   ├── contentDetector.ts # GLiNER 级联检测（可选增强）
+│   │   └── rules/             # 规则模块（按类别分组）
+│   │       ├── envPasswordRules / kvRules / dbPasswordRules
+│   │       ├── apiKeyRules / privateKeyRules / emailRules
+│   │       ├── piiRules       # 手机号/身份证/银行卡/IP/车牌
+│   │       ├── highEntropyRules / valueFilters / constants
+│   │       └── scanner        # 扫描器（类别开关 + 类型合并）
+│   ├── replacer/              # 替换引擎（纯函数 apply）
+│   │   ├── placeholder.ts     # 语义化中文占位符（生成/反解析）
+│   │   └── mapping.ts         # 映射表（同值共享）
+│   ├── types/                 # 类型定义（DetectionType/ProfileConfig）
+│   └── utils/id.ts            # 统一 ID 生成
+├── components/                # Vue 组件（ProfileTabs/DetectionItem...）
+├── stores/detection.ts        # Pinia（Profile 持久化 + 默认策略分层）
+├── sidepanel/                 # Side Panel 主界面
+└── background/                # Service Worker
 ```
 
-## 测试案例
-
-### 案例1：Docker Compose 配置
-
-```yaml
-version: '3.8'
-services:
-  postgres:
-    image: postgres:15
-    environment:
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: SuperSecret123!
-      POSTGRES_DB: myapp
-    ports:
-      - "5432:5432"
-
-  redis:
-    image: redis:7-alpine
-    command: redis-server --requirepass RedisP@ss2024
-
-  app:
-    image: myapp:latest
-    environment:
-      DATABASE_URL: postgres://admin:SuperSecret123!@postgres:5432/myapp
-      REDIS_URL: redis://:RedisP@ss2024@redis:6379
-      JWT_SECRET: jwt-secret-key-abc123def456
-      AWS_ACCESS_KEY_ID: AKIAIOSFODNN7EXAMPLE
-      AWS_SECRET_ACCESS_KEY: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
-      OPENAI_API_KEY: sk-proj-1234567890abcdef1234567890abcdef
-```
-
-**预期识别**：
-- `POSTGRES_PASSWORD: SuperSecret123!` → 环境变量密码
-- `redis-server --requirepass RedisP@ss2024` → Redis 密码
-- `postgres://admin:SuperSecret123!@postgres` → 连接串密码
-- `redis://:RedisP@ss2024@redis` → 连接串密码
-- `jwt-secret-key-abc123def456` → JWT 密钥
-- `AKIAIOSFODNN7EXAMPLE` → AWS Access Key
-- `wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY` → AWS Secret Key
-- `sk-proj-1234567890abcdef1234567890abcdef` → OpenAI API Key
-
----
-
-### 案例2：.env 文件
+## 测试
 
 ```bash
-# Database
-DB_HOST=localhost
-DB_PORT=5432
-DB_USER=admin
-DB_PASSWORD=P@ssw0rd2024!
-DB_NAME=myapp
-
-# Redis
-REDIS_HOST=redis
-REDIS_PORT=6379
-REDIS_PASSWORD=r3d1s_s3cur3!
-
-# API Keys
-OPENAI_API_KEY=sk-proj-abcdef1234567890abcdef1234567890
-STRIPE_SECRET_KEY=sk_live_51abc123def456ghi789
-
-# JWT
-JWT_SECRET=my-super-secret-jwt-key-2024
-JWT_EXPIRES_IN=7d
-
-# AWS
-AWS_ACCESS_KEY_ID=AKIA4EXAMPLE12345678
-AWS_SECRET_ACCESS_KEY=7c4a8d09ca3762af61e59520943dc26494f8941b
-
-# Other
-NODE_ENV=production
-DEBUG=false
-LOG_LEVEL=info
+npm test              # 全量（golden + 回归 + 单元 + 性能）
+npm run test:watch    # 监听模式
 ```
 
-**预期识别**：
-- `DB_PASSWORD=P@ssw0rd2024!` → 环境变量密码
-- `REDIS_PASSWORD=r3d1s_s3cur3!` → 环境变量密码
-- `OPENAI_API_KEY=sk-proj-abcdef...` → 环境变量 + API Key
-- `STRIPE_SECRET_KEY=sk_live_51abc...` → 环境变量 + API Key
-- `JWT_SECRET=my-super-secret-jwt-key-2024` → 环境变量密码
-- `AWS_ACCESS_KEY_ID=AKIA4EXAMPLE...` → 环境变量 + API Key
-- `AWS_SECRET_ACCESS_KEY=7c4a8d09...` → 环境变量 + API Key
+| 目录 | 内容 |
+|------|------|
+| `tests/golden/` | 按 Profile 分组的端到端用例（universal/text/code/whitelist） |
+| `tests/regression/` | Phase 1 修复点回归（含@密码/重复值/重叠/CJK 偏移/吞值） |
+| `tests/unit/` | 场景启发式/占位符/校验算法/替换引擎/用户档案 CRUD |
+| `tests/perf/` | 长文本基准（5000 字 < 2s） |
 
-**不识别**：
-- `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_NAME` → 非敏感变量
-- `REDIS_HOST`, `REDIS_PORT` → 非敏感变量
-- `NODE_ENV`, `DEBUG`, `LOG_LEVEL` → 白名单变量
-
----
-
-### 案例3：日志文件中的敏感信息
-
-```
-2024-01-15 10:30:22 [INFO] Application started
-2024-01-15 10:30:23 [DEBUG] Connecting to database: postgres://admin:DbP@ss2024!@db-server:5432/app
-2024-01-15 10:30:24 [ERROR] Connection failed: ECONNREFUSED 127.0.0.1:5432
-2024-01-15 10:30:25 [INFO] Retrying connection with redis://default:r3d1s_k3y@redis-server:6379
-2024-01-15 10:30:26 [WARN] Token expired: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U
-2024-01-15 10:30:27 [INFO] User login successful: username=admin
-```
-
-**预期识别**：
-- `postgres://admin:DbP@ss2024!@db-server` → 连接串密码
-- `redis://default:r3d1s_k3y@redis-server` → 连接串密码
-- `eyJhbGciOiJIUzI1NiIs...` → JWT Token
-
----
-
-### 案例4：代码片段
-
-```python
-import os
-import psycopg2
-
-# 数据库连接
-DATABASE_URL = "postgres://admin:MyS3cur3P@ss@localhost:5432/mydb"
-REDIS_URL = "redis://default:wJalrXUtnFEMI@redis:6379"
-
-def get_connection():
-    # 使用环境变量
-    password = os.getenv('DB_PASSWORD')
-    if not password:
-        raise ValueError("DB_PASSWORD not set")
-    
-    return psycopg2.connect(DATABASE_URL)
-
-def get_redis_password():
-    # 从配置文件读取
-    config = {
-        'host': 'redis',
-        'port': 6379,
-        'password': 'r3d1s_s3cur3_2024!'
-    }
-    return config['password']
-
-# API 调用
-import openai
-openai.api_key = "sk-proj-abcdef1234567890abcdef1234567890"
-
-# AWS 服务
-aws_secret = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
-```
-
-**预期识别**：
-- `DATABASE_URL = "postgres://admin:MyS3cur3P@ss@localhost..."` → 环境变量 + 连接串密码
-- `REDIS_URL = "redis://default:wJalrXUtnFEMI@redis..."` → 环境变量 + 连接串密码
-- `'password': 'r3d1s_s3cur3_2024!'` → 字典密码值
-- `openai.api_key = "sk-proj-abcdef..."` → API Key
-- `aws_secret = "wJalrXUtnFEMI..."` → AWS Secret Key
-
-**不识别**：
-- `os.getenv('DB_PASSWORD')` → 函数调用，不是变量赋值
-- `password = os.getenv(...)` → 变量名 `password` 不在敏感关键词白名单中（它是临时变量）
-
----
-
-### 案例5：Kubernetes Secret YAML
-
-```yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: app-secrets
-  namespace: production
-type: Opaque
-data:
-  # Base64 编码的值
-  DB_PASSWORD: UEAzc3cwcmQyMDI0IQ==
-  REDIS_PASSWORD: cjNkMXNfczNjdXJlIQ==
-  API_KEY: c2stcHJvamMtYWJjZGVmZzEyMzQ1Njc4OTBhYmNkZWZm
-  JWT_SECRET: bXktc3VwZXItc2VjcmV0LWp3dC1rZXktMjAyNA==
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: app-config
-data:
-  DB_HOST: "postgres-service"
-  DB_PORT: "5432"
-  DB_USER: "admin"
-  LOG_LEVEL: "info"
-```
-
-**预期识别**：
-- `DB_PASSWORD: UEAzc3cwcmQyMDI0IQ==` → Secret 中的密码（Base64）
-- `REDIS_PASSWORD: cjNkMXNfczNjdXJlIQ==` → Secret 中的密码（Base64）
-- `API_KEY: c2stcHJvamMt...` → Secret 中的 API Key（Base64）
-- `JWT_SECRET: bXktc3VwZXIt...` → Secret 中的 JWT 密钥（Base64）
-
-**不识别**：
-- ConfigMap 中的 `DB_HOST`, `DB_PORT`, `DB_USER`, `LOG_LEVEL` → 非敏感配置
-
----
-
-### 案例6：边界情况测试
-
-```bash
-# 1. 空值
-EMPTY_PASSWORD= 
-EMPTY_KEY= 
-
-# 2. 特殊字符
-SPECIAL_CHARS="p@ss!w0rd#$%^&*()"
-SPECIAL_CHARS2="a]b[c{d}e(f)g"
-
-# 3. 非常长的值
-LONG_SECRET=Aa1Bb2Cc3Dd4Ee5Ff6Gg7Hh8Ii9Jj0Kk1Ll2Mm3Nn4Oo5Pp6Qq7Rr8Ss9Tt0Uu1Vv2Ww3Xx4Yy5Zz6
-
-# 4. 非常短的值
-SHORT_PASS=ab
-SHORT_PASS2=12
-
-# 5. 纯数字
-NUMERIC_SECRET=12345678901234567890
-
-# 6. 重复值（同一值出现多次）
-REPEATED_VALUE=abc123def456ghi789jkl0
-SAME_VALUE_AGAIN=abc123def456ghi789jkl0
-ONE_MORE_TIME=abc123def456ghi789jkl0
-
-# 7. 常见密码模式
-COMMON_PASSWORD=password123
-WEAK_PASS=admin
-DEFAULT_SECRET=secret
-
-# 8. 看起来像但不是密码的
-NOT_A_PASSWORD=hello_world
-NOT_A_SECRET=foo_bar_baz
-```
-
-**预期识别**：
-- `SPECIAL_CHARS="p@ss!w0rd#$%^&*()"` → 高熵字符串（包含特殊字符）
-- `LONG_SECRET=Aa1Bb2Cc3...` → 高熵字符串（长度>25）
-- `REPEATED_VALUE=abc123def456ghi789jkl0` → 合并为1条（相同值出现3次）
-
-**预期不识别**：
-- `EMPTY_PASSWORD=` → 空值不识别
-- `SHORT_PASS=ab` → 太短，不识别
-- `SHORT_PASS2=12` → 太短，不识别
-- `NUMERIC_SECRET=12345678901234567890` → 纯数字，不识别
-- `COMMON_PASSWORD=password123` → 虽然包含 `PASSWORD`，但值不像是真实密码（可配置是否识别）
-- `WEAK_PASS=admin` → 太短，不识别
-- `DEFAULT_SECRET=secret` → 太常见，不识别
-- `NOT_A_PASSWORD=hello_world` → 不包含敏感关键词
-- `NOT_A_SECRET=foo_bar_baz` → 不包含敏感关键词
-
----
-
-## 检测类型
-
-| 类型 | 说明 | 示例 |
-|------|------|------|
-| `ENV_PASSWORD` | 环境变量中的密码 | `DB_PASSWORD=xxx` |
-| `API_KEY` | API 密钥 | `sk-proj-xxx`, `AKIAxxx` |
-| `DB_PASSWORD` | 数据库连接串密码 | `postgres://user:pass@host` |
-| `JWT` | JSON Web Token | `eyJhbGciOi...` |
-| `PRIVATE_KEY` | 私钥 | `-----BEGIN RSA PRIVATE KEY-----` |
-| `HIGH_ENTROPY` | 高熵字符串（疑似密钥） | 长度>25的随机字符串 |
-
-## 数据库支持
-
-支持 50+ 种数据库连接串识别：
-
-- **关系型**：PostgreSQL, MySQL, MariaDB, SQLite, MSSQL, Oracle, DB2, CockroachDB
-- **NoSQL**：MongoDB, Redis, Memcached, CouchDB, Cassandra, DynamoDB
-- **消息队列**：AMQP, RabbitMQ, Kafka, Nats, MQTT
-- **其他**：Elasticsearch, InfluxDB, Neo4j, ArangoDB, RethinkDB, etcd
+手动验证用例见 `docs/phase1-verification.md`、`docs/phase2-verification.md`、`docs/phase4-verification.md`。
 
 ## 技术栈
 
-- Vue 3 + Composition API
-- TypeScript
-- Vite + @crxjs/vite-plugin
-- Tailwind CSS v4
-- Reka UI
-- @xenova/transformers（NER 模型）
+- Vue 3 + Pinia + Tailwind CSS 4 + Reka UI
+- @crxjs/vite-plugin（Manifest V3 构建）
+- @huggingface/transformers + gliner + onnxruntime-web（GLiNER 模型，WASM，可选增强）
+- 模型远程加载（hf-mirror），失败时静默降级为纯正则（UI 显示降级状态）
