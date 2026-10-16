@@ -3,6 +3,7 @@
 import type { DetectionItem, DetectionResult, DetectionType, Confidence, ProfileConfig } from '../types'
 import { detectScene, type SceneResult } from './sceneDetector'
 import { detectContent, categorizeEntity, preloadContentModel, type ContentEntity, isContentModelReady } from './contentDetector'
+import type { ModelProgress } from './modelDownload'
 import { scanRegexRules, rulesByCategory } from './regexRules'
 import { scanCustomRules } from './rules/customRules'
 import { getProfileById, DEFAULT_PROFILE_ID, getSensitivity, ENTROPY_THRESHOLDS } from './profiles'
@@ -503,7 +504,7 @@ export const detect = async (
 
 // 预加载所有模型（仅在用户显式启用 AI 增强后由 store 调用）
 export const preloadModels = async (
-  onProgress?: (percent: number) => void
+  onProgress?: ModelProgress
 ): Promise<void> => {
   await preloadContentModel(onProgress)
 }

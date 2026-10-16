@@ -1,6 +1,7 @@
 // 内容检测器 - 使用 GLiNER 检测密钥和敏感信息
 
 import type { SceneType } from './sceneDetector'
+import { downloadModel, createSingleFlight, type ModelProgress } from './modelDownload'
 
 // 密钥相关实体类型（GLiNER 零样本标签）
 const SECRET_LABELS = [
@@ -38,55 +39,14 @@ export type EntityCategory = 'sensitive' | 'not_sensitive' | 'uncertain'
 
 // GLiNER 模型单例
 let glinerInstance: any = null
-let loading = false
 let ready = false
+// 单飞门闩：加载进行中时，重试/重复调用复用同一个 promise（结果就是真实结果，
+// 修复「卡住后点重试立刻 resolve（假成功）／永久卡 loading」）
+const loadGate = createSingleFlight()
 
-// 注意：模型文件在 onnx/ 子目录下（仓库根目录没有 model.onnx，直接请求会 404）。
-// 选 model_quantized.onnx（int8 量化，约 183MB / 183,403,734 字节）：全量 model.onnx 达 611MB，不适合浏览器扩展
-//
-// 模型源（按顺序回退）：
-// 1. ModelScope（阿里云）：`/models/{id}/resolve/{rev}/{path}` 端点的 302 带完整 CORS 头
-//    （Access-Control-Allow-Origin: *，Allow-Headers 含 Range），末端 cdn-lfs-cn-1.modelscope.cn
-//    返回与 HuggingFace 一致的 183,403,734 字节，国内实测约 14MB/s。
-//    ⚠️ 不要换回 `/api/v1/models/{id}/repo?FilePath=...`：它的 302 没有 ACAO，同样会被 CORS 判死。
-// 2. HuggingFace 官方源：302 会回显请求 Origin（CORS 通过），作为 ModelScope 镜像缺失时的兜底。
-//
-// ❌ 不要再用 hf-mirror.com：它已改为 308 跳转到 huggingface.co，且该 308 响应不带
-// Access-Control-Allow-Origin。Fetch 规范对重定向链上的每一跳都要做 CORS 校验，
-// 扩展页（manifest 未声明 host_permissions，只能走 CORS）会在第一跳直接抛
-// TypeError: Failed to fetch —— 界面上表现为「网络请求被阻止或模型下载失败」。
-const MODEL_SOURCES = [
-  'https://modelscope.cn/models/onnx-community/gliner_small-v2/resolve/main/onnx/model_quantized.onnx',
-  'https://huggingface.co/onnx-community/gliner_small-v2/resolve/main/onnx/model_quantized.onnx'
-]
-
-// 依次尝试模型源，返回第一个 HTTP 2xx 响应；全部失败时抛出带各源详情的错误
-const fetchFirstOk = async (urls: string[]): Promise<Response> => {
-  const failures: string[] = []
-  for (const url of urls) {
-    try {
-      const res = await fetch(url)
-      if (res.ok) return res
-      failures.push(`${new URL(url).host}: HTTP ${res.status}`)
-      console.warn('[PasteGuard] 模型源返回非 2xx，尝试下一个源：', url, res.status)
-    } catch (error) {
-      // 典型：CORS 或网络中断导致的 TypeError: Failed to fetch
-      failures.push(`${new URL(url).host}: ${error instanceof Error ? error.message : String(error)}`)
-      console.warn('[PasteGuard] 模型源请求失败，尝试下一个源：', url, error)
-    }
-  }
-  throw new Error(`模型下载失败：所有模型源均不可用（${failures.join('；')}）`)
-}
-
-// 加载 GLiNER 模型
-// onProgress: 真实下载进度回调（0-100）；model_quantized.onnx 约 183MB，自行流式下载后
-// 以 ArrayBuffer 传入 gliner（其 modelPath 支持二进制），从而获得真实字节数进度
-export const loadContentModel = async (
-  onProgress?: (percent: number) => void
-): Promise<void> => {
-  if (loading || ready) return
-  loading = true
-
+// 实际加载流程（由 loadGate 保证同一时刻只跑一份）
+// 模型以 ArrayBuffer 传入 gliner（其 modelPath 支持二进制），因此能拿到真实字节进度
+const runLoad = async (onProgress?: ModelProgress): Promise<void> => {
   try {
     // 注意：gliner 内部用的是 @xenova/transformers（node_modules/gliner/dist/index.mjs 首行
     // `import { env, AutoTokenizer } from '@xenova/transformers'`），tokenizer/config 由它下载，
@@ -98,33 +58,9 @@ export const loadContentModel = async (
     transformers.env.allowLocalModels = false
     transformers.env.useBrowserCache = true
 
-    // 流式下载模型，报告真实进度（源不可用时逐个回退）
-    const response = await fetchFirstOk(MODEL_SOURCES)
-    const contentLength = Number(response.headers.get('content-length')) || 0
-    const reader = response.body?.getReader()
-
-    let modelBuffer: ArrayBuffer
-    if (reader && contentLength > 0) {
-      const chunks: Uint8Array[] = []
-      let received = 0
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        chunks.push(value)
-        received += value.length
-        onProgress?.(Math.min(99, Math.round((received / contentLength) * 100)))
-      }
-      modelBuffer = new Uint8Array(received).buffer
-      let offset = 0
-      for (const chunk of chunks) {
-        new Uint8Array(modelBuffer).set(chunk, offset)
-        offset += chunk.length
-      }
-    } else {
-      // 无法获取 Content-Length 时退化为不定进度
-      onProgress?.(-1)
-      modelBuffer = await response.arrayBuffer()
-    }
+    // 下载模型：多源回退 + Range 断点续传 + 退避重试 + 停滞看门狗 + Cache Storage 落盘，
+    // 细节见 modelDownload.ts（命中缓存时零网络请求）
+    const modelBuffer = await downloadModel({ onProgress })
 
     const { Gliner } = await import('gliner')
     const ort = await import('onnxruntime-web')
@@ -151,14 +87,19 @@ export const loadContentModel = async (
     await glinerInstance.initialize()
 
     ready = true
-    loading = false
     console.log('[PasteGuard] Content detector ready')
   } catch (error) {
-    loading = false
     // 降噪：AI 增强为可选功能，失败仅警告（基础正则检测不受影响）
     console.warn('[PasteGuard] Failed to load content model (optional feature):', error)
     throw error
   }
+}
+
+// 加载 GLiNER 模型
+// onProgress: 真实下载进度（percent < 0 表示未知总长；received/total 供 UI 展示 MB）
+export const loadContentModel = (onProgress?: ModelProgress): Promise<void> => {
+  if (ready) return Promise.resolve()
+  return loadGate.run(() => runLoad(onProgress))
 }
 
 // 检测内容实体
@@ -214,7 +155,7 @@ export const isContentModelReady = (): boolean => ready
 
 // 预加载模型
 export const preloadContentModel = async (
-  onProgress?: (percent: number) => void
+  onProgress?: ModelProgress
 ): Promise<void> => {
   await loadContentModel(onProgress)
 }

@@ -13,7 +13,8 @@
     "sidePanel",
     "storage",
     "clipboardWrite",
-    "contextMenus"
+    "contextMenus",
+    "unlimitedStorage"
   ],
   "action": {
     "default_icon": {

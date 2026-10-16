@@ -93,6 +93,17 @@ const engineStatusItems = computed(() => [
         icon: 'content'
     }
 ])
+
+// 模型加载进度文案：已知总长 → 百分比；未知总长 → 「已下 xx.x / 183 MB」（字节实时心跳）
+const progressLabel = computed(() => {
+    if (!store.nerIndeterminate) return `${Math.round(store.nerLoadProgress || 0)}%`
+    if (store.nerLoadTotal > 0) {
+        const done = (store.nerLoadBytes / 1048576).toFixed(1)
+        const all = Math.round(store.nerLoadTotal / 1048576)
+        return `${done} / ${all} MB`
+    }
+    return '…'
+})
 </script>
 
 <template>
@@ -200,7 +211,7 @@ const engineStatusItems = computed(() => [
                 <div v-if="store.nerStatus === 'loading'" class="mt-2 w-full">
                     <div class="flex justify-between text-xs text-muted-foreground mb-1">
                         <span>下载模型中...</span>
-                        <span>{{ Number(store.nerLoadProgress || 0).toFixed(0) }}%</span>
+                        <span>{{ progressLabel }}</span>
                     </div>
                     <div class="w-full bg-muted rounded-full h-1.5">
                         <div class="bg-primary h-1.5 rounded-full transition-all duration-300"
@@ -263,8 +274,7 @@ const engineStatusItems = computed(() => [
                 <div v-else class="w-full mt-1">
                     <div class="flex justify-between text-xs text-primary mb-1">
                         <span>下载中...</span>
-                        <span v-if="!store.nerIndeterminate">{{ Math.round(store.nerLoadProgress) }}%</span>
-                        <span v-else>…</span>
+                        <span>{{ progressLabel }}</span>
                     </div>
                     <!-- 定进度：按真实字节数填充；不定进度：循环滑动动画 -->
                     <div class="w-full bg-primary/20 rounded-full h-1.5 overflow-hidden">

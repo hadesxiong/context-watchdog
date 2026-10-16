@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { DetectionItem, ReplaceConfig, MappingTable, ProfileConfig } from '../core/types'
-import { detect, preloadModels } from '../core/detector'
+import { detect, preloadModels, isContentModelReady } from '../core/detector'
 import { getProfileById, DEFAULT_PROFILE_ID } from '../core/detector/profiles'
 import { UserProfileManager, createChromeStorage } from '../core/detector/userProfiles'
 import { getReplacer } from '../core/replacer'
@@ -46,6 +46,9 @@ export const useDetectionStore = defineStore('detection', () => {
     const nerLoadProgress = ref(0)
     // 不定进度（服务端未返回 Content-Length 时为 true，进度条走循环动画）
     const nerIndeterminate = ref(false)
+    // 已下载字节 / 总字节：未知总长时 UI 展示「xx.x / 183 MB」而不是干转圈
+    const nerLoadBytes = ref(0)
+    const nerLoadTotal = ref(0)
     const nerError = ref<string | null>(null)
     const nerRetryCount = ref(0)
     // AI 增强检测开关（用户显式启用后才会下载模型）
@@ -289,6 +292,8 @@ export const useDetectionStore = defineStore('detection', () => {
         nerStatus.value = 'loading'
         nerLoadProgress.value = 0
         nerIndeterminate.value = false
+        nerLoadBytes.value = 0
+        nerLoadTotal.value = 0
         nerError.value = null
 
         try {
@@ -311,12 +316,17 @@ export const useDetectionStore = defineStore('detection', () => {
                 arm()
             })
 
-            // 真实下载进度：-1 表示无法获取 Content-Length（不定进度）
-            const onProgress = (percent: number) => {
+            // 真实下载进度：percent < 0 表示未知总长（不定进度）。
+            // 每次回调都 resetTimeout —— 只要还有字节进来就绝不误判「60 秒无进展」超时
+            //（修复：无 Content-Length 时此前只在开始上报一次，60 秒后必然假超时）
+            const onProgress = (percent: number, received?: number, total?: number) => {
                 resetTimeout()
+                if (typeof received === 'number') nerLoadBytes.value = received
+                if (typeof total === 'number' && total > 0) nerLoadTotal.value = total
                 if (percent < 0) {
                     nerIndeterminate.value = true
                 } else {
+                    nerIndeterminate.value = false
                     nerLoadProgress.value = percent
                 }
             }
@@ -324,6 +334,10 @@ export const useDetectionStore = defineStore('detection', () => {
             const loadPromise = preloadModels(onProgress).then(() => {
                 settled = true
                 if (timeoutTimer) clearTimeout(timeoutTimer)
+                // 以模型真实状态为准：promise resolve 但模型没就绪 → 视为失败（防假成功）
+                if (!isContentModelReady()) {
+                    throw new Error('模型加载结果异常：模型未就绪，请重试')
+                }
                 nerStatus.value = 'success'
                 nerRetryCount.value = 0
                 nerLoadProgress.value = 100
@@ -372,6 +386,8 @@ export const useDetectionStore = defineStore('detection', () => {
             nerStatus.value = 'disabled'
             nerLoadProgress.value = 0
             nerIndeterminate.value = false
+            nerLoadBytes.value = 0
+            nerLoadTotal.value = 0
             nerError.value = null
             engineStatus.value.sceneModel = false
             engineStatus.value.contentModel = false
@@ -387,6 +403,10 @@ export const useDetectionStore = defineStore('detection', () => {
     // 禁用模型（降级模式）
     const disableNER = () => {
         nerStatus.value = 'disabled'
+        nerLoadProgress.value = 0
+        nerIndeterminate.value = false
+        nerLoadBytes.value = 0
+        nerLoadTotal.value = 0
         engineStatus.value.sceneModel = false
         engineStatus.value.contentModel = false
         console.log('[PasteGuard] Models disabled')
@@ -416,6 +436,8 @@ export const useDetectionStore = defineStore('detection', () => {
         nerStatus,
         nerLoadProgress,
         nerIndeterminate,
+        nerLoadBytes,
+        nerLoadTotal,
         nerError,
         nerRetryCount,
         aiEnabled,
