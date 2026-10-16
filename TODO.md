@@ -34,9 +34,9 @@
 > （另有 151 行「检测中」浮窗层级一致）・ `App.vue:76-95` 三引擎卡片 + 开关；全 `src` 仅 `contentDetector.ts` 一处网络入口
 > → AI 关闭即零网络。
 > 未勾项：**间距统一**为纯视觉节奏，只能目视判定；**明暗主题**发现 1 处硬编码残留 `Switch.vue:65 bg-white`（开关把手，
-> 明暗下均可见故不影响使用），已登记为遗留项（见下方「🧭 遗留项 → B. 代码卫生 → 清理硬编码颜色」）。
+> 明暗下均可见故不影响使用）→ 已按遗留项 B-5 修复为 `bg-background`（深色观感待实机复核）。
 
-- [x] **明暗两套主题**：跟随系统 `prefers-color-scheme` 切换；检查 header、Tab、检出卡片、设置面板配色无硬编码残留（指定范围内无残留；`Switch.vue:65 bg-white` 见下方遗留清单「清理硬编码颜色」）
+- [x] **明暗两套主题**：跟随系统 `prefers-color-scheme` 切换；检查 header、Tab、检出卡片、设置面板配色无硬编码残留（指定范围内无残留；唯一发现的 `Switch.vue:65 bg-white` 已改为 `bg-background`）
 - [x] **Logo**：header 左上角应为「盾牌+四点掩码」SVG（非蓝色方块）；工具栏图标（16/32/48/128 PNG）正常显示（SVG 与 4 个 PNG 均在 `src/ui/Logo.vue` / `dist/icons/`；PNG 显示效果待目视）
 - [x] **配置弹窗**：「＋」新建自定义档案 → 居中 Dialog 弹出（遮罩 + 淡入缩放动画），Esc / 点遮罩 / 右上角 × 均可关闭；表单保存/取消/删除正常（`pg-dialog-in/out` 关键帧 + reka-ui 内置 Esc/遮罩关闭 + 显式 ×）
 - [ ] **间距统一**：Tab 区（`px-3 pt-3`）与输入区、右列 `p-3` 左对齐、垂直节奏一致（**需目视**，代码类名已核）
@@ -68,7 +68,7 @@
 - [x] **404 已修**：`MODEL_URL` 已改为 `onnx/model_quantized.onnx`（原根目录 `model.onnx` 不存在）；控制台不应再出现 `模型下载失败：HTTP 404`（证据：`MODEL_SOURCES` 指向 ModelScope/HF 的 `onnx/model_quantized.onnx`，curl 实测 200 / 183,403,734 字节）
 - [x] **真实进度**：开关打开 → 浮窗进度条按真实字节推进 0→100%（约 183MB int8 量化版，不再是"假进度卡 90%"）（证据：`progressPercent` 按 `content-length` 逐块计算，单测覆盖单调性与封顶 99；未知总长时 UI 显示「已下 xx.x / 183 MB」）
 - [x] **停滞超时**：只要进度在动就不会超时；真正 60 秒无进展才弹黄色「加载超时」toast + 重试按钮（证据：每次进度回调都 `resetTimeout()`；下载侧另有 30s 停滞看门狗，单测覆盖）
-- [x] **失败路径**：断网开启开关 → 黄色「NER模型加载失败」toast 立即出现（原 bug：`nerRetryCount` 恒为 0 导致永远卡 loading）；点重试可恢复（证据：`createSingleFlight` 单测——并发复用同一 promise、失败后释放门闩；`loadContentModel` 重试复用在飞加载的真实结果）
+- [x] **失败路径**：断网开启开关 → 黄色「NER模型加载失败」toast 立即出现（原 bug：旧变量 `nerRetryCount` 恒为 0 导致永远卡 loading；该变量已于遗留项 B-3 删除）；点重试可恢复（证据：`createSingleFlight` 单测——并发复用同一 promise、失败后释放门闩；`loadContentModel` 重试复用在飞加载的真实结果）
 - [ ] **就绪路径**：下载完成 → 绿色「NER模型已就绪」toast，引擎面板「AI 模型」变"生效"；输入含姓名/地址文本验证 AI 增强检出（代码侧：成功前断言 `isContentModelReady()` 杜绝假成功、`engineStatus.contentModel` 置位；**后半句需真机跑模型推理**，保持未勾）
 - [x] **开关关闭**：关闭 AI 增强 → 回退纯正则检测，状态复位（证据：`setAiEnabled(false)` 复位进度/字节/总长/引擎状态；`pipeline` 的 `shouldRunNER` 依赖 `nerStatus==='success'`）
 
@@ -83,16 +83,16 @@ npm run typecheck && npm test && npm run build   # 期望：0 error / 104 passed
 
 ---
 
-## 🧭 遗留项（2026-10-16 盘点，均未开始）
+## 🧭 遗留项（2026-10-16 盘点；A、B 两组已于 2026-10-17 实施完成，C 组待拍板）
 
-> 来源：本轮修复后仍存在的能力缺口 + 代码卫生 + 产品方向。全部为 `[ ]` 未开始，建议优先级 A → B → C。
+> 来源：本轮修复后仍存在的能力缺口 + 代码卫生 + 产品方向。A、B 组已完成并有单测/构建证据，C 组仍为 `[ ]` 待决策。
 
 ### A. 模型下载健壮性（跨会话 / 多实例）
 
-- [ ] **跨会话断点续传**：`modelDownload.ts` 的 `chunks` 只在内存，Range 续传仅在同一次下载进程内有效；侧栏关闭 / 浏览器崩溃 / 扩展更新后已收字节全部丢失，重下从 0。需把「部分文件 + 元数据」持久化（Cache Storage 存 partial 或 IndexedDB），并用 ETag / `If-Range` 校验源文件未变。
-- [ ] **多窗口并发去重**：sidePanel 每窗口一个实例，两个窗口同时开 AI 增强会各自下载 183MB（`createSingleFlight` 只在页面内生效）。需在 background service worker 或 Cache 层做跨上下文协调（先到者写缓存，其余轮询缓存命中）。
-- [ ] **缓存版本号自动化**：`MODEL_FILE_BYTES` 常量充当缓存 key 的 `?v=`，上游换模型文件必须改代码。改为用响应头 ETag / `Content-Length` 自动失效。
-- [ ] **内存峰值**：183MB ArrayBuffer（JS 侧）+ ORT wasm 内再拷一份，侧栏峰值 400MB+。下载完成后及时释放 JS 侧引用，或改用外部 ONNX session 复用。
+- [x] **跨会话断点续传**（A-1，2026-10-17）：部分文件持久化到 Cache Storage（`MODEL_PARTIAL_URL = ?partial`），元数据存条目响应头（`x-model-bytes/total/etag/source/saved-at`）；读取时三重一致性校验（实际字节 = 头声明 = content-length，不符即丢弃，绝不拼脏数据）。续传只在「同源 + 强 etag」时才发 `If-Range`（弱 etag / 跨源不发，跨源靠 `content-range.total` 不匹配时重置基准）。单测覆盖：跨会话续传、跨源续传与重置、源站忽略 Range、偏移不匹配、全部失败保留部分文件。
+- [x] **多窗口并发去重**（A-2，2026-10-17）：`chrome.storage.local` 单键锁 `pasteguard.modelLock`（owner + 30 秒心跳 TTL + 进度），抢不到锁的窗口进入等待：转发对方进度到 UI、显示「另一窗口下载中」，对方写完缓存即直接命中（全程零网络）；锁过期（关面板/崩溃）则接管，接管路径再查一次缓存避免重复下载。等待上限 200 轮 ×1.5s ≈ 5 分钟，超时自行下载（正确性不受影响，只多耗带宽）。未改 background SW。单测覆盖：锁抢占/过期接管/心跳权限、等待方零网络命中、过期接管。
+- [x] **缓存版本号自动化**（A-3，2026-10-17）：缓存 key 固定为 `.../model_quantized.onnx`（不再带 `?v=`），ETag/长度/时间写进条目响应头；命中缓存后先做 1 字节探测（`Range: bytes=0-0`，5 秒超时，双源依次，正文立即丢弃）比对 ETag → 长度兜底：一致/无法比较/离线一律沿用缓存（离线优先），确认过期才清缓存重下。旧 key `?v=183403734` 命中时一次性搬迁，升级用户不重下 183MB。单测覆盖：探测取值与全源失败、离线降级、远端更新触发重下。
+- [x] **内存峰值**（A-4，2026-10-17，轻方案）：`runLoad` 持本地 `onnxSettings` 引用，`initialize()` 后置空 `modelPath`，断开 gliner 实例对 183MB ArrayBuffer 的引用（ORT session 已持有 wasm 堆副本，推理不受影响）；并加 JS 堆快照日志 `[PasteGuard] 内存快照（模型下载完成 / 初始化完成并释放模型引用）`。**实测峰值数据待实机复核后回填此条。**
 
 > 注：tokenizer / config / spm.model 由 gliner 内部的 `@xenova/transformers` 下载，走它自己的 `transformers-cache`
 > 与 HTTP 缓存，不受本节 `?v=` 版本号管理；且 `transformers.env` 是**全局**设置，未来若出现第二处 transformers
@@ -100,11 +100,11 @@ npm run typecheck && npm test && npm run build   # 期望：0 error / 104 passed
 
 ### B. 代码卫生（低风险清理）
 
-- [ ] **废弃文件处置**：`nerDetector.ts` / `semanticRules.ts` / `connectionString.ts` 全项目 0 引用；§2.2 现记为「保留但不再使用」→ 需决定：删除，还是正式归档（若删除，同步更新 §1.3 表格与 §2.2）。
-- [ ] **删除兼容导出 `preloadNER`**：`src/core/detector/index.ts:34` 已标注废弃，无任何调用方。
-- [ ] **删除死变量 `nerRetryCount`**：`src/stores/detection.ts:53` 仅声明 / 复位 / 导出，无逻辑使用（其对应旧 bug 已由单飞门闩修复）。
-- [ ] **补 store 状态机单测**：60 秒停滞超时、timeout 后后台下载成功自愈为 success、成功前 `isContentModelReady()` 假成功断言、重试复用在飞加载（需 pinia + mock `core/detector`）。
-- [ ] **清理硬编码颜色**：`src/ui/Switch.vue:65` 开关把手 `bg-white` → 改用主题令牌（如 `bg-background`），使明暗主题完全跟随。
+- [x] **废弃文件处置**（B-1，2026-10-17）：已按拍板结论直接删除 `nerDetector.ts` / `semanticRules.ts` / `connectionString.ts`（未归档）；§1.3 表格与 §2.2 已同步。
+- [x] **删除兼容导出 `preloadNER`**（B-2，2026-10-17）：`src/core/detector/index.ts` 中已删除。
+- [x] **删除死变量 `nerRetryCount`**（B-3，2026-10-17）：声明 / 复位 / 导出三处已删除。
+- [x] **补 store 状态机单测**（B-4，2026-10-17）：新增 `tests/unit/detectionStore.test.ts` 6 用例（加载成功、`isContentModelReady()` 假成功断言、60 秒停滞超时、进度重置超时与字节/不定进度映射、`setAiEnabled(false)` 复位、另一窗口等待标记）。
+- [x] **清理硬编码颜色**（B-5，2026-10-17）：`src/ui/Switch.vue` 开关把手 `bg-white` → `bg-background`（深色主题观感待实机复核）。
 
 ### C. 产品 / 工程方向（需先拍板）
 
@@ -167,9 +167,8 @@ npm run typecheck && npm test && npm run build   # 期望：0 error / 104 passed
 | `@xenova/transformers` v2.17.2 | 保留，用于场景识别 |
 | `onnxruntime-web` | 新增，GLiNER 依赖 |
 | `@lmoe/gliner-onnx` | 新增，GLiNER TypeScript 封装 |
-| `src/core/detector/nerDetector.ts` | 废弃，替换为新检测器 |
-| `src/core/detector/semanticRules.ts` | 废弃，逻辑移入 GLiNER 置信度 |
-| `src/core/detector/connectionString.ts` | 废弃，死代码 |
+
+> 曾计划「废弃保留」的 `nerDetector.ts` / `semanticRules.ts` / `connectionString.ts` 已于遗留项 B-1 直接删除（2026-10-17）。
 
 ---
 
@@ -186,14 +185,10 @@ src/core/detector/
 └── index.ts              # 重写：调用新管线
 ```
 
-### 2.2 废弃文件（保留但不再使用）
+### 2.2 废弃文件（已于 2026-10-17 删除）
 
-```
-src/core/detector/
-├── nerDetector.ts        # 废弃：旧 NER 检测器
-├── semanticRules.ts      # 废弃：语义过滤
-└── connectionString.ts   # 废弃：死代码
-```
+`nerDetector.ts` / `semanticRules.ts` / `connectionString.ts` 原记为「保留但不再使用」，
+后按遗留项 B-1 的拍板结论**直接删除**（全项目 0 引用；历史版本见 git）。
 
 ### 2.3 保留文件
 
