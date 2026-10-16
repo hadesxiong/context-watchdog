@@ -117,4 +117,4 @@ npm run test:watch    # 监听模式
 - Vue 3 + Pinia + Tailwind CSS 4 + Reka UI
 - @crxjs/vite-plugin（Manifest V3 构建）
 - gliner + @xenova/transformers + onnxruntime-web（GLiNER 模型，WASM，可选增强）
-- 模型远程加载（主源 ModelScope 镜像，回退 huggingface.co；失败时静默降级为纯正则，UI 显示降级状态）
+- 模型远程加载（主源 ModelScope 镜像，回退 huggingface.co；Range 断点续传 + 指数退避重试 + 停滞看门狗 + Cache Storage 落盘，重开侧栏零下载；失败时静默降级为纯正则，UI 显示降级状态）

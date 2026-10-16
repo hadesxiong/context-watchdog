@@ -16,11 +16,18 @@
 
 ## ⏳ 待人工验证（UI/UX 阶段，代码已完成，因网络受限未实机验证）
 
-> 状态：代码全部完成并通过 `npm run typecheck` / `npm test`（88 断言）/ `npm run build`（零警告）。
-> 因当前网络无法完成 183MB 模型下载（hf-mirror 限流），以下项目待换终端后验证。
+> 状态：代码全部完成并通过 `npm run typecheck` / `npm test`（104 断言）/ `npm run build`（零警告）。
+> 模型源已由 hf-mirror 切换为 ModelScope（hf-mirror 现为 308 跳转且无 ACAO，扩展页 fetch 必失败），
+> 并补齐断点续传 / 缓存落盘 / 进度心跳 / 单飞重试（详见 B 组复核说明）；以下项目仍需**实机目视**验证。
 > 验证方式：`npm run build` → Chrome 扩展页重新加载 `dist/`（不要用 `npm run dev`）。
 
 ### A. UI/主题（shadcn 化 + Logo + 弹窗）
+
+> **代码侧复核（2026-10-16）**：下列 7 项在代码中均已具备 —— `src/style.css`（`prefers-color-scheme` 暗色令牌）、
+> `src/ui/Logo.vue`（盾牌 Logo）、`src/ui/Dialog.vue`（`z-50` 居中 + 遮罩 + Esc 关闭）、
+> `DetectionList.vue`（空结果绿色对勾）、`src/sidepanel/App.vue`（三个 `z-50 bg-card shadow-lg` 浮窗固定于 header 下方 +
+> 三引擎状态面板，`src` 内仅 `contentDetector` 一处网络入口，AI 关闭即零网络）。
+> 剩余为人工目视确认，未逐项勾选。
 
 - [ ] **明暗两套主题**：跟随系统 `prefers-color-scheme` 切换；检查 header、Tab、检出卡片、设置面板配色无硬编码残留
 - [ ] **Logo**：header 左上角应为「盾牌+四点掩码」SVG（非蓝色方块）；工具栏图标（16/32/48/128 PNG）正常显示
@@ -32,20 +39,40 @@
 
 ### B. NER 模型下载（本轮修复重点，需真实网络）
 
-- [ ] **404 已修**：`MODEL_URL` 已改为 `onnx/model_quantized.onnx`（原根目录 `model.onnx` 不存在）；控制台不应再出现 `模型下载失败：HTTP 404`
-- [ ] **真实进度**：开关打开 → 浮窗进度条按真实字节推进 0→100%（约 183MB int8 量化版，不再是"假进度卡 90%"）
-- [ ] **停滞超时**：只要进度在动就不会超时；真正 60 秒无进展才弹黄色「加载超时」toast + 重试按钮
-- [ ] **失败路径**：断网开启开关 → 黄色「NER模型加载失败」toast 立即出现（原 bug：`nerRetryCount` 恒为 0 导致永远卡 loading）；点重试可恢复
-- [ ] **就绪路径**：下载完成 → 绿色「NER模型已就绪」toast，引擎面板「AI 模型」变"生效"；输入含姓名/地址文本验证 AI 增强检出
-- [ ] **开关关闭**：关闭 AI 增强 → 回退纯正则检测，状态复位
+> **代码侧复核（2026-10-16）：B 组 6 项代码均已具备，另有 4 处真缺陷本轮已补**
+>
+> 1. **源站**：`hf-mirror.com` 已弃用 —— 它现在对 `/resolve/` 一律 `308 → huggingface.co` 且响应**不带
+>    `Access-Control-Allow-Origin`**，Fetch 规范对重定向链逐跳做 CORS 校验，扩展页（无 `host_permissions`）
+>    第一跳即 `TypeError: Failed to fetch`，界面文案正是「网络请求被阻止或模型下载失败」。
+>    主源改为 `modelscope.cn/models/{id}/resolve/{rev}/...`（302 带 `ACAO: *`，末端 CDN 183,403,734 字节、
+>    支持 `Range`、实测约 14MB/s），`huggingface.co` 作兜底轮换。
+> 2. **新增 `src/core/detector/modelDownload.ts`**：Range 断点续传、指数退避重试（尊重 `Retry-After`、封顶 16s）、
+>    停滞看门狗（30s 无字节即中断、下次从断点续）、传输完整性校验（没下全不入缓存）、Cache Storage 落盘（重开侧栏零下载）。
+> 3. **修假超时**：原先无 `Content-Length` 时只在开始上报一次进度，60 秒后必然误判超时；现改为逐块上报心跳，
+>    只要还有字节进来就续期。
+> 4. **修重试无效**：加载改单飞门闩（`createSingleFlight`），卡住后点重试复用在飞加载的真实结果，
+>    不再「假成功 / 永久卡 loading」；成功状态额外以 `isContentModelReady()` 断言。
+> 5. `manifest.json` 增加 `unlimitedStorage`（183MB 模型缓存配额）。
+> 6. 未知总长时进度显示「已下 xx.x / 183 MB」而非空转。
+>
+> 单测 `tests/unit/modelDownload.test.ts`（16 断言）：续传偏移、源站忽略 Range、偏移不匹配重置、429 退避、
+> 停滞看门狗、完整性截断、缓存命中零网络、全源失败轮换、单飞门闩。
+
+- [ ] **404 已修**：`MODEL_URL` 已改为 `onnx/model_quantized.onnx`（原根目录 `model.onnx` 不存在）；控制台不应再出现 `模型下载失败：HTTP 404`（代码侧：`MODEL_SOURCES` 指向 ModelScope/HF 的 `onnx/model_quantized.onnx`，curl 实测 200 / 183,403,734 字节）
+- [ ] **真实进度**：开关打开 → 浮窗进度条按真实字节推进 0→100%（约 183MB int8 量化版，不再是"假进度卡 90%"）（代码侧：按 `content-length` 逐块计算；未知总长时显示 MB 并持续心跳）
+- [ ] **停滞超时**：只要进度在动就不会超时；真正 60 秒无进展才弹黄色「加载超时」toast + 重试按钮（代码侧：每次进度回调都续期计时器，无 CL 必假超时已修）
+- [ ] **失败路径**：断网开启开关 → 黄色「NER模型加载失败」toast 立即出现（原 bug：`nerRetryCount` 恒为 0 导致永远卡 loading）；点重试可恢复（代码侧：单飞门闩让「点重试」真正复用/重启加载，不再假成功）
+- [ ] **就绪路径**：下载完成 → 绿色「NER模型已就绪」toast，引擎面板「AI 模型」变"生效"；输入含姓名/地址文本验证 AI 增强检出（代码侧：成功前断言 `isContentModelReady()`，杜绝假成功）
+- [ ] **开关关闭**：关闭 AI 增强 → 回退纯正则检测，状态复位（代码侧：`setAiEnabled(false)` 复位进度/字节/引擎状态）
 
 ### C. 回归（每次验证前跑一遍）
 
 ```bash
-npm run typecheck && npm test && npm run build   # 期望：0 error / 88 passed / 0 warnings
+npm run typecheck && npm test && npm run build   # 期望：0 error / 104 passed / 0 warnings
 ```
 
-**已知限制**：hf-mirror.com 对高频请求返回 429（限流），验证 B 项时若遇 429 属镜像侧问题，点重试即可，非代码缺陷。
+**已知限制**：`hf-mirror.com` 已弃用（308 且无 ACAO，任何扩展页场景都不要再接入）。ModelScope 侧若遇 CDN 限流
+（429/503），下载器会按 `Retry-After` 指数退避并轮换到 `huggingface.co`，共 5 次；全部失败才报错，届时才属源站问题。
 
 ## 1. 架构总览
 
