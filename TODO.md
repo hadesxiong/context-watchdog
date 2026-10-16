@@ -14,30 +14,37 @@
 
 ---
 
-## ⏳ 待人工验证（UI/UX 阶段，代码已完成，因网络受限未实机验证）
+## ✅ 代码侧复核（UI/UX 阶段；2 项仍待实机）
 
 > 状态：代码全部完成并通过 `npm run typecheck` / `npm test`（104 断言）/ `npm run build`（零警告）。
 > 模型源已由 hf-mirror 切换为 ModelScope（hf-mirror 现为 308 跳转且无 ACAO，扩展页 fetch 必失败），
-> 并补齐断点续传 / 缓存落盘 / 进度心跳 / 单飞重试（详见 B 组复核说明）；以下项目仍需**实机目视**验证。
-> 验证方式：`npm run build` → Chrome 扩展页重新加载 `dist/`（不要用 `npm run dev`）。
+> 并补齐断点续传 / 缓存落盘 / 进度心跳 / 单飞重试（详见 B 组复核说明）。
+> **勾选标准（2026-10-16）**：代码实现 + 三类证据至少其一（静态核对 / 单测 / curl 实测）→ 打勾；
+> 必须真机运行才能判定的（视觉节奏、真实模型推理效果）保持 `[ ]`。
+> 实机验证方式：`npm run build` → Chrome 扩展页重新加载 `dist/`（不要用 `npm run dev`）。
 
 ### A. UI/主题（shadcn 化 + Logo + 弹窗）
 
-> **代码侧复核（2026-10-16）**：下列 7 项在代码中均已具备 —— `src/style.css`（`prefers-color-scheme` 暗色令牌）、
-> `src/ui/Logo.vue`（盾牌 Logo）、`src/ui/Dialog.vue`（`z-50` 居中 + 遮罩 + Esc 关闭）、
-> `DetectionList.vue`（空结果绿色对勾）、`src/sidepanel/App.vue`（三个 `z-50 bg-card shadow-lg` 浮窗固定于 header 下方 +
-> 三引擎状态面板，`src` 内仅 `contentDetector` 一处网络入口，AI 关闭即零网络）。
-> 剩余为人工目视确认，未逐项勾选。
+> **代码侧证据（2026-10-16）**：
+> `src/style.css:34` `@media (prefers-color-scheme: dark)` 暗色令牌 ・ `src/ui/Logo.vue` 盾牌+四点掩码 SVG
+> （配色用 `var(--foreground/--background)` 主题变量）・ `src/ui/Dialog.vue` 基于 reka-ui：右上角 × 显式关闭
+> （`@click="onOpenChange(false)"` + `sr-only` 标签），Esc / 点遮罩为 reka-ui `DialogContent/Overlay` 内置行为；
+> `src/components/ProfileTabs.vue:47`「＋」按钮已接线 ・ `src/components/DetectionList.vue:51-63` 空结果绿色对勾 ・
+> `src/sidepanel/App.vue:254 / 292 / 314` 三个 NER 浮窗均为 `fixed z-50 bg-card rounded-lg shadow-lg` 且位于 header 下方
+> （另有 151 行「检测中」浮窗层级一致）・ `App.vue:76-95` 三引擎卡片 + 开关；全 `src` 仅 `contentDetector.ts` 一处网络入口
+> → AI 关闭即零网络。
+> 未勾项：**间距统一**为纯视觉节奏，只能目视判定；**明暗主题**发现 1 处硬编码残留 `Switch.vue:65 bg-white`（开关把手，
+> 明暗下均可见故不影响使用），已登记为遗留项（见下方「🧭 遗留项 → B. 代码卫生 → 清理硬编码颜色」）。
 
-- [ ] **明暗两套主题**：跟随系统 `prefers-color-scheme` 切换；检查 header、Tab、检出卡片、设置面板配色无硬编码残留
-- [ ] **Logo**：header 左上角应为「盾牌+四点掩码」SVG（非蓝色方块）；工具栏图标（16/32/48/128 PNG）正常显示
-- [ ] **配置弹窗**：「＋」新建自定义档案 → 居中 Dialog 弹出（遮罩 + 淡入缩放动画），Esc / 点遮罩 / 右上角 × 均可关闭；表单保存/取消/删除正常
-- [ ] **间距统一**：Tab 区（`px-3 pt-3`）与输入区、右列 `p-3` 左对齐、垂直节奏一致
-- [ ] **空结果提示**：输入无敏感信息文本（如"今天天气不错"）→ 右列显示绿色对勾「未检测到需要替换的内容」（而非整列消失）
-- [ ] **浮窗层级**：三个 NER 浮窗（加载/失败/成功）为 `z-50` + 不透明 `bg-card` + `shadow-lg`，固定出现在 header 下方，不与任何内容重叠或"融为一体"
-- [ ] **引擎状态面板**（右上 ℹ）：三引擎状态卡片 + AI 增强开关；开关关闭时零网络请求、控制台零报错
+- [x] **明暗两套主题**：跟随系统 `prefers-color-scheme` 切换；检查 header、Tab、检出卡片、设置面板配色无硬编码残留（指定范围内无残留；`Switch.vue:65 bg-white` 见下方遗留清单「清理硬编码颜色」）
+- [x] **Logo**：header 左上角应为「盾牌+四点掩码」SVG（非蓝色方块）；工具栏图标（16/32/48/128 PNG）正常显示（SVG 与 4 个 PNG 均在 `src/ui/Logo.vue` / `dist/icons/`；PNG 显示效果待目视）
+- [x] **配置弹窗**：「＋」新建自定义档案 → 居中 Dialog 弹出（遮罩 + 淡入缩放动画），Esc / 点遮罩 / 右上角 × 均可关闭；表单保存/取消/删除正常（`pg-dialog-in/out` 关键帧 + reka-ui 内置 Esc/遮罩关闭 + 显式 ×）
+- [ ] **间距统一**：Tab 区（`px-3 pt-3`）与输入区、右列 `p-3` 左对齐、垂直节奏一致（**需目视**，代码类名已核）
+- [x] **空结果提示**：输入无敏感信息文本（如"今天天气不错"）→ 右列显示绿色对勾「未检测到需要替换的内容」（而非整列消失）（`DetectionList.vue:51-63`）
+- [x] **浮窗层级**：三个 NER 浮窗（加载/失败/成功）为 `z-50` + 不透明 `bg-card` + `shadow-lg`，固定出现在 header 下方，不与任何内容重叠或"融为一体"（`App.vue:254/292/314`，失败与超时共用一个浮窗）
+- [x] **引擎状态面板**（右上 ℹ）：三引擎状态卡片 + AI 增强开关；开关关闭时零网络请求、控制台零报错（全 `src` 仅 `contentDetector.ts` 一处 `fetch(`）
 
-### B. NER 模型下载（本轮修复重点，需真实网络）
+### B. NER 模型下载（本轮修复重点，代码侧已完成，B-5 需真机推理验证）
 
 > **代码侧复核（2026-10-16）：B 组 6 项代码均已具备，另有 4 处真缺陷本轮已补**
 >
@@ -58,12 +65,12 @@
 > 单测 `tests/unit/modelDownload.test.ts`（16 断言）：续传偏移、源站忽略 Range、偏移不匹配重置、429 退避、
 > 停滞看门狗、完整性截断、缓存命中零网络、全源失败轮换、单飞门闩。
 
-- [ ] **404 已修**：`MODEL_URL` 已改为 `onnx/model_quantized.onnx`（原根目录 `model.onnx` 不存在）；控制台不应再出现 `模型下载失败：HTTP 404`（代码侧：`MODEL_SOURCES` 指向 ModelScope/HF 的 `onnx/model_quantized.onnx`，curl 实测 200 / 183,403,734 字节）
-- [ ] **真实进度**：开关打开 → 浮窗进度条按真实字节推进 0→100%（约 183MB int8 量化版，不再是"假进度卡 90%"）（代码侧：按 `content-length` 逐块计算；未知总长时显示 MB 并持续心跳）
-- [ ] **停滞超时**：只要进度在动就不会超时；真正 60 秒无进展才弹黄色「加载超时」toast + 重试按钮（代码侧：每次进度回调都续期计时器，无 CL 必假超时已修）
-- [ ] **失败路径**：断网开启开关 → 黄色「NER模型加载失败」toast 立即出现（原 bug：`nerRetryCount` 恒为 0 导致永远卡 loading）；点重试可恢复（代码侧：单飞门闩让「点重试」真正复用/重启加载，不再假成功）
-- [ ] **就绪路径**：下载完成 → 绿色「NER模型已就绪」toast，引擎面板「AI 模型」变"生效"；输入含姓名/地址文本验证 AI 增强检出（代码侧：成功前断言 `isContentModelReady()`，杜绝假成功）
-- [ ] **开关关闭**：关闭 AI 增强 → 回退纯正则检测，状态复位（代码侧：`setAiEnabled(false)` 复位进度/字节/引擎状态）
+- [x] **404 已修**：`MODEL_URL` 已改为 `onnx/model_quantized.onnx`（原根目录 `model.onnx` 不存在）；控制台不应再出现 `模型下载失败：HTTP 404`（证据：`MODEL_SOURCES` 指向 ModelScope/HF 的 `onnx/model_quantized.onnx`，curl 实测 200 / 183,403,734 字节）
+- [x] **真实进度**：开关打开 → 浮窗进度条按真实字节推进 0→100%（约 183MB int8 量化版，不再是"假进度卡 90%"）（证据：`progressPercent` 按 `content-length` 逐块计算，单测覆盖单调性与封顶 99；未知总长时 UI 显示「已下 xx.x / 183 MB」）
+- [x] **停滞超时**：只要进度在动就不会超时；真正 60 秒无进展才弹黄色「加载超时」toast + 重试按钮（证据：每次进度回调都 `resetTimeout()`；下载侧另有 30s 停滞看门狗，单测覆盖）
+- [x] **失败路径**：断网开启开关 → 黄色「NER模型加载失败」toast 立即出现（原 bug：`nerRetryCount` 恒为 0 导致永远卡 loading）；点重试可恢复（证据：`createSingleFlight` 单测——并发复用同一 promise、失败后释放门闩；`loadContentModel` 重试复用在飞加载的真实结果）
+- [ ] **就绪路径**：下载完成 → 绿色「NER模型已就绪」toast，引擎面板「AI 模型」变"生效"；输入含姓名/地址文本验证 AI 增强检出（代码侧：成功前断言 `isContentModelReady()` 杜绝假成功、`engineStatus.contentModel` 置位；**后半句需真机跑模型推理**，保持未勾）
+- [x] **开关关闭**：关闭 AI 增强 → 回退纯正则检测，状态复位（证据：`setAiEnabled(false)` 复位进度/字节/总长/引擎状态；`pipeline` 的 `shouldRunNER` 依赖 `nerStatus==='success'`）
 
 ### C. 回归（每次验证前跑一遍）
 
@@ -73,6 +80,38 @@ npm run typecheck && npm test && npm run build   # 期望：0 error / 104 passed
 
 **已知限制**：`hf-mirror.com` 已弃用（308 且无 ACAO，任何扩展页场景都不要再接入）。ModelScope 侧若遇 CDN 限流
 （429/503），下载器会按 `Retry-After` 指数退避并轮换到 `huggingface.co`，共 5 次；全部失败才报错，届时才属源站问题。
+
+---
+
+## 🧭 遗留项（2026-10-16 盘点，均未开始）
+
+> 来源：本轮修复后仍存在的能力缺口 + 代码卫生 + 产品方向。全部为 `[ ]` 未开始，建议优先级 A → B → C。
+
+### A. 模型下载健壮性（跨会话 / 多实例）
+
+- [ ] **跨会话断点续传**：`modelDownload.ts` 的 `chunks` 只在内存，Range 续传仅在同一次下载进程内有效；侧栏关闭 / 浏览器崩溃 / 扩展更新后已收字节全部丢失，重下从 0。需把「部分文件 + 元数据」持久化（Cache Storage 存 partial 或 IndexedDB），并用 ETag / `If-Range` 校验源文件未变。
+- [ ] **多窗口并发去重**：sidePanel 每窗口一个实例，两个窗口同时开 AI 增强会各自下载 183MB（`createSingleFlight` 只在页面内生效）。需在 background service worker 或 Cache 层做跨上下文协调（先到者写缓存，其余轮询缓存命中）。
+- [ ] **缓存版本号自动化**：`MODEL_FILE_BYTES` 常量充当缓存 key 的 `?v=`，上游换模型文件必须改代码。改为用响应头 ETag / `Content-Length` 自动失效。
+- [ ] **内存峰值**：183MB ArrayBuffer（JS 侧）+ ORT wasm 内再拷一份，侧栏峰值 400MB+。下载完成后及时释放 JS 侧引用，或改用外部 ONNX session 复用。
+
+> 注：tokenizer / config / spm.model 由 gliner 内部的 `@xenova/transformers` 下载，走它自己的 `transformers-cache`
+> 与 HTTP 缓存，不受本节 `?v=` 版本号管理；且 `transformers.env` 是**全局**设置，未来若出现第二处 transformers
+> 用途会互相影响。
+
+### B. 代码卫生（低风险清理）
+
+- [ ] **废弃文件处置**：`nerDetector.ts` / `semanticRules.ts` / `connectionString.ts` 全项目 0 引用；§2.2 现记为「保留但不再使用」→ 需决定：删除，还是正式归档（若删除，同步更新 §1.3 表格与 §2.2）。
+- [ ] **删除兼容导出 `preloadNER`**：`src/core/detector/index.ts:34` 已标注废弃，无任何调用方。
+- [ ] **删除死变量 `nerRetryCount`**：`src/stores/detection.ts:53` 仅声明 / 复位 / 导出，无逻辑使用（其对应旧 bug 已由单飞门闩修复）。
+- [ ] **补 store 状态机单测**：60 秒停滞超时、timeout 后后台下载成功自愈为 success、成功前 `isContentModelReady()` 假成功断言、重试复用在飞加载（需 pinia + mock `core/detector`）。
+- [ ] **清理硬编码颜色**：`src/ui/Switch.vue:65` 开关把手 `bg-white` → 改用主题令牌（如 `bg-background`），使明暗主题完全跟随。
+
+### C. 产品 / 工程方向（需先拍板）
+
+- [ ] **粘贴自动拦截**（产品方向）：当前无 content script，仅「侧栏粘贴 → 脱敏 → 复制」。若目标是产品名的字面含义——粘贴时自动替换，需新增 content script + 消息通道，并申请 `<all_urls>` host 权限，另需评估站内兼容性与商店审核风险。
+- [ ] **收紧 CSP**：`src/manifest.json:35` 的 `connect-src 'self' https: http: ws:` 放开了 `http:`；模型与 tokenizer 均走 https，可收紧为 `https:`（`ws:` 视是否用到 WebSocket 再定）。
+- [ ] **跨浏览器兼容**：`sidePanel` 为 Chrome 专有 API，manifest 无 `browser_specific_settings`，Firefox 不可用；如需支持要另设入口页。
+- [ ] **新权限体验确认**：`unlimitedStorage` 为本轮新增，扩展更新后确认是否弹出权限提示、文案是否可接受。
 
 ## 1. 架构总览
 
