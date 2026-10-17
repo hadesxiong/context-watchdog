@@ -57,7 +57,7 @@ const reportHeapSnapshot = (stage: string): void => {
 const runLoad = async (
   onProgress?: ModelProgress,
   onWaiting?: (waiting: boolean) => void,
-  onCacheHit?: () => void
+  onDownloadStart?: () => void
 ): Promise<void> => {
   try {
     // 注意：gliner 内部用的是 @xenova/transformers（node_modules/gliner/dist/index.mjs 首行
@@ -72,7 +72,7 @@ const runLoad = async (
 
     // 下载模型：多源回退 + 会话内/跨会话断点续传 + 退避重试 + 停滞看门狗 + Cache Storage 落盘
     // + 多窗口去重 + 缓存版本自动探测，细节见 modelDownload.ts
-    const modelBuffer = await downloadModel({ onProgress, onWaiting, onCacheHit })
+    const modelBuffer = await downloadModel({ onProgress, onWaiting, onDownloadStart })
     reportHeapSnapshot('模型下载完成')
 
     const { Gliner } = await import('gliner')
@@ -126,14 +126,14 @@ const runLoad = async (
 // 加载 GLiNER 模型
 // onProgress: 真实下载进度（percent < 0 表示未知总长；received/total 供 UI 展示 MB）
 // onWaiting: 另一窗口正在下载，本窗口处于等待状态（UI 据此显示「另一窗口下载中」）
-// onCacheHit: 模型来自本地缓存（UI 据此显示「本地缓存加载中」而不是「下载模型中」）
+// onDownloadStart: 确认走网络下载才触发（缓存命中全程静默，仅控制台日志）
 export const loadContentModel = (
   onProgress?: ModelProgress,
   onWaiting?: (waiting: boolean) => void,
-  onCacheHit?: () => void
+  onDownloadStart?: () => void
 ): Promise<void> => {
   if (ready) return Promise.resolve()
-  return loadGate.run(() => runLoad(onProgress, onWaiting, onCacheHit))
+  return loadGate.run(() => runLoad(onProgress, onWaiting, onDownloadStart))
 }
 
 // 检测内容实体
@@ -191,7 +191,7 @@ export const isContentModelReady = (): boolean => ready
 export const preloadContentModel = async (
   onProgress?: ModelProgress,
   onWaiting?: (waiting: boolean) => void,
-  onCacheHit?: () => void
+  onDownloadStart?: () => void
 ): Promise<void> => {
-  await loadContentModel(onProgress, onWaiting, onCacheHit)
+  await loadContentModel(onProgress, onWaiting, onDownloadStart)
 }

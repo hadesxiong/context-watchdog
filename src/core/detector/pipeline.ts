@@ -517,7 +517,7 @@ export const detect = async (
 export const preloadModels = async (
   onProgress?: ModelProgress,
   onWaiting?: (waiting: boolean) => void,
-  onCacheHit?: () => void
+  onDownloadStart?: () => void
 ): Promise<void> => {
-  await preloadContentModel(onProgress, onWaiting, onCacheHit)
+  await preloadContentModel(onProgress, onWaiting, onDownloadStart)
 }

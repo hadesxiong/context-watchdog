@@ -510,8 +510,9 @@ export interface DownloadModelOptions {
   onProgress?: ModelProgress
   // 另一窗口正在下载、本窗口处于等待（UI 显示「另一窗口下载中」）
   onWaiting?: (waiting: boolean) => void
-  // 模型来自本地缓存（UI 据此显示「本地缓存加载中」而不是「下载模型中」）
-  onCacheHit?: () => void
+  // 确认走网络下载（缓存未命中或已过期作废）：UI 据此才显示下载提示；
+  // 缓存命中全程静默（仅控制台日志），不打扰用户
+  onDownloadStart?: () => void
   // 探测节流状态存取（缺省 chrome.storage.local；node/测试注入内存实现或 null）
   probeState?: ProbeStateStore | null
   // 是否在线（缺省读 navigator.onLine；离线跳过探测直接沿用缓存）
@@ -530,7 +531,7 @@ export const downloadModel = async (options: DownloadModelOptions = {}): Promise
   const sleep = options.sleep ?? ((ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms)))
   const onProgress = options.onProgress
   const onWaiting = options.onWaiting
-  const onCacheHit = options.onCacheHit
+  const onDownloadStart = options.onDownloadStart
   const probeState = options.probeState !== undefined ? options.probeState : createChromeProbeState()
   const isOnline =
     options.isOnline ??
@@ -572,13 +573,16 @@ export const downloadModel = async (options: DownloadModelOptions = {}): Promise
           verdict === 'current' ? '一致' : '未知→离线优先'
         }），跳过下载`
       )
-      onCacheHit?.()
       onProgress?.(100, cached.buffer.byteLength, cached.buffer.byteLength)
       return cached.buffer
     }
     console.warn('[PasteGuard] 远端模型已更新，本地缓存作废并重新下载')
     await cache?.clear()
   }
+
+  // 走到此处 = 缓存未命中或已作废，接下来必然是网络下载（本窗口或等待另一窗口）→
+  // 通知 UI 显式提示；缓存命中路径在上面已静默返回，不触发本回调
+  onDownloadStart?.()
 
   // 2) 多窗口去重：抢不到锁就等另一窗口完成；等不到（对方失败/锁过期/超时）则接管
   const waitForOtherWindow = async (): Promise<ArrayBuffer | null> => {
@@ -594,7 +598,6 @@ export const downloadModel = async (options: DownloadModelOptions = {}): Promise
           // 对方刚下完，缓存可能还在落盘 → 再轮询几轮
           const done = await cache?.match()
           if (done) {
-            onCacheHit?.()
             onProgress?.(100, done.buffer.byteLength, done.buffer.byteLength)
             return done.buffer
           }
@@ -616,7 +619,6 @@ export const downloadModel = async (options: DownloadModelOptions = {}): Promise
     // 接管路径：对方可能刚好写完缓存 → 再查一次，避免重复下载
     const finished = await cache?.match()
     if (finished) {
-      onCacheHit?.()
       onProgress?.(100, finished.buffer.byteLength, finished.buffer.byteLength)
       return finished.buffer
     }

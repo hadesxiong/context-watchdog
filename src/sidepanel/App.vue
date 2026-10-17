@@ -128,10 +128,9 @@ const progressLabel = computed(() => {
     return '…'
 })
 
-// 加载阶段文案：区分「本地缓存加载」（无网络下载）与「网络下载」，避免误以为在重复下载
+// 加载阶段文案（仅在确认网络下载后才展示，缓存命中全程静默）
 const loadingCaption = computed(() => {
     if (store.nerWaitingOtherWindow) return '另一窗口下载中...'
-    if (store.nerFromCache) return '本地缓存加载中...'
     return '下载模型中...'
 })
 </script>
@@ -214,15 +213,16 @@ const loadingCaption = computed(() => {
                         <Switch :model-value="item.enabled" size="small"
                             @update:model-value="item.toggle" />
                     </div>
-                    <!-- AI 卡片附属：加载进度 / 失败重试 -->
+                    <!-- AI 卡片附属：加载进度（仅真网络下载；缓存命中静默初始化）/ 失败重试 -->
                     <template v-if="item.key === 'ai'">
-                        <div v-if="store.nerStatus === 'loading'" class="mt-2 w-full">
+                        <div v-if="store.nerStatus === 'loading' && store.nerDownloadStarted"
+                            class="mt-2 w-full">
                             <div class="flex justify-between text-xs text-muted-foreground mb-1">
                                 <span>{{ loadingCaption }}</span>
-                                <span v-if="!store.nerFromCache">{{ progressLabel }}</span>
+                                <span>{{ progressLabel }}</span>
                             </div>
                             <div class="w-full bg-muted rounded-full h-1.5">
-                                <div v-if="!store.nerFromCache && !store.nerIndeterminate"
+                                <div v-if="!store.nerIndeterminate"
                                     class="bg-primary h-1.5 rounded-full transition-all duration-300"
                                     :style="{ width: store.nerLoadProgress + '%' }"></div>
                                 <div v-else class="h-1.5 w-1/3 bg-primary rounded-full pg-indeterminate"></div>
@@ -244,16 +244,16 @@ const loadingCaption = computed(() => {
             <!-- 粘贴自动拦截：逐站授权，只有授权站点才注入粘贴监听 -->
             <PasteInterceptionSettings />
         </div>
-        <!-- NER 模型状态条 -->
+        <!-- NER 模型状态条（仅确认网络下载才显示；缓存命中全程静默） -->
         <Transition name="ner-notify" @after-leave="onNotifyLeave">
-            <div v-if="store.nerStatus === 'loading' && !dismissing"
+            <div v-if="store.nerStatus === 'loading' && store.nerDownloadStarted && !dismissing"
                 class="fixed z-50 left-1/2 -translate-x-1/2 top-[calc(var(--header-height)+8px)] m-3 p-3 max-w-125 min-w-80 w-auto
                     flex flex-col items-center gap-0.5
                     bg-card rounded-lg shadow-lg 
                     border border-primary/30">
                 <div class="flex justify-between items-start w-full">
                     <p class="text-sm font-medium text-foreground">
-                        {{ store.nerWaitingOtherWindow ? '另一窗口下载中，等待同步...' : '正在加载NER模型...' }}</p>
+                        {{ store.nerWaitingOtherWindow ? '另一窗口下载中，等待同步...' : '正在下载NER模型...' }}</p>
                     <div class="mt-1">
                         <svg class="w-4 h-4 text-primary animate-spin" fill="none" viewBox="0 0 24 24">
                             <circle class="opacity-25" cx="12" cy="12" r="10"
@@ -263,16 +263,8 @@ const loadingCaption = computed(() => {
                         </svg>
                     </div>
                 </div>
-                <!-- 本地缓存命中：读缓存 + ORT 初始化，无网络下载（循环动画，初始化无字节进度） -->
-                <div v-if="store.nerFromCache" class="w-full mt-1">
-                    <p class="text-xs text-primary w-full mb-1">
-                        已命中本地缓存，无需下载；正在初始化模型…</p>
-                    <div class="w-full bg-primary/20 rounded-full h-1.5 overflow-hidden">
-                        <div class="h-1.5 w-1/3 bg-primary rounded-full pg-indeterminate"></div>
-                    </div>
-                </div>
-                <!-- 网络下载：进度 0 → 首次下载提示；有进度 → 百分比/字节 -->
-                <p v-else-if="store.nerLoadProgress === 0 && !store.nerIndeterminate"
+                <!-- 进度 0 → 首次下载提示；有进度 → 百分比/字节 -->
+                <p v-if="store.nerLoadProgress === 0 && !store.nerIndeterminate"
                     class="text-xs text-primary w-full mt-1">
                     首次使用需要下载模型（约 180MB，量化版），请稍候</p>
                 <div v-else class="w-full mt-1">
@@ -312,9 +304,9 @@ const loadingCaption = computed(() => {
                 </svg>
             </div>
         </Transition>
-        <!-- NER 模型下载提示 - 成功 -->
+        <!-- NER 模型下载提示 - 成功（仅真下载后提示；缓存命中静默完成） -->
         <Transition name="ner-notify" @after-leave="onNotifyLeave">
-            <div v-if="store.nerStatus === 'success' && !dismissing"
+            <div v-if="store.nerStatus === 'success' && store.nerDownloadStarted && !dismissing"
                 class="fixed z-50 left-1/2 -translate-x-1/2 top-[calc(var(--header-height)+8px)] m-3 p-3 gap-3 flex items-center max-w-125 min-w-80 w-auto
                     bg-card rounded-lg shadow-lg 
                     border border-success/40">

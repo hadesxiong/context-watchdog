@@ -747,10 +747,10 @@ describe('downloadModel', () => {
     expect(decoder.decode(buffer)).toBe('cached-model')
   })
 
-  it('缓存命中触发 onCacheHit；真网络下载不触发', async () => {
-    // 缓存命中 → 触发
+  it('缓存命中不触发 onDownloadStart（静默）；真网络下载触发一次', async () => {
+    // 缓存命中 → 不触发（命中全程静默，仅控制台日志）
     const { cache } = createMemoryCache(toBytes('cached-model').buffer as ArrayBuffer)
-    let cacheHits = 0
+    let downloadStarts = 0
     await downloadModel({
       fetchImpl: async () => {
         throw new Error('不应发起网络请求')
@@ -760,11 +760,11 @@ describe('downloadModel', () => {
       lock: null,
       probe: async () => null,
       sleep: noSleep,
-      onCacheHit: () => { cacheHits++ }
+      onDownloadStart: () => { downloadStarts++ }
     })
-    expect(cacheHits).toBe(1)
+    expect(downloadStarts).toBe(0)
 
-    // 真下载 → 不触发
+    // 真下载 → 触发一次
     const { fetchImpl } = createFakeFetch(() =>
       makeResponse(200, { 'content-length': '5' }, [toBytes('hello')])
     )
@@ -774,9 +774,27 @@ describe('downloadModel', () => {
       partial: null,
       lock: null,
       sleep: noSleep,
-      onCacheHit: () => { cacheHits++ }
+      onDownloadStart: () => { downloadStarts++ }
     })
-    expect(cacheHits).toBe(1)
+    expect(downloadStarts).toBe(1)
+  })
+
+  it('缓存过期作废 → 触发 onDownloadStart（会重下，须显式提示）', async () => {
+    const { cache } = createMemoryCache(toBytes('old-model').buffer as ArrayBuffer, '"old"')
+    const { fetchImpl } = createFakeFetch(() =>
+      makeResponse(200, { etag: '"new"', 'content-length': '9' }, [toBytes('new-model')])
+    )
+    let downloadStarts = 0
+    await downloadModel({
+      fetchImpl,
+      cache,
+      partial: null,
+      lock: null,
+      probe: async () => ({ etag: '"new"', total: 9, source: 'modelscope.cn' }),
+      sleep: noSleep,
+      onDownloadStart: () => { downloadStarts++ }
+    })
+    expect(downloadStarts).toBe(1)
   })
 
   it('离线（isOnline=false）：跳过探测直接沿用缓存，探测零次', async () => {
