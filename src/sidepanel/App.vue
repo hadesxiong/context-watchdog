@@ -123,6 +123,13 @@ const progressLabel = computed(() => {
     }
     return '…'
 })
+
+// 加载阶段文案：区分「本地缓存加载」（无网络下载）与「网络下载」，避免误以为在重复下载
+const loadingCaption = computed(() => {
+    if (store.nerWaitingOtherWindow) return '另一窗口下载中...'
+    if (store.nerFromCache) return '本地缓存加载中...'
+    return '下载模型中...'
+})
 </script>
 
 <template>
@@ -229,12 +236,14 @@ const progressLabel = computed(() => {
                 <!-- 加载进度 -->
                 <div v-if="store.nerStatus === 'loading'" class="mt-2 w-full">
                     <div class="flex justify-between text-xs text-muted-foreground mb-1">
-                        <span>{{ store.nerWaitingOtherWindow ? '另一窗口下载中...' : '下载模型中...' }}</span>
-                        <span>{{ progressLabel }}</span>
+                        <span>{{ loadingCaption }}</span>
+                        <span v-if="!store.nerFromCache">{{ progressLabel }}</span>
                     </div>
                     <div class="w-full bg-muted rounded-full h-1.5">
-                        <div class="bg-primary h-1.5 rounded-full transition-all duration-300"
+                        <div v-if="!store.nerFromCache && !store.nerIndeterminate"
+                            class="bg-primary h-1.5 rounded-full transition-all duration-300"
                             :style="{ width: store.nerLoadProgress + '%' }"></div>
+                        <div v-else class="h-1.5 w-1/3 bg-primary rounded-full pg-indeterminate"></div>
                     </div>
                 </div>
                 <!-- 失败提示（关闭开关或重试） -->
@@ -289,7 +298,16 @@ const progressLabel = computed(() => {
                         </svg>
                     </div>
                 </div>
-                <p v-if="store.nerLoadProgress === 0 && !store.nerIndeterminate"
+                <!-- 本地缓存命中：读缓存 + ORT 初始化，无网络下载（循环动画，初始化无字节进度） -->
+                <div v-if="store.nerFromCache" class="w-full mt-1">
+                    <p class="text-xs text-primary w-full mb-1">
+                        已命中本地缓存，无需下载；正在初始化模型…</p>
+                    <div class="w-full bg-primary/20 rounded-full h-1.5 overflow-hidden">
+                        <div class="h-1.5 w-1/3 bg-primary rounded-full pg-indeterminate"></div>
+                    </div>
+                </div>
+                <!-- 网络下载：进度 0 → 首次下载提示；有进度 → 百分比/字节 -->
+                <p v-else-if="store.nerLoadProgress === 0 && !store.nerIndeterminate"
                     class="text-xs text-primary w-full mt-1">
                     首次使用需要下载模型（约 180MB，量化版），请稍候</p>
                 <div v-else class="w-full mt-1">

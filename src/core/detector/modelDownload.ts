@@ -47,6 +47,12 @@ export const RETRY_BASE_DELAY_MS = 1_000
 export const RETRY_MAX_DELAY_MS = 16_000
 // 版本探测的超时（1 字节请求，给足但别拖慢启动）
 export const PROBE_TIMEOUT_MS = 5_000
+// 版本探测节流窗口：距上次成功探测不足该时长直接沿用缓存（跨标签共享计时，
+// 存 chrome.storage.local）。模型极少更新，换取每次打开零探测延迟；
+// 离线（navigator.onLine === false）则完全跳过探测，不再白等超时
+export const PROBE_THROTTLE_MS = 24 * 60 * 60 * 1000
+// 探测时间戳的持久化 key（两个标签页/侧栏共享，24h 内只探一次）
+export const PROBE_STAMP_KEY = 'pasteguard.lastModelProbe'
 
 // 多窗口去重：锁键 + 心跳 TTL + 等待方轮询节奏（默认 1.5s × 200 轮 ≈ 5 分钟）
 export const MODEL_LOCK_KEY = 'pasteguard.modelLock'
@@ -82,6 +88,8 @@ export interface CachedModel {
   etag: string | null
   total: number
   savedAt: number
+  // 下载自哪个源（host）：跨源比对 ETag 必然不一致（各源自行生成），须退回比总长
+  source: string | null
 }
 
 // 未完成下载（部分文件）的元数据，随条目存在响应头里
@@ -100,7 +108,7 @@ export interface PartialStore {
 
 export interface ModelCache {
   match: () => Promise<CachedModel | null>
-  put: (buffer: ArrayBuffer, meta?: { etag?: string | null }) => Promise<void>
+  put: (buffer: ArrayBuffer, meta?: { etag?: string | null; source?: string | null }) => Promise<void>
   clear: () => Promise<void>
   // 旧版 key 一次性迁移；返回是否发生了迁移
   migrateLegacy?: () => Promise<boolean>
@@ -187,19 +195,37 @@ export const isWeakEtag = (etag: string | null): boolean => !etag || etag.trim()
 
 // 本地缓存与远端版本比对：'stale' 才需要重新下载；
 // 探测失败（离线 / 被限流 / 超时）→ 'unknown' → 沿用缓存（离线优先）
+// ⚠️ ETag 只在同源（或任一侧来源未知）时才可比对：ModelScope 与 HuggingFace 各自
+// 生成 ETag，跨源直接比对必然不一致 → 误判 'stale' → 清缓存重下 183MB。
+// 跨源时退回比总字节数（两源对同一文件返回一致的 183,403,734 字节）
 export const compareCachedVersion = (
-  cached: { etag: string | null; total: number },
+  cached: { etag: string | null; total: number; source?: string | null },
   remote: RemoteVersion | null
 ): 'current' | 'stale' | 'unknown' => {
   if (!remote) return 'unknown'
-  if (cached.etag && remote.etag) return cached.etag === remote.etag ? 'current' : 'stale'
+  const sameSource = !cached.source || !remote.source || cached.source === remote.source
+  if (sameSource && cached.etag && remote.etag) return cached.etag === remote.etag ? 'current' : 'stale'
   if (cached.total > 0 && remote.total > 0) return cached.total === remote.total ? 'current' : 'stale'
   return 'unknown'
 }
 
+// 探测节流判定：离线直接跳过（沿用缓存，省掉超时假等待）；
+// 距上次成功探测不足 PROBE_THROTTLE_MS 也跳过（时间戳存 storage，跨标签共享）
+export const shouldProbeRemote = (
+  options: { online: boolean; lastProbeAt: number; now: number; throttleMs?: number }
+): boolean => {
+  if (!options.online) return false
+  const throttleMs = options.throttleMs ?? PROBE_THROTTLE_MS
+  return options.now - (options.lastProbeAt || 0) >= throttleMs
+}
+
 // ---------- Cache Storage：完整模型 ----------
 
-const buildModelHeaders = (byteLength: number, etag?: string | null): Record<string, string> => {
+const buildModelHeaders = (
+  byteLength: number,
+  etag?: string | null,
+  source?: string | null
+): Record<string, string> => {
   const headers: Record<string, string> = {
     'Content-Length': String(byteLength),
     'Content-Type': 'application/octet-stream',
@@ -207,6 +233,8 @@ const buildModelHeaders = (byteLength: number, etag?: string | null): Record<str
     'X-Model-Saved-At': String(Date.now())
   }
   if (etag) headers.ETag = etag
+  // 记录下载来源（host）：版本探测跨源比对时据此只退回比总长，防止 ETag 误判清缓存
+  if (source) headers['X-Model-Source'] = source
   return headers
 }
 
@@ -228,7 +256,8 @@ export const createBrowserModelCache = (): ModelCache | null => {
           buffer,
           etag: response.headers.get('etag'),
           total: Number(response.headers.get('x-model-total')) || buffer.byteLength,
-          savedAt: Number(response.headers.get('x-model-saved-at')) || 0
+          savedAt: Number(response.headers.get('x-model-saved-at')) || 0,
+          source: response.headers.get('x-model-source')
         }
       } catch (error) {
         console.warn('[PasteGuard] 读取模型缓存失败（改为网络下载）:', error)
@@ -238,7 +267,10 @@ export const createBrowserModelCache = (): ModelCache | null => {
     put: async (buffer, meta) => {
       try {
         const cache = await caches.open(MODEL_CACHE_NAME)
-        await cache.put(MODEL_CACHE_URL, new Response(buffer, { headers: buildModelHeaders(buffer.byteLength, meta?.etag) }))
+        await cache.put(
+          MODEL_CACHE_URL,
+          new Response(buffer, { headers: buildModelHeaders(buffer.byteLength, meta?.etag, meta?.source) })
+        )
         console.log(`[PasteGuard] 模型已写入缓存（${(buffer.byteLength / 1048576).toFixed(1)} MB），下次启动零下载`)
       } catch (error) {
         // 缓存失败不影响本次使用（下次再下一遍而已）
@@ -462,6 +494,12 @@ export const probeRemoteVersion = async (options: ProbeOptions = {}): Promise<Re
 
 // ---------- 下载 ----------
 
+// 探测节流状态（上次成功探测时间戳）：跨标签共享，存 chrome.storage.local
+export interface ProbeStateStore {
+  getLastProbeAt: () => Promise<number>
+  setLastProbeAt: (timestamp: number) => Promise<void>
+}
+
 export interface DownloadModelOptions {
   fetchImpl?: (input: string, init?: RequestInit) => Promise<Response>
   cache?: ModelCache | null
@@ -472,6 +510,14 @@ export interface DownloadModelOptions {
   onProgress?: ModelProgress
   // 另一窗口正在下载、本窗口处于等待（UI 显示「另一窗口下载中」）
   onWaiting?: (waiting: boolean) => void
+  // 模型来自本地缓存（UI 据此显示「本地缓存加载中」而不是「下载模型中」）
+  onCacheHit?: () => void
+  // 探测节流状态存取（缺省 chrome.storage.local；node/测试注入内存实现或 null）
+  probeState?: ProbeStateStore | null
+  // 是否在线（缺省读 navigator.onLine；离线跳过探测直接沿用缓存）
+  isOnline?: () => boolean
+  // 探测节流窗口（缺省 PROBE_THROTTLE_MS；单测注入极小值）
+  probeThrottleMs?: number
   stallTimeoutMs?: number
   maxAttempts?: number
   lockPollMs?: number
@@ -484,6 +530,12 @@ export const downloadModel = async (options: DownloadModelOptions = {}): Promise
   const sleep = options.sleep ?? ((ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms)))
   const onProgress = options.onProgress
   const onWaiting = options.onWaiting
+  const onCacheHit = options.onCacheHit
+  const probeState = options.probeState !== undefined ? options.probeState : createChromeProbeState()
+  const isOnline =
+    options.isOnline ??
+    (() => (typeof navigator === 'undefined' ? true : navigator.onLine !== false))
+  const probeThrottleMs = options.probeThrottleMs ?? PROBE_THROTTLE_MS
   const stallTimeoutMs = options.stallTimeoutMs ?? STALL_TIMEOUT_MS
   const maxAttempts = options.maxAttempts ?? MAX_ATTEMPTS
   const lockPollMs = options.lockPollMs ?? LOCK_POLL_MS
@@ -498,16 +550,29 @@ export const downloadModel = async (options: DownloadModelOptions = {}): Promise
     console.log('[PasteGuard] 旧版缓存已迁移，无需重新下载')
   }
 
-  // 1) 完整缓存命中 → 1 字节探测确认版本（探测失败 = 离线等 → 直接用缓存，离线优先）
+  // 1) 完整缓存命中 → 1 字节探测确认版本（探测失败 = 离线等 → 直接用缓存，离线优先）。
+  //    离线或 24h 内已探测过（节流，跨标签共享计时）→ 跳过探测直接沿用缓存；
+  //    探测成功（无论结论）刷新节流时间戳，失败不刷新（下次打开还会再试）
   const cached = await cache?.match()
   if (cached) {
-    const verdict = compareCachedVersion(cached, await probe({ fetchImpl }))
+    let remote: RemoteVersion | null = null
+    const lastProbeAt = (await probeState?.getLastProbeAt()) ?? 0
+    if (shouldProbeRemote({ online: isOnline(), lastProbeAt, now: Date.now(), throttleMs: probeThrottleMs })) {
+      remote = await probe({ fetchImpl })
+      if (remote) await probeState?.setLastProbeAt(Date.now())
+    } else {
+      console.log(
+        `[PasteGuard] 跳过版本探测（${isOnline() ? `距上次探测不足 ${Math.round(probeThrottleMs / 3600000)} 小时` : '离线'}），直接沿用缓存`
+      )
+    }
+    const verdict = compareCachedVersion(cached, remote)
     if (verdict !== 'stale') {
       console.log(
         `[PasteGuard] 模型命中本地缓存（${(cached.buffer.byteLength / 1048576).toFixed(1)} MB，版本${
           verdict === 'current' ? '一致' : '未知→离线优先'
         }），跳过下载`
       )
+      onCacheHit?.()
       onProgress?.(100, cached.buffer.byteLength, cached.buffer.byteLength)
       return cached.buffer
     }
@@ -529,6 +594,7 @@ export const downloadModel = async (options: DownloadModelOptions = {}): Promise
           // 对方刚下完，缓存可能还在落盘 → 再轮询几轮
           const done = await cache?.match()
           if (done) {
+            onCacheHit?.()
             onProgress?.(100, done.buffer.byteLength, done.buffer.byteLength)
             return done.buffer
           }
@@ -550,6 +616,7 @@ export const downloadModel = async (options: DownloadModelOptions = {}): Promise
     // 接管路径：对方可能刚好写完缓存 → 再查一次，避免重复下载
     const finished = await cache?.match()
     if (finished) {
+      onCacheHit?.()
       onProgress?.(100, finished.buffer.byteLength, finished.buffer.byteLength)
       return finished.buffer
     }
@@ -735,7 +802,7 @@ export const downloadModel = async (options: DownloadModelOptions = {}): Promise
         }
 
         const buffer = mergeChunks(chunks, total > 0 ? total : undefined)
-        await cache?.put(buffer, { etag: resumeEtag })
+        await cache?.put(buffer, { etag: resumeEtag, source: resumeSource })
         await partial?.clear()
         // 完成心跳：等待方看到 100% 才会去读缓存，避免它每轮都拉 183MB
         await lock?.heartbeat({ percent: 100, received: buffer.byteLength, total: buffer.byteLength })
@@ -769,5 +836,22 @@ const createChromeStorageCompat = (): {
         chrome.storage.local.get(key, result => resolve(result as Record<string, unknown>))
       }),
     set: items => new Promise(resolve => chrome.storage.local.set(items, () => resolve()))
+  }
+}
+
+// 探测节流状态的默认实现：时间戳存 chrome.storage.local（两个标签页/侧栏共享计时）；
+// 无 chrome（node/测试环境）返回 null → 每次打开都探测（保持旧行为）
+const createChromeProbeState = (): ProbeStateStore | null => {
+  const compat = createChromeStorageCompat()
+  if (!compat) return null
+  return {
+    getLastProbeAt: async () => {
+      const result = await compat.get(PROBE_STAMP_KEY)
+      const value = result[PROBE_STAMP_KEY]
+      return typeof value === 'number' && value > 0 ? value : 0
+    },
+    setLastProbeAt: async timestamp => {
+      await compat.set({ [PROBE_STAMP_KEY]: timestamp })
+    }
   }
 }

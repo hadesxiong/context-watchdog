@@ -8,6 +8,7 @@ import {
   MAX_ATTEMPTS,
   RETRY_BASE_DELAY_MS,
   RETRY_MAX_DELAY_MS,
+  PROBE_THROTTLE_MS,
   parseContentRange,
   parseRetryAfter,
   backoffDelayMs,
@@ -15,6 +16,7 @@ import {
   mergeChunks,
   isWeakEtag,
   compareCachedVersion,
+  shouldProbeRemote,
   probeRemoteVersion,
   createModelLock,
   createSingleFlight,
@@ -22,6 +24,7 @@ import {
   type ModelCache,
   type PartialStore,
   type PartialModelMeta,
+  type ProbeStateStore,
   type RemoteVersion
 } from '../../src/core/detector/modelDownload'
 
@@ -104,14 +107,21 @@ const makeHangingResponse = (
 }
 
 // 内存版完整缓存（替代 Cache Storage 的完整模型条目）
-const createMemoryCache = (initial?: ArrayBuffer, etag?: string | null) => {
-  let stored: { buffer: ArrayBuffer; etag: string | null; total: number; savedAt: number } | null = initial
-    ? { buffer: initial, etag: etag ?? null, total: initial.byteLength, savedAt: Date.now() }
-    : null
+const createMemoryCache = (initial?: ArrayBuffer, etag?: string | null, source?: string | null) => {
+  let stored: { buffer: ArrayBuffer; etag: string | null; total: number; savedAt: number; source: string | null } | null =
+    initial
+      ? { buffer: initial, etag: etag ?? null, total: initial.byteLength, savedAt: Date.now(), source: source ?? null }
+      : null
   const cache: ModelCache = {
     match: async () => stored,
     put: async (buffer, meta) => {
-      stored = { buffer, etag: meta?.etag ?? null, total: buffer.byteLength, savedAt: Date.now() }
+      stored = {
+        buffer,
+        etag: meta?.etag ?? null,
+        total: buffer.byteLength,
+        savedAt: Date.now(),
+        source: meta?.source ?? null
+      }
     },
     clear: async () => {
       stored = null
@@ -147,6 +157,24 @@ const createMemoryStorage = () => {
       }
     }
   }
+}
+
+// 内存版探测节流状态（替代 chrome.storage.local 的时间戳存取）
+const createMemoryProbeState = (initial = 0): ProbeStateStore & { reads: number; writes: number[] } => {
+  let last = initial
+  const state = {
+    reads: 0,
+    writes: [] as number[],
+    getLastProbeAt: async () => {
+      state.reads++
+      return last
+    },
+    setLastProbeAt: async (timestamp: number) => {
+      state.writes.push(timestamp)
+      last = timestamp
+    }
+  }
+  return state
 }
 
 const noSleep = async (): Promise<void> => undefined
@@ -213,6 +241,47 @@ describe('纯函数', () => {
     expect(compareCachedVersion({ etag: null, total: 10 }, remote(null, 11))).toBe('stale')
     expect(compareCachedVersion({ etag: 'A', total: 10 }, null)).toBe('unknown')
     expect(compareCachedVersion({ etag: null, total: 0 }, remote(null, 0))).toBe('unknown')
+  })
+
+  it('compareCachedVersion：跨源时 ETag 不可比，退回比总长（防误判清缓存）', () => {
+    // HF 下载（etag hf-*）+ ModelScope 探测（etag ms-*）：同文件不同源 ETag 必然不同 → 不能判 stale
+    const cached = { etag: '"hf-abc"', total: 183403734, source: 'huggingface.co' }
+    const remoteMs: RemoteVersion = { etag: '"ms-xyz"', total: 183403734, source: 'modelscope.cn' }
+    expect(compareCachedVersion(cached, remoteMs)).toBe('current')
+
+    // 跨源且总长也变了 → 真过期
+    const changed: RemoteVersion = { etag: '"ms-new"', total: 999, source: 'modelscope.cn' }
+    expect(compareCachedVersion(cached, changed)).toBe('stale')
+
+    // 跨源但任一侧总长未知 → unknown（沿用缓存）
+    const unknownTotal: RemoteVersion = { etag: '"ms-x"', total: 0, source: 'modelscope.cn' }
+    expect(compareCachedVersion({ etag: '"hf"', total: 0, source: 'huggingface.co' }, unknownTotal)).toBe('unknown')
+
+    // 同源仍然比 ETag（总长相同但 ETag 变 → stale）
+    const sameSource: RemoteVersion = { etag: '"ms-new"', total: 183403734, source: 'modelscope.cn' }
+    expect(compareCachedVersion({ etag: '"ms-old"', total: 183403734, source: 'modelscope.cn' }, sameSource)).toBe('stale')
+
+    // 旧缓存条目无 source（升级前写入）：按同源处理，保持旧比对行为
+    expect(compareCachedVersion({ etag: '"a"', total: 10 }, { etag: '"b"', total: 10, source: 'x' })).toBe('stale')
+  })
+
+  it('shouldProbeRemote：离线跳过、24h 节流、过期再探', () => {
+    const now = 1_000_000_000_000
+    // 离线 → 永不探测（即便从未探过）
+    expect(shouldProbeRemote({ online: false, lastProbeAt: 0, now })).toBe(false)
+    // 从未探测过 → 探
+    expect(shouldProbeRemote({ online: true, lastProbeAt: 0, now })).toBe(true)
+    // 刚探过（不足节流窗口）→ 跳过
+    expect(
+      shouldProbeRemote({ online: true, lastProbeAt: now - PROBE_THROTTLE_MS + 60_000, now })
+    ).toBe(false)
+    // 节流窗口已过 → 再探
+    expect(
+      shouldProbeRemote({ online: true, lastProbeAt: now - PROBE_THROTTLE_MS - 1, now })
+    ).toBe(true)
+    // 自定义节流窗口（单测用极小值）
+    expect(shouldProbeRemote({ online: true, lastProbeAt: now - 5, now, throttleMs: 10 })).toBe(false)
+    expect(shouldProbeRemote({ online: true, lastProbeAt: now - 11, now, throttleMs: 10 })).toBe(true)
   })
 })
 
@@ -331,6 +400,7 @@ describe('downloadModel', () => {
     expect(progress[progress.length - 1]).toBe(100)
     expect([...progress].sort((a, b) => a - b)).toEqual(progress) // 单调不减
     expect(read()?.etag).toBe('"v1"') // ETag 已随条目保存，供版本探测比对
+    expect(read()?.source).toBe(new URL(MODEL_SOURCES[0]).host) // 来源已保存，跨源比对退回比总长
   })
 
   it('缓存命中 + 探测一致：零网络请求', async () => {
@@ -650,5 +720,156 @@ describe('downloadModel', () => {
 
     expect(new Uint8Array(buffer)).toEqual(sample)
     expect(waitingEvents).toEqual([]) // 无需等待
+  })
+
+  it('跨源缓存命中：ETag 不同但总长一致 → 不清缓存不重下（修复误判 stale）', async () => {
+    // 首次下载走 HF（缓存记 source=huggingface.co），探测命中 ModelScope 且 ETag 不同
+    const { cache } = createMemoryCache(
+      toBytes('cached-model').buffer as ArrayBuffer,
+      '"hf-abc"',
+      'huggingface.co'
+    )
+    let fetched = 0
+
+    const buffer = await downloadModel({
+      fetchImpl: async () => {
+        fetched++
+        throw new Error('不应发起网络请求')
+      },
+      cache,
+      partial: null,
+      lock: null,
+      probe: async () => ({ etag: '"ms-xyz"', total: 12, source: 'modelscope.cn' }),
+      sleep: noSleep
+    })
+
+    expect(fetched).toBe(0)
+    expect(decoder.decode(buffer)).toBe('cached-model')
+  })
+
+  it('缓存命中触发 onCacheHit；真网络下载不触发', async () => {
+    // 缓存命中 → 触发
+    const { cache } = createMemoryCache(toBytes('cached-model').buffer as ArrayBuffer)
+    let cacheHits = 0
+    await downloadModel({
+      fetchImpl: async () => {
+        throw new Error('不应发起网络请求')
+      },
+      cache,
+      partial: null,
+      lock: null,
+      probe: async () => null,
+      sleep: noSleep,
+      onCacheHit: () => { cacheHits++ }
+    })
+    expect(cacheHits).toBe(1)
+
+    // 真下载 → 不触发
+    const { fetchImpl } = createFakeFetch(() =>
+      makeResponse(200, { 'content-length': '5' }, [toBytes('hello')])
+    )
+    await downloadModel({
+      fetchImpl,
+      cache: null,
+      partial: null,
+      lock: null,
+      sleep: noSleep,
+      onCacheHit: () => { cacheHits++ }
+    })
+    expect(cacheHits).toBe(1)
+  })
+
+  it('离线（isOnline=false）：跳过探测直接沿用缓存，探测零次', async () => {
+    const { cache } = createMemoryCache(toBytes('cached-model').buffer as ArrayBuffer, '"v1"')
+    let probes = 0
+    let fetched = 0
+
+    const buffer = await downloadModel({
+      fetchImpl: async () => {
+        fetched++
+        throw new Error('不应发起网络请求')
+      },
+      cache,
+      partial: null,
+      lock: null,
+      probe: async () => {
+        probes++
+        return null
+      },
+      isOnline: () => false,
+      sleep: noSleep
+    })
+
+    expect(probes).toBe(0)
+    expect(fetched).toBe(0)
+    expect(decoder.decode(buffer)).toBe('cached-model')
+  })
+
+  it('探测节流：24h 内再开新标签 → 跳过探测直接用缓存', async () => {
+    const probeState = createMemoryProbeState(Date.now() - 60_000) // 1 分钟前刚探测过
+    const { cache } = createMemoryCache(toBytes('cached-model').buffer as ArrayBuffer, '"v1"')
+    let probes = 0
+
+    const buffer = await downloadModel({
+      fetchImpl: async () => {
+        throw new Error('不应发起网络请求')
+      },
+      cache,
+      partial: null,
+      lock: null,
+      probe: async () => {
+        probes++
+        return null
+      },
+      probeState,
+      sleep: noSleep
+    })
+
+    expect(probes).toBe(0)
+    expect(probeState.writes).toEqual([]) // 跳过探测不刷新时间戳
+    expect(decoder.decode(buffer)).toBe('cached-model')
+  })
+
+  it('探测节流：窗口过期 → 重新探测并刷新时间戳；探测失败不刷新', async () => {
+    // 节流过期 → 探测成功 → 时间戳刷新
+    const probeState = createMemoryProbeState(Date.now() - PROBE_THROTTLE_MS - 1)
+    const { cache } = createMemoryCache(toBytes('cached-model').buffer as ArrayBuffer, '"v1"')
+    let probes = 0
+    const startedAt = Date.now()
+
+    const buffer = await downloadModel({
+      fetchImpl: async () => {
+        throw new Error('不应发起网络请求')
+      },
+      cache,
+      partial: null,
+      lock: null,
+      probe: async () => {
+        probes++
+        return { etag: '"v1"', total: 12, source: 'modelscope.cn' }
+      },
+      probeState,
+      sleep: noSleep
+    })
+
+    expect(probes).toBe(1)
+    expect(probeState.writes).toHaveLength(1)
+    expect(probeState.writes[0]).toBeGreaterThanOrEqual(startedAt) // 刷新为当前时间
+    expect(decoder.decode(buffer)).toBe('cached-model')
+
+    // 探测失败（全源不可达）→ 不刷新时间戳（下次打开还会再试）
+    const probeState2 = createMemoryProbeState(Date.now() - PROBE_THROTTLE_MS - 1)
+    await downloadModel({
+      fetchImpl: async () => {
+        throw new Error('不应发起网络请求')
+      },
+      cache,
+      partial: null,
+      lock: null,
+      probe: async () => null,
+      probeState: probeState2,
+      sleep: noSleep
+    })
+    expect(probeState2.writes).toEqual([])
   })
 })

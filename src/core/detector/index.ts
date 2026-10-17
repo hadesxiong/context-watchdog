@@ -21,11 +21,13 @@ export const detect = async (
 }
 
 // 预加载所有模型（仅在用户显式启用 AI 增强后由 store 调用）
+// onCacheHit: 模型来自本地缓存（UI 据此显示「本地缓存加载中」而不是「下载模型中」）
 export const preloadModels = async (
   onProgress?: ModelProgress,
-  onWaiting?: (waiting: boolean) => void
+  onWaiting?: (waiting: boolean) => void,
+  onCacheHit?: () => void
 ): Promise<void> => {
-  await pipelinePreload(onProgress, onWaiting)
+  await pipelinePreload(onProgress, onWaiting, onCacheHit)
 }
 
 // 模型是否真正就绪（store 用它校验「成功」状态，避免假成功）

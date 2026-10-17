@@ -53,6 +53,8 @@ export const useDetectionStore = defineStore('detection', () => {
     const nerLoadTotal = ref(0)
     // 另一窗口正在下载模型、本窗口等待中（UI 显示「另一窗口下载中」，见 modelDownload 的多窗口锁）
     const nerWaitingOtherWindow = ref(false)
+    // 本次加载命中本地缓存（UI 据此显示「本地缓存加载中」而非「下载模型中」，避免误以为在重新下载）
+    const nerFromCache = ref(false)
     const nerError = ref<string | null>(null)
     // AI 增强检测开关（用户显式启用后才会下载模型）
     const aiEnabled = ref(false)
@@ -315,6 +317,7 @@ export const useDetectionStore = defineStore('detection', () => {
         nerLoadBytes.value = 0
         nerLoadTotal.value = 0
         nerWaitingOtherWindow.value = false
+        nerFromCache.value = false
         nerError.value = null
 
         try {
@@ -356,7 +359,12 @@ export const useDetectionStore = defineStore('detection', () => {
                 nerWaitingOtherWindow.value = waiting
             }
 
-            const loadPromise = preloadModels(onProgress, onWaiting).then(() => {
+            // 缓存命中：本地加载（读缓存 + ORT 初始化），非网络下载 —— UI 文案据此区分
+            const onCacheHit = () => {
+                nerFromCache.value = true
+            }
+
+            const loadPromise = preloadModels(onProgress, onWaiting, onCacheHit).then(() => {
                 settled = true
                 if (timeoutTimer) clearTimeout(timeoutTimer)
                 nerWaitingOtherWindow.value = false
@@ -474,6 +482,7 @@ export const useDetectionStore = defineStore('detection', () => {
         nerLoadBytes,
         nerLoadTotal,
         nerWaitingOtherWindow,
+        nerFromCache,
         nerError,
         aiEnabled,
         setAiEnabled,
