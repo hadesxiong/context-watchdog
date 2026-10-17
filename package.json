@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc && vite build && node scripts/postbuild.mjs",
+    "build": "vue-tsc && vite build && node scripts/postbuild.mjs chrome",
+    "build:firefox": "vue-tsc && vite build --mode firefox && node scripts/postbuild.mjs firefox",
     "preview": "vite preview",
     "typecheck": "vue-tsc --noEmit",
     "test": "vitest run",

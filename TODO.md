@@ -16,7 +16,7 @@
 
 ## ✅ 代码侧复核（UI/UX 阶段；2 项仍待实机）
 
-> 状态：代码全部完成并通过 `npm run typecheck` / `npm test`（104 断言）/ `npm run build`（零警告）。
+> 状态：代码全部完成并通过 `npm run typecheck` / `npm test`（141 断言）/ `npm run build`（零警告）。
 > 模型源已由 hf-mirror 切换为 ModelScope（hf-mirror 现为 308 跳转且无 ACAO，扩展页 fetch 必失败），
 > 并补齐断点续传 / 缓存落盘 / 进度心跳 / 单飞重试（详见 B 组复核说明）。
 > **勾选标准（2026-10-16）**：代码实现 + 三类证据至少其一（静态核对 / 单测 / curl 实测）→ 打勾；
@@ -75,7 +75,7 @@
 ### C. 回归（每次验证前跑一遍）
 
 ```bash
-npm run typecheck && npm test && npm run build   # 期望：0 error / 104 passed / 0 warnings
+npm run typecheck && npm test && npm run build   # 期望：0 error / 141 passed / 0 warnings
 ```
 
 **已知限制**：`hf-mirror.com` 已弃用（308 且无 ACAO，任何扩展页场景都不要再接入）。ModelScope 侧若遇 CDN 限流
@@ -111,7 +111,7 @@ npm run typecheck && npm test && npm run build   # 期望：0 error / 104 passed
 
 - [x] **粘贴自动拦截**（C-1，2026-10-17）：按拍板结论实现——**先插入后就地替换**（不阻塞输入）、**SW 跑正则管线**（GLiNER 不在 SW 加载，面板不必开着）、**逐站授权**（`optional_host_permissions` + `chrome.permissions.request`，不申请 `<all_urls>`）。实现：`core/sites.ts`（站点规范化/匹配）、`core/messages.ts`（PASTE_DETECT 契约）、`content/pasteText.ts`（插入区间推导与改写守卫，纯函数有单测）、`background/pasteEntryPoint.ts`（自包含注入函数）、`background/service-worker.ts`（检测服务 + `tabs.onUpdated` 按需注入 + 站点列表变化即注入已开页面）、`components/PasteInterceptionSettings.vue`（添加/移除站点 UI）。护栏：password/隐藏框绝不处理、插入文本与剪贴板逐字吻合才改写、检测期间用户继续输入则放弃改写、超 20000 字符直接放行。**已知限制**：仅支持 `input[type=text/search]` 与 `textarea`，`contenteditable` 富文本区域暂不处理（待后续版本）；自动拦截为正则档，AI 增强只在侧栏手动流程生效。单测：`sites.test.ts` 11 例 + `pasteRewrite.test.ts` 6 例。
 - [x] **收紧 CSP**（C-2，2026-10-17）：`manifest.json` 的 `extension_pages` CSP 由 `connect-src 'self' https: http: ws:` 收紧为 `connect-src 'self' https:`（模型与 tokenizer 全走 https；代码中无 WebSocket 使用）。`script-src 'self' 'wasm-unsafe-eval'` 保留（ORT WASM 必需，Firefox MV3 亦要求显式声明）。
-- [x] **跨浏览器兼容**（C-3，2026-10-17，最小方案）：同一份 `dist/` 兼容 Firefox 121+——manifest 增加 `sidebar_action`（打开同一 sidepanel 页面）与 `browser_specific_settings.gecko`；SW 内运行时探测 `chrome.sidePanel.open` → 失败回退 `chrome.sidebarAction.open`；`background` 同时声明 `service_worker` 与 `scripts`（CRXJS 会丢弃 `scripts`，由新增 `scripts/postbuild.mjs` 在构建后注回，Chrome 121+ 忽略多余键）。**待实机**：Firefox 加载/侧栏打开/粘贴注入/CSP 四项均需在 Firefox 中人工验证。
+- [x] **跨浏览器兼容**（C-3，2026-10-17，最小方案 + 双目标构建）：`npm run build` 出 Chrome 包 `dist/`、`npm run build:firefox`（`vite build --mode firefox`）出 Firefox 包 `dist-firefox/`，两边 manifest 均为纯目标键、加载零警告。两目标共用同一份输入 manifest（CRXJS 靠 `side_panel`/`service_worker` 发现打包入口，分叉输入会漏打包，曾实测漏掉 sidepanel 全部模块），`--mode firefox` 仅切 `outDir`；Firefox 键转换集中在 `scripts/postbuild.mjs`：`service_worker → scripts`、`side_panel → sidebar_action`、移除 `sidePanel` 权限、补 `browser_specific_settings.gecko`（`pasteguard@pasteguard.dev`，min 121）。SW 内运行时探测 `chrome.sidePanel.open` → 回退 `chrome.sidebarAction.open`。**待实机**：Chrome 加载确认无「'background.scripts' requires manifest v2 / Unrecognized 'sidebar_action'」警告；Firefox 加载 `dist-firefox/manifest.json`，验证侧栏打开/粘贴注入/CSP/无未知键警告。
 - [ ] **新权限体验确认**（C-4）：本轮又新增 `scripting` 权限与 `optional_host_permissions`（可选，运行时按站点申请）。**待实机**：扩展更新后确认 Chrome 是否弹权限提示、文案是否可接受；粘贴拦截的站点授权弹窗观感如何。
 
 ## 1. 架构总览

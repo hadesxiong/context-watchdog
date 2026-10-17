@@ -11,8 +11,9 @@ PasteGuard 是 Chrome / Firefox 浏览器扩展（Manifest V3），在用户将�
 
 ```bash
 npm install
-npm run build     # 构建后加载 dist/ 到 chrome://extensions（Firefox：about:debugging → 此 Firefox → 加载临时附加组件 → 选 dist/manifest.json）
-npm run test      # 运行测试套件（141 项断言）
+npm run build           # Chrome 包 → dist/，加载到 chrome://extensions
+npm run build:firefox   # Firefox 包 → dist-firefox/，about:debugging → 此 Firefox → 加载临时附加组件 → 选 dist-firefox/manifest.json
+npm run test            # 运行测试套件（141 项断言）
 ```
 
 ## 架构
@@ -81,11 +82,17 @@ v1 范围限制：只支持 `input[type=text/search]` 与 `textarea`；`contente
 
 ### Firefox 兼容
 
-同一份 `dist/` 可直接在 Firefox 121+ 加载：
+按目标浏览器分别出包，两边 manifest 均为「纯目标键」，加载零警告：
 
-- 侧栏：Chrome 走 `side_panel` + `sidePanel.open()`，Firefox 走 `sidebar_action` + `sidebarAction.open()`，SW 内运行时探测并回退，两者打开同一面板页面
-- 后台脚本：manifest 同时声明 `background.service_worker`（Chrome 用）与 `background.scripts`（Firefox 事件页用）。CRXJS 构建会丢弃 `scripts` 键，故 `scripts/postbuild.mjs` 在构建后把它注回（Chrome 121+ 会忽略多余的 `scripts`）
-- 已知差异：`sidePanel` 权限与 `side_panel` 键在 Firefox 中会被记为未知项（仅警告，不影响加载）；AMO 提交前需按需拆分 manifest
+```bash
+npm run build           # Chrome → dist/
+npm run build:firefox   # Firefox 121+ → dist-firefox/
+```
+
+- 两个目标**共用同一份输入 manifest**（CRXJS 必须靠 `side_panel` / `service_worker` 发现打包入口，分叉输入会漏打包），`--mode firefox` 只切换输出目录
+- 差异转换统一由 `scripts/postbuild.mjs` 在构建后完成：`background.service_worker → scripts`、`side_panel → sidebar_action`、移除 `sidePanel` 未知权限、补 `browser_specific_settings.gecko` id
+- 侧栏打开：SW 内运行时探测 `chrome.sidePanel.open` → 失败回退 `chrome.sidebarAction.open`，两者打开同一面板页面
+- 因此 Chrome 包不含 `sidebar_action`/`scripts`/gecko 键（不会报「requires manifest version of 2 or lower」），Firefox 包不含 `side_panel`/`sidePanel`/`service_worker`（无未知键/未知权限警告）
 
 ### 防泄漏保证
 
