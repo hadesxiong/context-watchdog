@@ -14,7 +14,12 @@
     "storage",
     "clipboardWrite",
     "contextMenus",
-    "unlimitedStorage"
+    "unlimitedStorage",
+    "scripting"
+  ],
+  "optional_host_permissions": [
+    "https://*/*",
+    "http://*/*"
   ],
   "action": {
     "default_icon": {

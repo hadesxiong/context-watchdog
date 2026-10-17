@@ -5,6 +5,7 @@ import InputArea from '../components/InputArea.vue'
 import DetectionList from '../components/DetectionList.vue'
 import ActionBar from '../components/ActionBar.vue'
 import ProfileTabs from '../components/ProfileTabs.vue'
+import PasteInterceptionSettings from '../components/PasteInterceptionSettings.vue'
 import { Button, Switch, Logo, LoadingOverlay } from '../ui'
 
 const store = useDetectionStore()
@@ -248,6 +249,8 @@ const progressLabel = computed(() => {
                 </Button>
                 </div>
             </div>
+            <!-- 粘贴自动拦截：逐站授权，只有授权站点才注入粘贴监听 -->
+            <PasteInterceptionSettings />
         </div>
         <!-- NER 模型状态条 -->
         <Transition name="ner-notify" @after-leave="onNotifyLeave">
