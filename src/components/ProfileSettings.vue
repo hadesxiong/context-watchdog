@@ -3,6 +3,7 @@
 // 编辑本地草稿，点击保存时提交；内置档案不渲染本组件
 import { ref, reactive, watch } from 'vue'
 import { useDetectionStore } from '../stores/detection'
+import { Button, Input, Textarea } from '../ui'
 import { validateCustomRule, CUSTOM_PATTERN_MAX_LENGTH } from '../core/detector/rules/customRules'
 import type { ProfileConfig, RuleCategory, Sensitivity, DetectionType, CustomRule } from '../core/types'
 
@@ -207,42 +208,46 @@ const onSave = async () => {
 </script>
 
 <template>
-    <!-- 表单主体：外壳（标题/遮罩/关闭/动画）由外层 Dialog 提供 -->
-    <div class="text-xs space-y-3">
+    <!-- 表单主体：外壳（标题/遮罩/关闭/动画）由外层 Dialog 提供；
+         样式对齐外部设计系统：text-sm 正文 / ui Input·Textarea·Button / 统一焦点环与间距 -->
+    <div class="text-sm space-y-4">
         <!-- 名称与描述 -->
-        <div class="space-y-1">
-            <label class="block text-muted-foreground">档案名称</label>
-            <input v-model="draft.name" maxlength="20"
-                class="w-full px-2 py-1 rounded-sm border bg-muted/50 border-border text-foreground focus:outline-none focus:border-ring" />
-            <label class="block text-muted-foreground">描述</label>
-            <input v-model="draft.description" maxlength="100"
-                class="w-full px-2 py-1 rounded-sm border bg-muted/50 border-border text-foreground focus:outline-none focus:border-ring" />
+        <div class="space-y-2">
+            <div class="space-y-1">
+                <label class="block text-sm font-medium text-foreground">档案名称</label>
+                <Input v-model="draft.name" maxlength="20" placeholder="如：仅密钥" />
+            </div>
+            <div class="space-y-1">
+                <label class="block text-sm font-medium text-foreground">描述</label>
+                <Input v-model="draft.description" maxlength="100"
+                    placeholder="一句话说明该档案的适用场景" />
+            </div>
         </div>
 
         <!-- 规则类别开关 -->
-        <div class="space-y-1">
-            <label class="block text-muted-foreground">检测类别</label>
-            <div class="flex gap-2">
+        <div class="space-y-1.5">
+            <label class="block text-sm font-medium text-foreground">检测类别</label>
+            <div class="flex gap-4">
                 <label v-for="cat in CATEGORY_LABELS" :key="cat.key"
-                    class="flex items-center gap-1 cursor-pointer text-foreground">
+                    class="flex items-center gap-1.5 cursor-pointer text-sm text-foreground">
                     <input type="checkbox" :checked="draft.enabledCategories.includes(cat.key)"
-                        @change="toggleCategory(cat.key)" class="accent-primary" />
+                        @change="toggleCategory(cat.key)" class="accent-primary h-3.5 w-3.5" />
                     {{ cat.label }}
                 </label>
             </div>
         </div>
 
         <!-- 灵敏度 -->
-        <div class="space-y-1">
-            <label class="block text-muted-foreground">高熵灵敏度</label>
-            <div class="flex gap-1">
+        <div class="space-y-1.5">
+            <label class="block text-sm font-medium text-foreground">高熵灵敏度</label>
+            <div class="flex gap-1.5">
                 <button v-for="s in SENSITIVITY_LABELS" :key="s.key"
                     @click="draft.sensitivity = { ...draft.sensitivity, entropy: s.key }"
                     :class="[
-                        'px-2 py-1 rounded-sm border text-xs transition-colors',
+                        'px-3 py-1.5 rounded-md border text-sm font-medium transition-colors',
                         (draft.sensitivity.entropy || 'standard') === s.key
                             ? 'border-ring text-primary bg-primary/10'
-                            : 'border-border text-muted-foreground hover:border-input'
+                            : 'border-input text-muted-foreground hover:bg-accent hover:text-accent-foreground'
                     ]">
                     {{ s.label }}
                 </button>
@@ -250,21 +255,22 @@ const onSave = async () => {
         </div>
 
         <!-- 置信度分层 -->
-        <label class="flex items-center gap-1.5 cursor-pointer text-foreground">
-            <input type="checkbox" v-model="draft.tierLowConfidence" class="accent-primary" />
+        <label class="flex items-center gap-1.5 cursor-pointer text-sm text-foreground">
+            <input type="checkbox" v-model="draft.tierLowConfidence" class="accent-primary h-3.5 w-3.5" />
             中低置信度仅提示（不替换）
         </label>
 
         <!-- 分类型默认策略 -->
-        <div class="space-y-1">
-            <label class="block text-muted-foreground">默认策略</label>
-            <div class="grid grid-cols-2 gap-1">
+        <div class="space-y-1.5">
+            <label class="block text-sm font-medium text-foreground">默认策略</label>
+            <div class="grid grid-cols-2 gap-1.5">
                 <div v-for="t in ACTION_TYPES" :key="t.key"
-                    class="flex items-center justify-between gap-1 text-foreground">
+                    class="flex items-center justify-between gap-2 text-sm text-foreground">
                     <span class="truncate">{{ t.label }}</span>
                     <select :value="draft.defaultActions[t.key] || 'replace'"
                         @change="draft.defaultActions = { ...draft.defaultActions, [t.key]: ($event.target as HTMLSelectElement).value as 'replace' | 'keep' }"
-                        class="px-1 py-0.5 rounded-sm border bg-muted/50 border-border text-xs">
+                        class="px-2 py-1 rounded-md border border-input bg-background text-sm text-foreground
+                            focus:outline-none focus:ring-2 focus:ring-ring">
                         <option value="replace">替换</option>
                         <option value="keep">保留</option>
                     </select>
@@ -273,33 +279,35 @@ const onSave = async () => {
         </div>
 
         <!-- 值白名单 -->
-        <div class="space-y-1">
-            <label class="block text-muted-foreground">值白名单（每行一个，精确匹配不检测）</label>
-            <textarea v-model="whitelistText" rows="3" placeholder="example.com&#10;test-account-001"
-                class="w-full px-2 py-1 rounded-sm border bg-muted/50 border-border text-foreground font-mono text-xs focus:outline-none focus:border-ring resize-y"></textarea>
+        <div class="space-y-1.5">
+            <label class="block text-sm font-medium text-foreground">值白名单</label>
+            <Textarea v-model="whitelistText" :rows="3" placeholder="example.com&#10;test-account-001" />
+            <p class="text-xs text-muted-foreground">每行一个，精确匹配不检测</p>
         </div>
 
         <!-- 自定义正则规则（Phase 5） -->
-        <div class="space-y-1">
+        <div class="space-y-1.5">
             <div class="flex items-center justify-between">
-                <label class="block text-muted-foreground">自定义正则（{{ customRules.length }} 条）</label>
-                <button @click="showRuleForm = !showRuleForm"
-                    class="px-1.5 py-0.5 rounded-sm text-primary hover:bg-primary/10 transition-colors">
-                    {{ showRuleForm ? '收起' : '＋ 添加' }}
-                </button>
+                <label class="block text-sm font-medium text-foreground">
+                    自定义正则（{{ customRules.length }} 条）</label>
+                <Button variant="secondary" btnType="text" size="sm" @click="showRuleForm = !showRuleForm">
+                    {{ showRuleForm ? '收起' : '＋ 添加' }}</Button>
             </div>
 
             <!-- 规则列表 -->
             <div v-for="rule in customRules" :key="rule.id"
-                class="flex items-center gap-1 p-1.5 rounded-sm bg-muted/50 border border-border">
-                <input type="checkbox" v-model="rule.enabled" class="accent-primary shrink-0" :title="rule.enabled ? '已启用' : '已停用'" />
+                class="flex items-center gap-2 p-2 rounded-md bg-muted/50 border border-border">
+                <input type="checkbox" v-model="rule.enabled" class="accent-primary h-3.5 w-3.5 shrink-0"
+                    :title="rule.enabled ? '已启用' : '已停用'" />
                 <div class="flex-1 min-w-0">
-                    <p class="text-xs text-foreground truncate">{{ rule.name }}
-                        <span class="text-muted-foreground">→ {{ RULE_TYPE_OPTIONS.find(t => t.key === rule.type)?.label }}</span>
+                    <p class="text-sm text-foreground truncate">{{ rule.name }}
+                        <span class="text-xs text-muted-foreground">→ {{ RULE_TYPE_OPTIONS.find(t => t.key === rule.type)?.label }}</span>
                     </p>
                     <p class="text-xs text-muted-foreground font-mono truncate">{{ rule.pattern }}</p>
                 </div>
-                <button @click="removeRule(rule.id)" class="text-muted-foreground hover:text-destructive shrink-0" title="删除规则">
+                <button @click="removeRule(rule.id)"
+                    class="text-muted-foreground hover:text-destructive shrink-0 p-1 rounded-md
+                        hover:bg-destructive/10 transition-colors" title="删除规则">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
@@ -307,28 +315,26 @@ const onSave = async () => {
             </div>
 
             <!-- 添加表单 -->
-            <div v-if="showRuleForm" class="p-2 space-y-1.5 rounded-sm border border-primary/20 bg-primary/5">
-                <input v-model="newRule.name" maxlength="20" placeholder="规则名称（如：工号）"
-                    class="w-full px-2 py-1 rounded-sm border bg-background border-border text-foreground text-xs focus:outline-none focus:border-ring" />
-                <input v-model="newRule.pattern" :maxlength="CUSTOM_PATTERN_MAX_LENGTH" placeholder="正则（如：EMP-\d{6}）"
-                    class="w-full px-2 py-1 rounded-sm border bg-background border-border text-foreground font-mono text-xs focus:outline-none focus:border-ring" />
-                <div class="flex gap-1">
+            <div v-if="showRuleForm" class="p-3 space-y-2 rounded-md border border-primary/20 bg-primary/5">
+                <Input v-model="newRule.name" maxlength="20" placeholder="规则名称（如：工号）" />
+                <Input v-model="newRule.pattern" :maxlength="CUSTOM_PATTERN_MAX_LENGTH"
+                    placeholder="正则（如：EMP-\d{6}）" />
+                <div class="flex gap-1.5">
                     <select v-model="newRule.type"
-                        class="flex-1 px-1 py-1 rounded-sm border bg-background border-border text-xs text-foreground">
+                        class="flex-1 px-2 py-1.5 rounded-md border border-input bg-background text-sm text-foreground
+                            focus:outline-none focus:ring-2 focus:ring-ring">
                         <option v-for="t in RULE_TYPE_OPTIONS" :key="t.key" :value="t.key">{{ t.label }}</option>
                     </select>
                     <select v-model="newRule.confidence"
-                        class="px-1 py-1 rounded-sm border bg-background border-border text-xs text-foreground">
+                        class="px-2 py-1.5 rounded-md border border-input bg-background text-sm text-foreground
+                            focus:outline-none focus:ring-2 focus:ring-ring">
                         <option value="high">高置信</option>
                         <option value="medium">中置信</option>
                         <option value="low">低置信</option>
                     </select>
                 </div>
                 <p v-if="ruleError" class="text-destructive text-xs">{{ ruleError }}</p>
-                <button @click="addRule"
-                    class="w-full px-2 py-1 rounded-sm bg-primary text-primary-foreground hover:bg-primary/90 text-xs transition-colors">
-                    添加规则
-                </button>
+                <Button class="w-full" size="sm" @click="addRule">添加规则</Button>
             </div>
             <p class="text-xs text-muted-foreground">
                 拒绝嵌套量词（如 <code>(a+)+</code>）防 ReDoS；每条规则有 50ms 执行预算
@@ -336,59 +342,48 @@ const onSave = async () => {
         </div>
 
         <!-- AI 检测标签 -->
-        <div class="space-y-1">
-            <label class="block text-muted-foreground">AI 模型检测目标（GLiNER 标签）</label>
-            <div class="flex gap-1 flex-wrap">
+        <div class="space-y-1.5">
+            <label class="block text-sm font-medium text-foreground">AI 模型检测目标（GLiNER 标签）</label>
+            <div class="flex gap-1.5 flex-wrap">
                 <button v-for="(preset, key) in { pii: '个人信息集', secret: '密钥集', all: '全部', custom: '自定义' }"
                     :key="key" @click="currentPreset = key as typeof currentPreset"
                     :class="[
-                        'px-2 py-0.5 rounded-sm border text-xs transition-colors',
+                        'px-3 py-1.5 rounded-md border text-sm font-medium transition-colors',
                         currentPreset === key
                             ? 'border-ring text-primary bg-primary/10'
-                            : 'border-border text-muted-foreground hover:border-input'
+                            : 'border-input text-muted-foreground hover:bg-accent hover:text-accent-foreground'
                     ]">
                     {{ preset }}
                 </button>
             </div>
-            <textarea v-if="currentPreset === 'custom'" v-model="customLabelsText" rows="2"
-                placeholder="person name, phone number"
-                class="w-full px-2 py-1 rounded-sm border bg-muted/50 border-border text-foreground font-mono text-xs focus:outline-none focus:border-ring resize-y"></textarea>
+            <Textarea v-if="currentPreset === 'custom'" v-model="customLabelsText" :rows="2"
+                placeholder="person name, phone number" />
         </div>
 
         <!-- 错误提示 -->
         <p v-if="error" class="text-destructive text-xs">{{ error }}</p>
 
         <!-- 档案导入导出（Phase 5） -->
-        <div class="space-y-1 pt-1 border-t border-border">
-            <div class="flex gap-1">
-                <button @click="onExport"
-                    class="flex-1 px-2 py-1 rounded-sm border border-border text-muted-foreground hover:border-input transition-colors">
-                    导出档案 JSON
-                </button>
-                <button @click="onImport"
-                    class="flex-1 px-2 py-1 rounded-sm border border-border text-muted-foreground hover:border-input transition-colors">
-                    从剪贴板导入
-                </button>
+        <div class="space-y-1.5 pt-3 border-t border-border">
+            <div class="flex gap-2">
+                <Button variant="secondary" btnType="outline" size="sm" class="flex-1" @click="onExport">
+                    导出档案 JSON</Button>
+                <Button variant="secondary" btnType="outline" size="sm" class="flex-1" @click="onImport">
+                    从剪贴板导入</Button>
             </div>
             <p v-if="ioMessage" class="text-success text-xs">{{ ioMessage }}</p>
             <p v-if="ioError" class="text-destructive text-xs">{{ ioError }}</p>
         </div>
 
         <!-- 操作 -->
-        <div class="flex items-center justify-between pt-1 border-t border-border">
-            <button @click="emit('delete')"
-                class="px-2 py-1 rounded-sm text-destructive hover:bg-destructive/10 transition-colors">
-                删除档案
-            </button>
-            <div class="flex gap-1">
-                <button @click="emit('close')"
-                    class="px-2 py-1 rounded-sm border border-border text-muted-foreground hover:border-input transition-colors">
-                    取消
-                </button>
-                <button @click="onSave" :disabled="saving"
-                    class="px-2 py-1 rounded-sm bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors">
-                    {{ saving ? '保存中…' : '保存' }}
-                </button>
+        <div class="flex items-center justify-between pt-3 border-t border-border">
+            <Button variant="danger" btnType="text" size="sm" @click="emit('delete')">
+                删除档案</Button>
+            <div class="flex gap-2">
+                <Button variant="secondary" btnType="outline" size="sm" @click="emit('close')">
+                    取消</Button>
+                <Button size="sm" :loading="saving" @click="onSave">
+                    {{ saving ? '保存中…' : '保存' }}</Button>
             </div>
         </div>
     </div>
