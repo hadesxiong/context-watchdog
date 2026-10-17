@@ -5,7 +5,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import type { ModelProgress } from '../../src/core/detector/modelDownload'
-import { preloadModels, isContentModelReady } from '../../src/core/detector'
+import { detect, preloadModels, isContentModelReady } from '../../src/core/detector'
 import { useDetectionStore } from '../../src/stores/detection'
 
 vi.mock('../../src/core/detector', () => ({
@@ -16,6 +16,7 @@ vi.mock('../../src/core/detector', () => ({
 
 const mockedPreload = vi.mocked(preloadModels)
 const mockedReady = vi.mocked(isContentModelReady)
+const mockedDetect = vi.mocked(detect)
 
 // 默认：立即加载完成且模型真实就绪
 const stubLoadSuccess = () => {
@@ -188,5 +189,62 @@ describe('detection store - AI 增强首启引导', () => {
     await store.setAiEnabled(true)
 
     expect(store.shouldShowOnboarding).toBe(false)
+  })
+})
+
+describe('detection store - 引擎开关', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    setActivePinia(createPinia())
+    stubLoadSuccess()
+    mockedDetect.mockResolvedValue({ items: [], text: '' })
+  })
+
+  it('默认全开；detectText 把开关传入检测管线', async () => {
+    const store = useDetectionStore()
+    expect(store.engineToggles).toEqual({ regex: true, scene: true })
+
+    await store.detect('hello')
+
+    expect(mockedDetect).toHaveBeenCalledWith('hello', expect.anything(), {
+      enableSceneDetection: true,
+      enableContentDetection: false, // 未启用 AI → 内容检测关闭
+      enableRegexFallback: true
+    })
+  })
+
+  it('setEngineToggle 关正则：开关持久化状态更新，并传入后续检测', async () => {
+    const store = useDetectionStore()
+    await store.setEngineToggle('regex', false)
+
+    expect(store.engineToggles.regex).toBe(false)
+    expect(store.engineToggles.scene).toBe(true)
+
+    await store.detect('hello')
+    expect(mockedDetect).toHaveBeenLastCalledWith('hello', expect.anything(),
+      expect.objectContaining({ enableRegexFallback: false }))
+  })
+
+  it('setEngineToggle 关场景 + 启用 AI：AI 内容检测随之开启', async () => {
+    const store = useDetectionStore()
+    await store.setEngineToggle('scene', false)
+    await store.setAiEnabled(true)
+
+    await store.detect('hello')
+    expect(mockedDetect).toHaveBeenLastCalledWith('hello', expect.anything(), {
+      enableSceneDetection: false,
+      enableContentDetection: true,
+      enableRegexFallback: true
+    })
+  })
+
+  it('已有文本时切换开关 → 立即重新检测', async () => {
+    const store = useDetectionStore()
+    await store.detect('hello')
+    expect(mockedDetect).toHaveBeenCalledTimes(1)
+
+    await store.setEngineToggle('regex', false)
+
+    expect(mockedDetect).toHaveBeenCalledTimes(2)
   })
 })

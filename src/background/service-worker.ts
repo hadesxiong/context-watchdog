@@ -7,6 +7,12 @@
 import { detect } from '../core/detector'
 import { sanitizeText } from '../core/replacer'
 import { matchSite, readProtectedSites, PROTECTED_SITES_KEY } from '../core/sites'
+import {
+  readEngineToggles,
+  ENGINE_TOGGLES_KEY,
+  DEFAULT_ENGINE_TOGGLES,
+  type EngineToggles
+} from '../core/detector/engineToggles'
 import { PASTE_DETECT, type PasteDetectResponse } from '../core/messages'
 import { pasteGuardEntryPoint } from './pasteEntryPoint'
 
@@ -51,6 +57,8 @@ chrome.action.onClicked.addListener(async tab => {
 // ---------- 粘贴自动拦截：受保护站点注入 ----------
 
 let protectedPatterns: string[] = []
+// 引擎开关（与侧栏面板共用同一份 storage 配置，见 engineToggles.ts）
+let engineToggles: EngineToggles = { ...DEFAULT_ENGINE_TOGGLES }
 
 const injectPasteGuard = (tabId: number): void => {
   chrome.scripting
@@ -67,18 +75,29 @@ const injectIntoOpenTabs = async (): Promise<void> => {
   }
 }
 
-// 站点列表变化 → 刷新缓存并对已打开页面注入（移除站点时停止注入由页面重载自然生效，
+// 站点列表/引擎开关变化 → 刷新缓存并对已打开页面注入（移除站点时停止注入由页面重载自然生效，
 // 已注入的监听不会自动卸载，但只在有权限的站点上才会收到消息）
 void readProtectedSites().then(sites => {
   protectedPatterns = sites
 })
 
+void readEngineToggles().then(toggles => {
+  engineToggles = toggles
+})
+
 chrome.storage.onChanged.addListener((changes, areaName) => {
-  if (areaName !== 'local' || !changes[PROTECTED_SITES_KEY]) return
-  void readProtectedSites().then(sites => {
-    protectedPatterns = sites
-    return injectIntoOpenTabs()
-  })
+  if (areaName !== 'local') return
+  if (changes[PROTECTED_SITES_KEY]) {
+    void readProtectedSites().then(sites => {
+      protectedPatterns = sites
+      return injectIntoOpenTabs()
+    })
+  }
+  if (changes[ENGINE_TOGGLES_KEY]) {
+    void readEngineToggles().then(toggles => {
+      engineToggles = toggles
+    })
+  }
 })
 
 // 页面导航/重载时按需注入（无需在 manifest 声明 content_scripts，
@@ -97,7 +116,11 @@ chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) =
   if (request?.type !== PASTE_DETECT || typeof request.text !== 'string') return undefined
 
   const text = request.text.slice(0, MAX_PASTE_CHARS)
-  detect(text)
+  // 引擎开关与面板一致：关正则/场景则粘贴拦截也遵守（AI 模型在 SW 恒不加载，自动走正则档）
+  detect(text, undefined, {
+    enableSceneDetection: engineToggles.scene,
+    enableRegexFallback: engineToggles.regex
+  })
     .then(result => {
       // sanitizeText 是纯函数（局部 MappingManager），SW 内无状态依赖
       const { sanitizedText } = sanitizeText(result.text, result.items)

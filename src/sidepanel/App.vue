@@ -92,24 +92,28 @@ const openInNewTab = () => {
     chrome.tabs.create({ url: chrome.runtime.getURL('src/sidepanel/index.html') })
 }
 
+// 引擎卡片：正则/场景开关来自 engineToggles（持久化，SW 粘贴拦截联动）；AI 开关即 aiEnabled
 const engineStatusItems = computed(() => [
     {
+        key: 'regex' as const,
         name: '正则规则',
         description: '密钥、连接串、PII（手机/身份证/银行卡）等模式匹配',
-        enabled: store.engineStatus.regexRules,
-        icon: 'regex'
+        enabled: store.engineToggles.regex,
+        toggle: (v: boolean) => store.setEngineToggle('regex', v)
     },
     {
+        key: 'scene' as const,
         name: '场景识别',
         description: '启发式识别文本类型（零延迟，离线可用）',
-        enabled: store.engineStatus.sceneModel,
-        icon: 'scene'
+        enabled: store.engineToggles.scene,
+        toggle: (v: boolean) => store.setEngineToggle('scene', v)
     },
     {
+        key: 'ai' as const,
         name: 'AI 模型',
-        description: '姓名、地址等无固定格式实体（需联网加载模型）',
-        enabled: store.engineStatus.contentModel,
-        icon: 'content'
+        description: '姓名、地址等无固定格式实体（需下载约 180MB 模型，仅此一次）',
+        enabled: store.aiEnabled,
+        toggle: (v: boolean) => store.setAiEnabled(v)
     }
 ])
 
@@ -192,88 +196,49 @@ const loadingCaption = computed(() => {
                 </svg>
                 </button>
             </div>
-            <!-- 引擎具体内容 -->
+            <!-- 引擎开关：正则/场景持久化并联动粘贴拦截；AI 开关即启用增强检测（合并下载） -->
             <div class="flex flex-col gap-3">
                 <div v-for="item in engineStatusItems" :key="item.name"
-                    class="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-                    <div class="flex items-center gap-3">
-                        <!-- <div
-                        :class="[
-                            'w-2 h-2 rounded-full',
-                            item.enabled ? 'bg-success' : 'bg-muted'
-                        ]"
-                        /> -->
-                        <div>
-                            <p class="text-sm font-medium text-foreground">
-                                {{ item.name }}
-                            </p>
-                            <p class="text-xs text-muted-foreground">
-                                {{ item.description }}
-                            </p>
+                    class="p-3 rounded-lg bg-muted/50">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <div>
+                                <p class="text-sm font-medium text-foreground">
+                                    {{ item.name }}
+                                </p>
+                                <p class="text-xs text-muted-foreground">
+                                    {{ item.description }}
+                                </p>
+                            </div>
                         </div>
+                        <Switch :model-value="item.enabled" size="small"
+                            @update:model-value="item.toggle" />
                     </div>
-                    <span :class="[
-                        'text-xs font-medium px-2 py-1 rounded-full',
-                        item.enabled
-                            ? 'bg-success/10 text-success'
-                            : 'bg-muted text-muted-foreground'
-                        ]">
-                        {{ item.enabled ? '生效' : '未生效' }}</span>
-                </div>
-            </div>
-            <!-- AI 增强检测开关（默认关闭：不下载模型、零网络请求） -->
-            <div class="mt-4 p-3 rounded-lg bg-muted/50">
-                <div class="flex items-center justify-between">
-                    <div class="pr-3">
-                        <p class="text-sm font-medium text-foreground">
-                            启用 AI 增强检测</p>
-                        <p class="text-xs text-muted-foreground mt-0.5">
-                            识别姓名、地址等无固定格式内容；需下载约 180MB 模型</p>
-                    </div>
-                    <Switch v-model="store.aiEnabled" size="small"
-                        @update:model-value="(v: boolean) => store.setAiEnabled(v)" />
-                </div>
-                <!-- 加载进度 -->
-                <div v-if="store.nerStatus === 'loading'" class="mt-2 w-full">
-                    <div class="flex justify-between text-xs text-muted-foreground mb-1">
-                        <span>{{ loadingCaption }}</span>
-                        <span v-if="!store.nerFromCache">{{ progressLabel }}</span>
-                    </div>
-                    <div class="w-full bg-muted rounded-full h-1.5">
-                        <div v-if="!store.nerFromCache && !store.nerIndeterminate"
-                            class="bg-primary h-1.5 rounded-full transition-all duration-300"
-                            :style="{ width: store.nerLoadProgress + '%' }"></div>
-                        <div v-else class="h-1.5 w-1/3 bg-primary rounded-full pg-indeterminate"></div>
-                    </div>
-                </div>
-                <!-- 失败提示（关闭开关或重试） -->
-                <p v-if="store.nerStatus === 'error' || store.nerStatus === 'timeout'"
-                    class="mt-2 text-xs text-warning">
-                    {{ store.nerError || '模型下载失败，可关闭后重试；基础检测不受影响' }}
-                </p>
-            </div>
-            <!-- NER 模型操作 -->
-            <div
-                v-if="store.nerStatus === 'error' || store.nerStatus === 'timeout'"
-                class="mt-4 p-3 bg-warning/10 rounded-lg border border-warning/30"
-            >
-                <div class="flex items-center justify-between">
-                <div>
-                    <p class="text-sm font-medium text-warning">
-                    NER模型未加载
-                    </p>
-                    <p class="text-xs text-warning">
-                    {{ store.nerError || '基础检测功能仍可正常使用' }}
-                    </p>
-                </div>
-                <Button
-                    @click="store.retryLoadNER"
-                    variant="secondary"
-                    btnType="outline"
-                    size="sm"
-                >
-                    重试
-                </Button>
+                    <!-- AI 卡片附属：加载进度 / 失败重试 -->
+                    <template v-if="item.key === 'ai'">
+                        <div v-if="store.nerStatus === 'loading'" class="mt-2 w-full">
+                            <div class="flex justify-between text-xs text-muted-foreground mb-1">
+                                <span>{{ loadingCaption }}</span>
+                                <span v-if="!store.nerFromCache">{{ progressLabel }}</span>
+                            </div>
+                            <div class="w-full bg-muted rounded-full h-1.5">
+                                <div v-if="!store.nerFromCache && !store.nerIndeterminate"
+                                    class="bg-primary h-1.5 rounded-full transition-all duration-300"
+                                    :style="{ width: store.nerLoadProgress + '%' }"></div>
+                                <div v-else class="h-1.5 w-1/3 bg-primary rounded-full pg-indeterminate"></div>
+                            </div>
+                        </div>
+                        <!-- 失败提示（关闭开关或重试） -->
+                        <div v-if="store.nerStatus === 'error' || store.nerStatus === 'timeout'"
+                            class="mt-2 flex items-center justify-between gap-2">
+                            <p class="text-xs text-warning">
+                                {{ store.nerError || '模型加载失败；基础检测不受影响' }}</p>
+                            <Button @click="store.retryLoadNER" variant="secondary"
+                                btnType="outline" size="sm" class="shrink-0">
+                                重试
+                            </Button>
+                        </div>
+                    </template>
                 </div>
             </div>
             <!-- 粘贴自动拦截：逐站授权，只有授权站点才注入粘贴监听 -->

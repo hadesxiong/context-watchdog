@@ -4,6 +4,11 @@ import type { DetectionItem, ReplaceConfig, MappingTable, ProfileConfig } from '
 import { detect, preloadModels, isContentModelReady } from '../core/detector'
 import { getProfileById, DEFAULT_PROFILE_ID } from '../core/detector/profiles'
 import { UserProfileManager, createChromeStorage } from '../core/detector/userProfiles'
+import {
+    normalizeEngineToggles,
+    ENGINE_TOGGLES_KEY,
+    type EngineToggles
+} from '../core/detector/engineToggles'
 import { getReplacer } from '../core/replacer'
 
 // 模型状态类型
@@ -129,6 +134,22 @@ export const useDetectionStore = defineStore('detection', () => {
         regexRules: true
     })
 
+    // 引擎开关（正则规则 / 场景识别；AI 模型开关复用 aiEnabled）：持久化，粘贴拦截 SW 读同一份配置
+    const engineToggles = ref<EngineToggles>({ regex: true, scene: true })
+    storageLocal?.get(ENGINE_TOGGLES_KEY, (result: Record<string, unknown>) => {
+        engineToggles.value = normalizeEngineToggles(result?.[ENGINE_TOGGLES_KEY])
+    })
+
+    // 切换引擎开关；对已有文本立即按新开关重新检测（开关即刻生效）
+    const setEngineToggle = async (engine: keyof EngineToggles, enabled: boolean) => {
+        engineToggles.value = { ...engineToggles.value, [engine]: enabled }
+        storageLocal?.set({ [ENGINE_TOGGLES_KEY]: { ...engineToggles.value } })
+        console.log('[PasteGuard] Engine toggle:', engine, enabled ? 'enabled' : 'disabled')
+        if (originalText.value) {
+            await detectText(originalText.value)
+        }
+    }
+
     // 计算属性
     const isNERReady = computed(() => nerStatus.value === 'success')
 
@@ -175,7 +196,11 @@ export const useDetectionStore = defineStore('detection', () => {
         console.log('[PasteGuard] Starting detection for text:', text.substring(0, 100) + '...')
 
         try {
-        const result = await detect(text, activeProfile.value)
+        const result = await detect(text, activeProfile.value, {
+            enableSceneDetection: engineToggles.value.scene,
+            enableContentDetection: aiEnabled.value,
+            enableRegexFallback: engineToggles.value.regex
+        })
         detections.value = result.items
 
         console.log('[PasteGuard] Detection completed. Found', result.items.length, 'items:')
@@ -492,6 +517,8 @@ export const useDetectionStore = defineStore('detection', () => {
 
         // 引擎状态
         engineStatus,
+        engineToggles,
+        setEngineToggle,
 
         // 计算属性
         isNERReady,
