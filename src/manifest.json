@@ -32,11 +32,25 @@
   "side_panel": {
     "default_path": "src/sidepanel/index.html"
   },
+  "sidebar_action": {
+    "default_title": "PasteGuard - AI脱敏助手",
+    "default_panel": "src/sidepanel/index.html",
+    "default_position": "right"
+  },
   "background": {
     "service_worker": "src/background/service-worker.ts",
+    "scripts": [
+      "src/background/service-worker.ts"
+    ],
     "type": "module"
   },
   "content_security_policy": {
-    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; connect-src 'self' https: http: ws:"
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; connect-src 'self' https:"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "pasteguard@pasteguard.dev",
+      "strict_min_version": "121.0"
+    }
   }
 }

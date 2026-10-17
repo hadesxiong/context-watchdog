@@ -1,6 +1,6 @@
 // Service Worker
 // 职责：
-// 1) 点击扩展图标打开侧栏（sidePanel）
+// 1) 点击扩展图标打开侧栏：Chrome/Edge 走 sidePanel，Firefox 走 sidebar_action（同一面板页面）
 // 2) 粘贴自动拦截的检测服务：content script 把粘贴文本发到这里跑检测管线并回传脱敏结果
 //    （GLiNER 模型不会在 SW 中加载——isContentModelReady() 按上下文判定，自动走正则档）
 // 3) 受保护站点的按需注入：只有用户授权过的站点才注入粘贴监听，未授权站点零接触
@@ -23,6 +23,10 @@ interface SidePanelLike {
   open?: (options: { tabId: number }) => Promise<void>
 }
 
+interface SidebarActionLike {
+  open?: () => Promise<void> | void
+}
+
 chrome.action.onClicked.addListener(async tab => {
   const sidePanel = (chrome as unknown as { sidePanel?: SidePanelLike }).sidePanel
   if (typeof sidePanel?.open === 'function' && typeof tab.id === 'number') {
@@ -30,8 +34,17 @@ chrome.action.onClicked.addListener(async tab => {
       await sidePanel.open({ tabId: tab.id })
       return
     } catch (error) {
-      console.warn('[PasteGuard] sidePanel.open 失败:', error)
+      console.warn('[PasteGuard] sidePanel.open 失败，回退 sidebarAction:', error)
     }
+  }
+
+  // Firefox：manifest 的 sidebar_action 打开同一面板页面。
+  // sidebarAction.open() 需要用户手势，点击扩展图标这一事件即满足
+  const sidebarAction = (chrome as unknown as { sidebarAction?: SidebarActionLike }).sidebarAction
+  try {
+    await sidebarAction?.open?.()
+  } catch (error) {
+    console.warn('[PasteGuard] 打开侧栏失败:', error)
   }
 })
 
