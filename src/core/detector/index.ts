@@ -4,11 +4,9 @@ import { isContentModelReady } from './contentDetector'
 import type { ModelProgress } from './modelDownload'
 import { getProfileById, DEFAULT_PROFILE_ID } from './profiles'
 
-// 新管线配置
+// 新管线配置（正则恒开、场景识别为 AI 分支内部细节，故仅暴露 AI 检测开关）
 interface DetectorConfig {
-  enableSceneDetection: boolean
   enableContentDetection: boolean
-  enableRegexFallback: boolean
 }
 
 // 主检测函数 - 委托给新管线（profile 为检测配置档案，缺省用"不限"）

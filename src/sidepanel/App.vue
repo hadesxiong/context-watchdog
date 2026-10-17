@@ -92,27 +92,24 @@ const openInNewTab = () => {
     chrome.tabs.create({ url: chrome.runtime.getURL('src/sidepanel/index.html') })
 }
 
-// 引擎卡片：正则/场景开关来自 engineToggles（持久化，SW 粘贴拦截联动）；AI 开关即 aiEnabled
+// 引擎卡片：正则为基础引擎恒开（Switch 禁止修改——SW 粘贴拦截仅依赖此档，
+// 误关会使拦截整体失灵）；场景识别并入 AI（仅喂给 GLiNER 提示词，随 AI 开关走，
+// 不单独设卡）；AI 开关即 aiEnabled
 const engineStatusItems = computed(() => [
     {
         key: 'regex' as const,
         name: '正则规则',
-        description: '密钥、连接串、PII（手机/身份证/银行卡）等模式匹配',
-        enabled: store.engineToggles.regex,
-        toggle: (v: boolean) => store.setEngineToggle('regex', v)
-    },
-    {
-        key: 'scene' as const,
-        name: '场景识别',
-        description: '启发式识别文本类型（零延迟，离线可用）',
-        enabled: store.engineToggles.scene,
-        toggle: (v: boolean) => store.setEngineToggle('scene', v)
+        description: '密钥、连接串、PII（手机/身份证/银行卡）等模式匹配 · 基础引擎，始终启用',
+        enabled: true,
+        locked: true,
+        toggle: (_v: boolean) => { /* 恒开，禁止修改 */ }
     },
     {
         key: 'ai' as const,
         name: 'AI 模型',
-        description: '姓名、地址等无固定格式实体（需下载约 180MB 模型，仅此一次）',
+        description: '姓名、地址等无固定格式实体，自动叠加场景识别（需下载约 180MB 模型，仅此一次）',
         enabled: store.aiEnabled,
+        locked: false,
         toggle: (v: boolean) => store.setAiEnabled(v)
     }
 ])
@@ -195,7 +192,7 @@ const loadingCaption = computed(() => {
                 </svg>
                 </button>
             </div>
-            <!-- 引擎开关：正则/场景持久化并联动粘贴拦截；AI 开关即启用增强检测（合并下载） -->
+            <!-- 引擎开关：正则恒开（禁改）+ AI 开关（含场景识别，合并下载） -->
             <div class="flex flex-col gap-3">
                 <div v-for="item in engineStatusItems" :key="item.name"
                     class="p-3 rounded-lg bg-muted/50">
@@ -211,6 +208,7 @@ const loadingCaption = computed(() => {
                             </div>
                         </div>
                         <Switch :model-value="item.enabled" size="small"
+                            :disabled="item.locked"
                             @update:model-value="item.toggle" />
                     </div>
                     <!-- AI 卡片附属：加载进度（仅真网络下载；缓存命中静默初始化）/ 失败重试 -->

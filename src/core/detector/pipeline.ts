@@ -10,17 +10,13 @@ import { getProfileById, DEFAULT_PROFILE_ID, getSensitivity, ENTROPY_THRESHOLDS 
 import { generatePlaceholder } from '../replacer/placeholder'
 import { generateId } from '../utils/id'
 
-// 检测引擎配置
+// 检测引擎配置（正则为基础引擎恒开；场景识别为 AI 分支内部细节，不单独暴露开关）
 interface DetectorConfig {
-  enableSceneDetection: boolean
   enableContentDetection: boolean
-  enableRegexFallback: boolean
 }
 
 const defaultConfig: DetectorConfig = {
-  enableSceneDetection: true,
-  enableContentDetection: true,
-  enableRegexFallback: true
+  enableContentDetection: true
 }
 
 // GLiNER 实体类型到 DetectionType 的映射（密钥类 + PII 类）
@@ -381,53 +377,48 @@ export const detect = async (
 
   console.log('[PasteGuard] Pipeline started. Profile:', profile.id, 'Text length:', text.length)
 
-  // Step 1: 场景识别（启发式，确定性）
-  let scene: SceneResult = { type: 'plain', confidence: 0, scores: {} as any }
-  if (mergedConfig.enableSceneDetection) {
-    try {
-      scene = await detectScene(text)
-      console.log('[PasteGuard] Scene:', scene.type, `(${(scene.confidence * 100).toFixed(1)}%)`)
-    } catch (error) {
-      console.warn('[PasteGuard] Scene detection failed, using default:', error)
-    }
+  // Step 2: 按 Profile 启用的规则类别运行正则规则（正则为基础引擎恒开，
+  // SW 粘贴拦截仅依赖此档，不提供关闭入口）
+  console.log('[PasteGuard] Running regex rules for categories:', profile.enabledCategories.join(', '))
+  const enabledRules = profile.enabledCategories.flatMap(cat => rulesByCategory[cat] || [])
+  const enableEntropy = profile.enabledCategories.includes('entropy')
+  const entropyThresholds = ENTROPY_THRESHOLDS[getSensitivity(profile, 'entropy')]
+
+  const regexItems = scanRegexRules(text, enabledRules, { enableEntropy, entropyThresholds })
+  console.log('[PasteGuard] Regex found', regexItems.length, 'items')
+
+  // 为正则结果添加 source 标记
+  for (const item of regexItems) {
+    items.push({
+      ...item,
+      source: 'regex'
+    })
   }
 
-  // Step 2: 按 Profile 启用的规则类别运行正则规则（正则引擎开关关闭时整段跳过，
-  // 含自定义正则；检测结果为空属用户自选预期）
-  if (mergedConfig.enableRegexFallback) {
-    console.log('[PasteGuard] Running regex rules for categories:', profile.enabledCategories.join(', '))
-    const enabledRules = profile.enabledCategories.flatMap(cat => rulesByCategory[cat] || [])
-    const enableEntropy = profile.enabledCategories.includes('entropy')
-    const entropyThresholds = ENTROPY_THRESHOLDS[getSensitivity(profile, 'entropy')]
-
-    const regexItems = scanRegexRules(text, enabledRules, { enableEntropy, entropyThresholds })
-    console.log('[PasteGuard] Regex found', regexItems.length, 'items')
-
-    // 为正则结果添加 source 标记
-    for (const item of regexItems) {
-      items.push({
-        ...item,
-        source: 'regex'
-      })
+  // Step 2b: 用户自定义正则（ReDoS 校验 + 时间预算，Phase 5）
+  const customRules = (profile.customRules || []).filter(r => r.enabled)
+  if (customRules.length > 0) {
+    const custom = scanCustomRules(text, customRules)
+    console.log('[PasteGuard] Custom rules found', custom.items.length, 'items')
+    for (const warning of custom.warnings) {
+      console.warn('[PasteGuard]', warning)
     }
-
-    // Step 2b: 用户自定义正则（ReDoS 校验 + 时间预算，Phase 5）
-    const customRules = (profile.customRules || []).filter(r => r.enabled)
-    if (customRules.length > 0) {
-      const custom = scanCustomRules(text, customRules)
-      console.log('[PasteGuard] Custom rules found', custom.items.length, 'items')
-      for (const warning of custom.warnings) {
-        console.warn('[PasteGuard]', warning)
-      }
-      items.push(...custom.items)
-    }
-  } else {
-    console.log('[PasteGuard] Regex engine disabled by toggle, skipping')
+    items.push(...custom.items)
   }
 
-  // Step 3-4: GLiNER 级联触发（仅处理正则未覆盖片段，如果模型可用）
+  // Step 3-4: GLiNER 级联触发（仅处理正则未覆盖片段，如果模型可用）。
+  // 场景识别为 AI 分支内部细节（仅喂给 GLiNER 提示词，不影响正则检出），
+  // 随 AI 开关走：AI 关闭/模型未就绪时一并省去这步启发式（约 10ms）
   if (mergedConfig.enableContentDetection && isContentModelReady()) {
     try {
+      let scene: SceneResult = { type: 'plain', confidence: 0, scores: {} as any }
+      try {
+        scene = await detectScene(text)
+        console.log('[PasteGuard] Scene:', scene.type, `(${(scene.confidence * 100).toFixed(1)}%)`)
+      } catch (error) {
+        console.warn('[PasteGuard] Scene detection failed, using default:', error)
+      }
+
       const segments = buildUncoveredSegments(text, items)
       console.log('[PasteGuard] Cascade: sending', segments.length, 'uncovered segments to model')
 
@@ -465,18 +456,12 @@ export const detect = async (
         }
       }
 
-      // Step 5b: uncertain 实体回流正则复检（复检不中的以低置信度保留）；
-      // 正则引擎关闭时跳过复检，直接按低置信度保留模型判断
+      // Step 5b: uncertain 实体回流正则复检（复检不中的以低置信度保留）
       for (const entity of uncertain) {
         const coveredByRegex = items.some(existing =>
           existing.startIndex <= entity.startIndex && existing.endIndex >= entity.endIndex
         )
         if (coveredByRegex) continue
-
-        if (!mergedConfig.enableRegexFallback) {
-          items.push(toDetectionItem({ ...entity, confidence: Math.min(entity.confidence, 0.5) }))
-          continue
-        }
 
         const rechecked = recheckWithRegex(entity)
         if (rechecked.length > 0) {

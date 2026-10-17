@@ -200,51 +200,29 @@ describe('detection store - 引擎开关', () => {
     mockedDetect.mockResolvedValue({ items: [], text: '' })
   })
 
-  it('默认全开；detectText 把开关传入检测管线', async () => {
+  it('detectText 仅传 AI 开关（正则恒开、场景识别已内部化，无持久化开关）', async () => {
     const store = useDetectionStore()
-    expect(store.engineToggles).toEqual({ regex: true, scene: true })
 
     await store.detect('hello')
 
     expect(mockedDetect).toHaveBeenCalledWith('hello', expect.anything(), {
-      enableSceneDetection: true,
-      enableContentDetection: false, // 未启用 AI → 内容检测关闭
-      enableRegexFallback: true
+      enableContentDetection: false // 未启用 AI → 内容检测关闭
     })
   })
 
-  it('setEngineToggle 关正则：开关持久化状态更新，并传入后续检测', async () => {
+  it('启用 AI → 内容检测随之开启（场景识别随 AI 分支一并启用）', async () => {
     const store = useDetectionStore()
-    await store.setEngineToggle('regex', false)
-
-    expect(store.engineToggles.regex).toBe(false)
-    expect(store.engineToggles.scene).toBe(true)
-
-    await store.detect('hello')
-    expect(mockedDetect).toHaveBeenLastCalledWith('hello', expect.anything(),
-      expect.objectContaining({ enableRegexFallback: false }))
-  })
-
-  it('setEngineToggle 关场景 + 启用 AI：AI 内容检测随之开启', async () => {
-    const store = useDetectionStore()
-    await store.setEngineToggle('scene', false)
     await store.setAiEnabled(true)
 
     await store.detect('hello')
     expect(mockedDetect).toHaveBeenLastCalledWith('hello', expect.anything(), {
-      enableSceneDetection: false,
-      enableContentDetection: true,
-      enableRegexFallback: true
+      enableContentDetection: true
     })
   })
 
-  it('已有文本时切换开关 → 立即重新检测', async () => {
+  it('不再暴露 engineToggles / setEngineToggle（正则恒开、场景随 AI）', () => {
     const store = useDetectionStore()
-    await store.detect('hello')
-    expect(mockedDetect).toHaveBeenCalledTimes(1)
-
-    await store.setEngineToggle('regex', false)
-
-    expect(mockedDetect).toHaveBeenCalledTimes(2)
+    expect(store).not.toHaveProperty('engineToggles')
+    expect(store).not.toHaveProperty('setEngineToggle')
   })
 })
