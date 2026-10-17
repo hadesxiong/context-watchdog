@@ -20,6 +20,8 @@ interface DetectionEngineStatus {
 const PROFILE_STORAGE_KEY = 'pasteguard.activeProfile'
 // AI 增强检测显式开关（Phase UI：默认关闭，零网络请求零报错）
 const AI_ENABLED_KEY = 'pasteguard.aiEnabled'
+// AI 增强首启引导弹窗「已展示」标记（展示过一次后永不再弹，无论用户是否开启）
+const AI_ONBOARDING_KEY = 'pasteguard.aiOnboardingSeen'
 
 // 计算某检测项的默认替换动作：Profile 显式配置 > 置信度分层 > 替换
 const resolveDefaultAction = (
@@ -54,6 +56,10 @@ export const useDetectionStore = defineStore('detection', () => {
     const nerError = ref<string | null>(null)
     // AI 增强检测开关（用户显式启用后才会下载模型）
     const aiEnabled = ref(false)
+    // 首启引导弹窗是否已展示过（持久化；展示即置位，与用户选择无关）
+    const aiOnboardingSeen = ref(false)
+    // storage 恢复是否完成（App 侧据此避免在恢复前误判「从未展示过」而误弹引导）
+    const onboardingRestored = ref(false)
 
     // 激活的检测配置档案（Tab 切换，持久化）
     const activeProfileId = ref<string>(DEFAULT_PROFILE_ID)
@@ -93,13 +99,26 @@ export const useDetectionStore = defineStore('detection', () => {
         }
     })
 
-    // 恢复 AI 增强开关：仅在用户此前显式启用时才加载模型（默认零网络请求）
-    storageLocal?.get(AI_ENABLED_KEY, (result: Record<string, unknown>) => {
-        if (result?.[AI_ENABLED_KEY] === true) {
-            aiEnabled.value = true
-            initNER()
-        }
-    })
+    // 恢复 AI 增强开关与首启引导标记：仅在用户此前显式启用时才加载模型（默认零网络请求）
+    if (storageLocal) {
+        storageLocal.get([AI_ENABLED_KEY, AI_ONBOARDING_KEY], (result: Record<string, unknown>) => {
+            aiOnboardingSeen.value = result?.[AI_ONBOARDING_KEY] === true
+            if (result?.[AI_ENABLED_KEY] === true) {
+                aiEnabled.value = true
+                initNER()
+            }
+            onboardingRestored.value = true
+        })
+    } else {
+        // 无 storage（node 测试环境）：视为已恢复，保持默认未看过引导
+        onboardingRestored.value = true
+    }
+
+    // 是否应展示首启引导：storage 已恢复 + 从未展示过 + 当前未启用 AI
+    //（已启用过 AI 的老用户不弹——尊重既有选择）
+    const shouldShowOnboarding = computed(
+        () => onboardingRestored.value && !aiOnboardingSeen.value && !aiEnabled.value
+    )
 
     // 检测引擎状态
     const engineStatus = ref<DetectionEngineStatus>({
@@ -409,6 +428,12 @@ export const useDetectionStore = defineStore('detection', () => {
         await initNER()
     }
 
+    // 首启引导「已展示」置位（展示即调用，持久化后永不再弹）
+    const markOnboardingSeen = () => {
+        aiOnboardingSeen.value = true
+        storageLocal?.set({ [AI_ONBOARDING_KEY]: true })
+    }
+
     // 禁用模型（降级模式）
     const disableNER = () => {
         nerStatus.value = 'disabled'
@@ -452,6 +477,9 @@ export const useDetectionStore = defineStore('detection', () => {
         nerError,
         aiEnabled,
         setAiEnabled,
+        aiOnboardingSeen,
+        shouldShowOnboarding,
+        markOnboardingSeen,
 
         // 引擎状态
         engineStatus,

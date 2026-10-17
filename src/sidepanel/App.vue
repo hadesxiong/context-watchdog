@@ -6,7 +6,7 @@ import DetectionList from '../components/DetectionList.vue'
 import ActionBar from '../components/ActionBar.vue'
 import ProfileTabs from '../components/ProfileTabs.vue'
 import PasteInterceptionSettings from '../components/PasteInterceptionSettings.vue'
-import { Button, Switch, Logo, LoadingOverlay } from '../ui'
+import { Button, Switch, Logo, LoadingOverlay, Dialog } from '../ui'
 
 const store = useDetectionStore()
 const inputText = ref('')
@@ -18,6 +18,24 @@ const showEngineStatus = ref(false)
 
 // 模型不再随面板挂载自动下载：仅当用户此前显式启用 AI 增强时，
 // store 内部会自行恢复并加载（见 stores/detection.ts 的 AI_ENABLED_KEY 逻辑）
+
+// 首启引导弹窗：从未展示过 且 未启用过 AI 才弹；展示即置位（store 持久化），无论用户怎么选都永不再弹
+const showOnboarding = ref(store.shouldShowOnboarding)
+watch(() => store.shouldShowOnboarding, (val) => {
+    if (val) {
+        showOnboarding.value = true
+        store.markOnboardingSeen()
+    }
+}, { immediate: true })
+
+const onEnableAiFromDialog = () => {
+    showOnboarding.value = false
+    store.setAiEnabled(true)
+}
+
+const onDismissOnboarding = () => {
+    showOnboarding.value = false
+}
 
 const dismissTimer = ref<ReturnType<typeof setTimeout> | null>(null)
 const dismissing = ref(false)
@@ -385,6 +403,26 @@ const progressLabel = computed(() => {
         </main>
         <!-- 全局检测中遮罩 -->
         <LoadingOverlay v-if="showOverlay" />
+        <!-- 首启引导弹窗：AI 增强为可选项，开启才下载模型（选择权交还用户） -->
+        <Dialog :open="showOnboarding" title="启用 AI 增强检测？"
+            @update:open="(v: boolean) => { if (!v) onDismissOnboarding() }">
+            <div class="space-y-3">
+                <p class="text-xs text-muted-foreground leading-relaxed">
+                    AI 增强可识别姓名、地址等无固定格式内容，让检测更全面。
+                    开启后需下载约 180MB 量化模型（仅此一次，本地处理，不上传任何数据）。
+                    不开启也可正常使用正则基础检测（密钥、手机号、身份证等）。
+                </p>
+                <div class="flex justify-end gap-2">
+                    <Button variant="secondary" btnType="outline" size="sm"
+                        @click="onDismissOnboarding">
+                        暂不
+                    </Button>
+                    <Button size="sm" @click="onEnableAiFromDialog">
+                        开启 AI 增强
+                    </Button>
+                </div>
+            </div>
+        </Dialog>
     </div>
 </template>
 

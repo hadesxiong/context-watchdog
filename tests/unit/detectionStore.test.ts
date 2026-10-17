@@ -153,3 +153,40 @@ describe('detection store - 模型加载状态机', () => {
     expect(store.nerStatus).toBe('success')
   })
 })
+
+describe('detection store - AI 增强首启引导', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.useFakeTimers()
+    setActivePinia(createPinia())
+    stubLoadSuccess()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('默认（无 storage 环境）：从未展示过且未启用 → 应弹引导', () => {
+    const store = useDetectionStore()
+
+    expect(store.aiOnboardingSeen).toBe(false)
+    expect(store.shouldShowOnboarding).toBe(true)
+  })
+
+  it('markOnboardingSeen 置位后永不再弹', () => {
+    const store = useDetectionStore()
+    expect(store.shouldShowOnboarding).toBe(true)
+
+    store.markOnboardingSeen()
+
+    expect(store.aiOnboardingSeen).toBe(true)
+    expect(store.shouldShowOnboarding).toBe(false)
+  })
+
+  it('已启用过 AI 的老用户：即使从未见过引导也不弹', async () => {
+    const store = useDetectionStore()
+    await store.setAiEnabled(true)
+
+    expect(store.shouldShowOnboarding).toBe(false)
+  })
+})
