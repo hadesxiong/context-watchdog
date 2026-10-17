@@ -1,13 +1,18 @@
 # PasteGuard - AI脱敏助手
 
-Chrome 浏览器扩展（Manifest V3），在用户将文本发送给 AI 前，自动检测并替换敏感信息。**双轨检测**：通用文本 PII（手机号/身份证/银行卡/邮箱/车牌/IP）与开发场景密钥（API Key/密码/连接串/JWT/私钥）并重。所有处理在本地完成。
+PasteGuard 是 Chrome / Firefox 浏览器扩展（Manifest V3），在用户将文本发送给 AI 前，自动检测并替换敏感信息。**双轨检测**：通用文本 PII（手机号/身份证/银行卡/邮箱/车牌/IP）与开发场景密钥（API Key/密码/连接串/JWT/私钥）并重。所有处理在本地完成。
+
+两种用法：
+
+- **侧栏手动脱敏**（默认）：侧栏粘贴 → 检出列表 → 一键脱敏 → 复制
+- **粘贴自动拦截**（可选，逐站授权）：在已授权站点粘贴时自动就地替换为占位符，无需打开侧栏
 
 ## 快速开始
 
 ```bash
 npm install
-npm run build     # 构建后加载 dist/ 到 chrome://extensions
-npm run test      # 运行测试套件（50 项断言）
+npm run build     # 构建后加载 dist/ 到 chrome://extensions（Firefox：about:debugging → 此 Firefox → 加载临时附加组件 → 选 dist/manifest.json）
+npm run test      # 运行测试套件（141 项断言）
 ```
 
 ## 架构
@@ -63,6 +68,25 @@ Tab 栏「＋」基于当前档案克隆出用户自定义档案（⚙ 按钮编
 
 自定义档案持久化于 `chrome.storage.local`（`pasteguard.userProfiles`），内置档案不可改删；数据经 sanitize 校验，存储损坏自动丢弃。详见 `docs/phase4-verification.md`、`docs/phase5-verification.md`。
 
+### 粘贴自动拦截（可选，逐站授权）
+
+侧栏「粘贴自动拦截」卡片中添加站点（如 `chat.example.com`），浏览器会弹出该站点的访问授权。授权后：
+
+- 在该站点的输入框 / 文本域粘贴时，**先正常插入原文**（不阻塞输入），检测完成后**就地替换**为占位符
+- 检测在 service worker 中跑现有正则管线（GLiNER 模型不会在 SW 加载），无需下载模型
+- 站点列表持久化在 `chrome.storage.local`（`pasteguard.protectedSites`），SW 按 `tabs.onUpdated` 按需注入粘贴监听——**未授权站点零接触**（manifest 不声明 `content_scripts`，也不申请 `<all_urls>`）
+- 安全护栏：password/隐藏输入框绝不处理；插入文本与剪贴板逐字吻合才改写（站点改写粘贴内容则放弃）；检测期间用户继续输入则放弃改写，绝不覆盖新内容；未检出则完全不动
+
+v1 范围限制：只支持 `input[type=text/search]` 与 `textarea`；`contenteditable` 富文本区域暂不处理（粘贴片段难以可靠定位，待后续版本）。
+
+### Firefox 兼容
+
+同一份 `dist/` 可直接在 Firefox 121+ 加载：
+
+- 侧栏：Chrome 走 `side_panel` + `sidePanel.open()`，Firefox 走 `sidebar_action` + `sidebarAction.open()`，SW 内运行时探测并回退，两者打开同一面板页面
+- 后台脚本：manifest 同时声明 `background.service_worker`（Chrome 用）与 `background.scripts`（Firefox 事件页用）。CRXJS 构建会丢弃 `scripts` 键，故 `scripts/postbuild.mjs` 在构建后把它注回（Chrome 121+ 会忽略多余的 `scripts`）
+- 已知差异：`sidePanel` 权限与 `side_panel` 键在 Firefox 中会被记为未知项（仅警告，不影响加载）；AMO 提交前需按需拆分 manifest
+
 ### 防泄漏保证
 
 - **同值必同占位符**：同一敏感值出现 N 处 → N 处全部替换为同一占位符（值传播覆盖无上下文的裸露出现）
@@ -88,12 +112,15 @@ src/
 │   ├── replacer/              # 替换引擎（纯函数 apply）
 │   │   ├── placeholder.ts     # 语义化中文占位符（生成/反解析）
 │   │   └── mapping.ts         # 映射表（同值共享）
+│   ├── sites.ts               # 受保护站点规范化/匹配（粘贴拦截）
+│   ├── messages.ts            # content ↔ SW 消息契约
 │   ├── types/                 # 类型定义（DetectionType/ProfileConfig）
 │   └── utils/id.ts            # 统一 ID 生成
-├── components/                # Vue 组件（ProfileTabs/DetectionItem...）
+├── components/                # Vue 组件（ProfileTabs/DetectionItem/PasteInterceptionSettings...）
+├── content/pasteText.ts       # 粘贴就地替换纯逻辑（区间推导与改写守卫）
 ├── stores/detection.ts        # Pinia（Profile 持久化 + 默认策略分层）
 ├── sidepanel/                 # Side Panel 主界面
-└── background/                # Service Worker
+└── background/                # Service Worker（侧栏入口跨浏览器 + 粘贴检测服务 + 站点注入）
 ```
 
 ## 测试
@@ -107,7 +134,7 @@ npm run test:watch    # 监听模式
 |------|------|
 | `tests/golden/` | 按 Profile 分组的端到端用例（universal/text/code/whitelist） |
 | `tests/regression/` | Phase 1 修复点回归（含@密码/重复值/重叠/CJK 偏移/吞值） |
-| `tests/unit/` | 场景启发式/占位符/校验算法/替换引擎/用户档案 CRUD |
+| `tests/unit/` | 场景启发式/占位符/校验算法/替换引擎/用户档案 CRUD/模型下载器/检测 store 状态机/站点匹配/粘贴就地替换 |
 | `tests/perf/` | 长文本基准（5000 字 < 2s） |
 
 手动验证用例见 `docs/phase1-verification.md`、`docs/phase2-verification.md`、`docs/phase4-verification.md`。

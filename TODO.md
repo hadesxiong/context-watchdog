@@ -83,9 +83,10 @@ npm run typecheck && npm test && npm run build   # 期望：0 error / 104 passed
 
 ---
 
-## 🧭 遗留项（2026-10-16 盘点；A、B 两组已于 2026-10-17 实施完成，C 组待拍板）
+## 🧭 遗留项（2026-10-16 盘点；A、B、C 三组均已于 2026-10-17 实施完成）
 
-> 来源：本轮修复后仍存在的能力缺口 + 代码卫生 + 产品方向。A、B 组已完成并有单测/构建证据，C 组仍为 `[ ]` 待决策。
+> 来源：本轮修复后仍存在的能力缺口 + 代码卫生 + 产品方向。A、B、C 三组已实施并有单测/构建证据；
+> 仅 C-4（新权限提示）与 A-4（heap 实测）需真机观察后回填。
 
 ### A. 模型下载健壮性（跨会话 / 多实例）
 
@@ -106,12 +107,12 @@ npm run typecheck && npm test && npm run build   # 期望：0 error / 104 passed
 - [x] **补 store 状态机单测**（B-4，2026-10-17）：新增 `tests/unit/detectionStore.test.ts` 6 用例（加载成功、`isContentModelReady()` 假成功断言、60 秒停滞超时、进度重置超时与字节/不定进度映射、`setAiEnabled(false)` 复位、另一窗口等待标记）。
 - [x] **清理硬编码颜色**（B-5，2026-10-17）：`src/ui/Switch.vue` 开关把手 `bg-white` → `bg-background`（深色主题观感待实机复核）。
 
-### C. 产品 / 工程方向（需先拍板）
+### C. 产品 / 工程方向（2026-10-17 拍板并实施）
 
-- [ ] **粘贴自动拦截**（产品方向）：当前无 content script，仅「侧栏粘贴 → 脱敏 → 复制」。若目标是产品名的字面含义——粘贴时自动替换，需新增 content script + 消息通道，并申请 `<all_urls>` host 权限，另需评估站内兼容性与商店审核风险。
-- [ ] **收紧 CSP**：`src/manifest.json:35` 的 `connect-src 'self' https: http: ws:` 放开了 `http:`；模型与 tokenizer 均走 https，可收紧为 `https:`（`ws:` 视是否用到 WebSocket 再定）。
-- [ ] **跨浏览器兼容**：`sidePanel` 为 Chrome 专有 API，manifest 无 `browser_specific_settings`，Firefox 不可用；如需支持要另设入口页。
-- [ ] **新权限体验确认**：`unlimitedStorage` 为本轮新增，扩展更新后确认是否弹出权限提示、文案是否可接受。
+- [x] **粘贴自动拦截**（C-1，2026-10-17）：按拍板结论实现——**先插入后就地替换**（不阻塞输入）、**SW 跑正则管线**（GLiNER 不在 SW 加载，面板不必开着）、**逐站授权**（`optional_host_permissions` + `chrome.permissions.request`，不申请 `<all_urls>`）。实现：`core/sites.ts`（站点规范化/匹配）、`core/messages.ts`（PASTE_DETECT 契约）、`content/pasteText.ts`（插入区间推导与改写守卫，纯函数有单测）、`background/pasteEntryPoint.ts`（自包含注入函数）、`background/service-worker.ts`（检测服务 + `tabs.onUpdated` 按需注入 + 站点列表变化即注入已开页面）、`components/PasteInterceptionSettings.vue`（添加/移除站点 UI）。护栏：password/隐藏框绝不处理、插入文本与剪贴板逐字吻合才改写、检测期间用户继续输入则放弃改写、超 20000 字符直接放行。**已知限制**：仅支持 `input[type=text/search]` 与 `textarea`，`contenteditable` 富文本区域暂不处理（待后续版本）；自动拦截为正则档，AI 增强只在侧栏手动流程生效。单测：`sites.test.ts` 11 例 + `pasteRewrite.test.ts` 6 例。
+- [x] **收紧 CSP**（C-2，2026-10-17）：`manifest.json` 的 `extension_pages` CSP 由 `connect-src 'self' https: http: ws:` 收紧为 `connect-src 'self' https:`（模型与 tokenizer 全走 https；代码中无 WebSocket 使用）。`script-src 'self' 'wasm-unsafe-eval'` 保留（ORT WASM 必需，Firefox MV3 亦要求显式声明）。
+- [x] **跨浏览器兼容**（C-3，2026-10-17，最小方案）：同一份 `dist/` 兼容 Firefox 121+——manifest 增加 `sidebar_action`（打开同一 sidepanel 页面）与 `browser_specific_settings.gecko`；SW 内运行时探测 `chrome.sidePanel.open` → 失败回退 `chrome.sidebarAction.open`；`background` 同时声明 `service_worker` 与 `scripts`（CRXJS 会丢弃 `scripts`，由新增 `scripts/postbuild.mjs` 在构建后注回，Chrome 121+ 忽略多余键）。**待实机**：Firefox 加载/侧栏打开/粘贴注入/CSP 四项均需在 Firefox 中人工验证。
+- [ ] **新权限体验确认**（C-4）：本轮又新增 `scripting` 权限与 `optional_host_permissions`（可选，运行时按站点申请）。**待实机**：扩展更新后确认 Chrome 是否弹权限提示、文案是否可接受；粘贴拦截的站点授权弹窗观感如何。
 
 ## 1. 架构总览
 
