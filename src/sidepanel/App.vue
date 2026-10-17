@@ -355,10 +355,6 @@ const loadingCaption = computed(() => {
                         <template #profile>
                             <ProfileSelect />
                         </template>
-                        <template #subtitle>
-                            <p class="text-xs text-muted-foreground -mt-1.5">
-                                {{ store.activeProfile.description }}</p>
-                        </template>
                     </InputArea>
                 </div>
                 <!-- 底部操作（仅在有检出项时显示替换操作） -->

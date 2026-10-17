@@ -83,8 +83,6 @@ const handlePaste = (_event: ClipboardEvent) => {
                     清空</Button>
             </div>
         </div>
-        <!-- 副标题行（当前档案描述等） -->
-        <slot name="subtitle" />
 
         <div class="p-0 min-[720px]:flex-1 min-[720px]:flex min-[720px]:flex-col">
             <textarea ref="textareaRef"
