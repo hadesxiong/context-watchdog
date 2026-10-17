@@ -44,13 +44,14 @@ const onOpenChange = (open: boolean) => {
             <DialogContent
                 :class="[
                     'fixed left-1/2 top-1/2 z-50 w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2',
-                    'max-h-[calc(100vh-4rem)] overflow-y-auto',
+                    'max-h-[calc(100vh-4rem)] overflow-hidden flex flex-col',
                     'rounded-lg border border-border bg-card text-card-foreground shadow-lg',
                     'p-4 space-y-3',
                     'data-[state=open]:pg-dialog-in data-[state=closed]:pg-dialog-out',
                     width
                 ]">
-                <div class="flex items-start justify-between gap-3">
+                <!-- 标题区：独立固定（shrink-0），长表单滚动时标题/描述/关闭按钮不跟随 -->
+                <div class="flex items-start justify-between gap-3 shrink-0">
                     <div class="space-y-1">
                         <DialogTitle v-if="title" class="text-base font-semibold text-foreground">
                             {{ title }}
@@ -72,7 +73,10 @@ const onOpenChange = (open: boolean) => {
                         <span class="sr-only">关闭</span>
                     </button>
                 </div>
-                <slot />
+                <!-- 正文滚动区：仅内容滚动（含长表单），overscroll-contain 防滚动穿透到页面 -->
+                <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+                    <slot />
+                </div>
             </DialogContent>
         </DialogPortal>
     </DialogRoot>

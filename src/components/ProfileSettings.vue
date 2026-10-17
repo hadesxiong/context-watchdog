@@ -3,7 +3,7 @@
 // 编辑本地草稿，点击保存时提交；内置档案不渲染本组件
 import { ref, reactive, watch } from 'vue'
 import { useDetectionStore } from '../stores/detection'
-import { Button, Input, Textarea } from '../ui'
+import { Button, Input, Textarea, Switch } from '../ui'
 import { validateCustomRule, CUSTOM_PATTERN_MAX_LENGTH } from '../core/detector/rules/customRules'
 import type { ProfileConfig, RuleCategory, Sensitivity, DetectionType, CustomRule } from '../core/types'
 
@@ -171,7 +171,7 @@ const SENSITIVITY_LABELS: Array<{ key: Sensitivity; label: string }> = [
     { key: 'strict', label: '严格' }
 ]
 
-// ---- 分类型默认策略 ----
+// ---- 分类型默认策略（Switch 形式：开 = 替换，关 = 保留） ----
 const ACTION_TYPES: Array<{ key: DetectionType; label: string }> = [
     { key: 'ENV_PASSWORD', label: '密码' },
     { key: 'API_KEY', label: 'API 密钥' },
@@ -184,6 +184,13 @@ const ACTION_TYPES: Array<{ key: DetectionType; label: string }> = [
     { key: 'IP_ADDRESS', label: 'IP 地址' },
     { key: 'PLATE', label: '车牌' }
 ]
+
+const currentAction = (key: DetectionType): 'replace' | 'keep' =>
+    draft.defaultActions[key] || 'replace'
+
+const setDefaultAction = (key: DetectionType, replace: boolean) => {
+    draft.defaultActions = { ...draft.defaultActions, [key]: replace ? 'replace' : 'keep' }
+}
 
 // ---- 保存 ----
 const onSave = async () => {
@@ -212,12 +219,12 @@ const onSave = async () => {
          样式对齐外部设计系统：text-sm 正文 / ui Input·Textarea·Button / 统一焦点环与间距 -->
     <div class="text-sm space-y-4">
         <!-- 名称与描述 -->
-        <div class="space-y-2">
-            <div class="space-y-1">
+        <div class="space-y-3">
+            <div class="space-y-1.5">
                 <label class="block text-sm font-medium text-foreground">档案名称</label>
                 <Input v-model="draft.name" maxlength="20" placeholder="如：仅密钥" />
             </div>
-            <div class="space-y-1">
+            <div class="space-y-1.5">
                 <label class="block text-sm font-medium text-foreground">描述</label>
                 <Input v-model="draft.description" maxlength="100"
                     placeholder="一句话说明该档案的适用场景" />
@@ -260,20 +267,22 @@ const onSave = async () => {
             中低置信度仅提示（不替换）
         </label>
 
-        <!-- 分类型默认策略 -->
+        <!-- 分类型默认策略：Switch（开 = 替换，关 = 保留） -->
         <div class="space-y-1.5">
             <label class="block text-sm font-medium text-foreground">默认策略</label>
-            <div class="grid grid-cols-2 gap-1.5">
+            <div class="grid grid-cols-2 gap-x-4 gap-y-2">
                 <div v-for="t in ACTION_TYPES" :key="t.key"
                     class="flex items-center justify-between gap-2 text-sm text-foreground">
                     <span class="truncate">{{ t.label }}</span>
-                    <select :value="draft.defaultActions[t.key] || 'replace'"
-                        @change="draft.defaultActions = { ...draft.defaultActions, [t.key]: ($event.target as HTMLSelectElement).value as 'replace' | 'keep' }"
-                        class="px-2 py-1 rounded-md border border-input bg-background text-sm text-foreground
-                            focus:outline-none focus:ring-2 focus:ring-ring">
-                        <option value="replace">替换</option>
-                        <option value="keep">保留</option>
-                    </select>
+                    <span class="flex items-center gap-1.5 shrink-0">
+                        <span class="w-7 text-right text-xs"
+                            :class="currentAction(t.key) === 'replace' ? 'text-primary' : 'text-muted-foreground'">
+                            {{ currentAction(t.key) === 'replace' ? '替换' : '保留' }}
+                        </span>
+                        <Switch size="small"
+                            :model-value="currentAction(t.key) === 'replace'"
+                            @update:model-value="setDefaultAction(t.key, $event)" />
+                    </span>
                 </div>
             </div>
         </div>
@@ -315,7 +324,7 @@ const onSave = async () => {
             </div>
 
             <!-- 添加表单 -->
-            <div v-if="showRuleForm" class="p-3 space-y-2 rounded-md border border-primary/20 bg-primary/5">
+            <div v-if="showRuleForm" class="p-3 space-y-1.5 rounded-md border border-primary/20 bg-primary/5">
                 <Input v-model="newRule.name" maxlength="20" placeholder="规则名称（如：工号）" />
                 <Input v-model="newRule.pattern" :maxlength="CUSTOM_PATTERN_MAX_LENGTH"
                     placeholder="正则（如：EMP-\d{6}）" />
@@ -360,31 +369,23 @@ const onSave = async () => {
                 placeholder="person name, phone number" />
         </div>
 
-        <!-- 错误提示 -->
-        <p v-if="error" class="text-destructive text-xs">{{ error }}</p>
-
-        <!-- 档案导入导出（Phase 5） -->
+        <!-- 操作：导入导出与保存/删除合并一行（关闭由标题栏 × / Esc 承担，不再设取消） -->
         <div class="space-y-1.5 pt-3 border-t border-border">
-            <div class="flex gap-2">
-                <Button variant="secondary" btnType="outline" size="sm" class="flex-1" @click="onExport">
-                    导出档案 JSON</Button>
-                <Button variant="secondary" btnType="outline" size="sm" class="flex-1" @click="onImport">
-                    从剪贴板导入</Button>
+            <div class="flex items-center gap-2">
+                <Button variant="secondary" btnType="outline" size="sm"
+                    title="复制全部自定义档案 JSON 到剪贴板" @click="onExport">导出</Button>
+                <Button variant="secondary" btnType="outline" size="sm"
+                    title="从剪贴板读取档案 JSON 并导入" @click="onImport">导入</Button>
+                <div class="ml-auto flex items-center gap-2">
+                    <Button variant="danger" btnType="text" size="sm" @click="emit('delete')">
+                        删除档案</Button>
+                    <Button size="sm" :loading="saving" @click="onSave">
+                        {{ saving ? '保存中…' : '保存' }}</Button>
+                </div>
             </div>
+            <p v-if="error" class="text-destructive text-xs">{{ error }}</p>
             <p v-if="ioMessage" class="text-success text-xs">{{ ioMessage }}</p>
             <p v-if="ioError" class="text-destructive text-xs">{{ ioError }}</p>
-        </div>
-
-        <!-- 操作 -->
-        <div class="flex items-center justify-between pt-3 border-t border-border">
-            <Button variant="danger" btnType="text" size="sm" @click="emit('delete')">
-                删除档案</Button>
-            <div class="flex gap-2">
-                <Button variant="secondary" btnType="outline" size="sm" @click="emit('close')">
-                    取消</Button>
-                <Button size="sm" :loading="saving" @click="onSave">
-                    {{ saving ? '保存中…' : '保存' }}</Button>
-            </div>
         </div>
     </div>
 </template>
