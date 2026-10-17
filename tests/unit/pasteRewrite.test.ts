@@ -1,6 +1,25 @@
 // 单元用例 - 粘贴「先插入后就地替换」的纯逻辑
 import { describe, it, expect } from 'vitest'
-import { computeInsertionRange, applySanitized } from '../../src/content/pasteText'
+import { computeInsertionRange, applySanitized, normalizeNewlines } from '../../src/content/pasteText'
+
+describe('normalizeNewlines', () => {
+  it('CRLF → LF（Windows 剪贴板多行文本的常见形态）', () => {
+    expect(normalizeNewlines('a\r\nb\r\nc')).toBe('a\nb\nc')
+  })
+
+  it('孤立 CR → LF（旧 Mac 形态）', () => {
+    expect(normalizeNewlines('a\rb')).toBe('a\nb')
+  })
+
+  it('LF 与无换行保持不变', () => {
+    expect(normalizeNewlines('a\nb')).toBe('a\nb')
+    expect(normalizeNewlines('single line')).toBe('single line')
+  })
+
+  it('混合形态逐一归一化', () => {
+    expect(normalizeNewlines('a\r\nb\rc\nd')).toBe('a\nb\nc\nd')
+  })
+})
 
 describe('computeInsertionRange', () => {
   it('末尾追加：区间为粘贴文本本身', () => {
@@ -45,6 +64,22 @@ describe('computeInsertionRange', () => {
     const range = computeInsertionRange(value, value.length, pasted)
     expect(range).toEqual({ start: 5, end: value.length })
     expect(value.slice(range!.start, range!.end)).toBe(pasted)
+  })
+
+  it('回归：CRLF 多行粘贴（剪贴板 \r\n / textarea 已归一化为 \n）→ 匹配成功', () => {
+    // 模拟 Windows 剪贴板：原始文本带 \r\n；textarea.value 已按规范归一化为 \n
+    const pastedRaw = '手机13812345678\r\n邮箱test@example.com'
+    const pastedInValue = normalizeNewlines(pastedRaw) // textarea 内实际形态
+    const value = `前缀\n${pastedInValue}\n后缀`
+    const caret = ('前缀\n' + pastedInValue).length
+
+    const range = computeInsertionRange(value, caret, pastedRaw)
+    expect(range).not.toBeNull()
+    expect(value.slice(range!.start, range!.end)).toBe(pastedInValue)
+  })
+
+  it('回归：归一化后光标容纳不下（粘贴全文为空白换行）→ null', () => {
+    expect(computeInsertionRange('ab', 1, '\r\n')).toBeNull()
   })
 })
 

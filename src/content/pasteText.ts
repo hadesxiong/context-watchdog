@@ -7,6 +7,12 @@ export interface InsertionRange {
   end: number
 }
 
+// 换行归一化：textarea.value 按 HTML 规范把 \r\n / \r 归一化为 \n，
+// 而剪贴板原始文本（尤其 Windows）常带 \r\n——不归一化会导致多行粘贴的
+// 逐字校验必然失配（长度与内容双重偏差），整条检测链路静默失效
+export const normalizeNewlines = (text: string): string =>
+  text.replace(/\r\n?/g, '\n')
+
 // 粘贴插入区间：粘贴后光标位置 - 粘贴文本长度。
 // 与实际值不吻合（站点改写粘贴内容 / IME / 并发输入）则返回 null，调用方放弃改写
 export const computeInsertionRange = (
@@ -14,10 +20,11 @@ export const computeInsertionRange = (
   caret: number,
   pasted: string
 ): InsertionRange | null => {
-  if (!pasted || caret < 0 || caret > value.length) return null
-  const start = caret - pasted.length
+  const expected = normalizeNewlines(pasted)
+  if (!expected || caret < 0 || caret > value.length) return null
+  const start = caret - expected.length
   if (start < 0) return null
-  if (value.slice(start, caret) !== pasted) return null
+  if (value.slice(start, caret) !== expected) return null
   return { start, end: caret }
 }
 
