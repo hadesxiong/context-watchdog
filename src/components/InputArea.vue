@@ -62,10 +62,14 @@ const handlePaste = (_event: ClipboardEvent) => {
 
 <template>
     <div class="flex flex-col gap-3 h-full">
-        <div class="flex items-center w-full justify-between">
-            <label class="text-base font-bold text-foreground">
-                输入文本</label>
-            <div class="p-0 flex gap-3 border-t border-border/50 bg-background/50">
+        <div class="flex items-center w-full justify-between gap-2">
+            <div class="flex items-center gap-2 min-w-0">
+                <label class="text-base font-bold text-foreground shrink-0">
+                    输入文本</label>
+                <!-- 档案下拉选择器（App 侧注入） -->
+                <slot name="profile" />
+            </div>
+            <div class="p-0 flex gap-3 border-t border-border/50 bg-background/50 shrink-0">
                 <Button variant="primary" btnType="text"
                     @click="handleDetect"
                     :disabled="!localText.trim() || isProcessing"
@@ -79,6 +83,8 @@ const handlePaste = (_event: ClipboardEvent) => {
                     清空</Button>
             </div>
         </div>
+        <!-- 副标题行（当前档案描述等） -->
+        <slot name="subtitle" />
 
         <div class="p-0 min-[720px]:flex-1 min-[720px]:flex min-[720px]:flex-col">
             <textarea ref="textareaRef"

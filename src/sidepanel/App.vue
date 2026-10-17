@@ -4,7 +4,7 @@ import { useDetectionStore } from '../stores/detection'
 import InputArea from '../components/InputArea.vue'
 import DetectionList from '../components/DetectionList.vue'
 import ActionBar from '../components/ActionBar.vue'
-import ProfileTabs from '../components/ProfileTabs.vue'
+import ProfileSelect from '../components/ProfileSelect.vue'
 import PasteInterceptionSettings from '../components/PasteInterceptionSettings.vue'
 import { Button, Switch, Logo, LoadingOverlay, Dialog } from '../ui'
 
@@ -385,19 +385,24 @@ const loadingCaption = computed(() => {
                     min-[820px]:border-border 
                      `
                 ]">
-                <!-- 场景 Tab -->
-                <ProfileTabs />
-                <!-- 输入项 -->
+                <!-- 输入项（档案下拉挂在标题旁） -->
                 <div :class="['px-3 pt-3',
-                    hasDetected && `
-                        min-[820px]:py-3
+                    hasDetected && `min-[820px]:pt-3
                         min-[820px]:flex 
                         min-[820px]:flex-col 
                         min-[820px]:flex-1 
                         min-[820px]:min-h-0`
                 ]">
                     <InputArea v-model="inputText" :is-processing="showOverlay"
-                        @detect="handleDetect" @clear="handleClear"/>
+                        @detect="handleDetect" @clear="handleClear">
+                        <template #profile>
+                            <ProfileSelect />
+                        </template>
+                        <template #subtitle>
+                            <p class="text-xs text-muted-foreground -mt-1.5">
+                                {{ store.activeProfile.description }}</p>
+                        </template>
+                    </InputArea>
                 </div>
                 <!-- 底部操作（仅在有检出项时显示替换操作） -->
                 <div v-if="hasResults" class="hidden min-[820px]:block">
