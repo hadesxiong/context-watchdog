@@ -52,7 +52,7 @@ const onOpenChange = (open: boolean) => {
                 ]">
                 <div class="flex items-start justify-between gap-3">
                     <div class="space-y-1">
-                        <DialogTitle v-if="title" class="text-sm font-semibold text-foreground">
+                        <DialogTitle v-if="title" class="text-base font-semibold text-foreground">
                             {{ title }}
                         </DialogTitle>
                         <DialogDescription v-if="description" class="text-xs text-muted-foreground">
