@@ -121,7 +121,7 @@ npm run typecheck && npm test && npm run build   # 期望：0 error / 141 passed
 > 删引擎开关持久化。校验基线：typecheck 0 错误、163 tests、`build` + `build:firefox` 通过。
 
 - [ ] **缓存命中全程静默**（`6df1167`）：`onCacheHit` 反转为 `onDownloadStart`——只有确认走网络下载（缓存未命中/过期作废，含另一窗口下载）才显示下载 toast 与进度；缓存命中仅 console 日志，打开面板零打扰。**待实机**：启用 AI 后重开面板不应出现任何下载提示（含原先「先闪首次需下载 180MB 再变已命中缓存」的误导窗口）；真首次下载仍有进度与「已就绪」。
-- [ ] **档案下拉放大**（`f676c97`）：trigger/菜单项 text-sm、菜单 min-w-65 加宽；每个选项第二行显示档案说明（line-clamp-2）；自定义档案项内嵌编辑齿轮（点齿轮=先激活该档案再开编辑弹窗，阻断 Select 选中流程）；删除 trigger 旁独立齿轮与标题下说明副标题行（含 InputArea 死插槽）。**待实机**：下拉尺寸协调、说明位置合适、齿轮点击不切换选项、新建/删除流程正常。
+- [ ] **档案下拉放大**（`f676c97`，齿轮点击 bug 已修见下）：trigger/菜单项 text-sm、菜单 min-w-65 加宽；每个选项第二行显示档案说明（line-clamp-2）；自定义档案项内嵌编辑齿轮（点齿轮=先激活该档案再开编辑弹窗）；删除 trigger 旁独立齿轮与标题下说明副标题行（含 InputArea 死插槽）。**待实机**：下拉尺寸协调、说明位置合适、齿轮点击进入编辑页、新建/删除流程正常。
 - [ ] **正则恒开 + 场景并入 AI**（`10a9a05`）：正则卡渲染 disabled Switch 常开 + 注脚「基础引擎，始终启用」；场景识别挪进 AI 分支内部（不影响正则检出，单测证明）；删除 `engineToggles` 模块与 storage 键（SW 不再读开关，`detect(text)` 固定纯正则档）；`DetectorConfig` 收敛为 `enableContentDetection` 一键。**待实机**：正则开关可见但点不动、场景卡已消失、AI 开关照常工作且持久化。
 - [ ] **弹窗标题放大 + 边框加深**（`e4c1dfc`）：Dialog 标题 text-sm → text-base（全部弹窗受益）；light `--border/--input` oklch 0.92 → 0.87、dark 10%/15% → 18%/24%。**待实机**：标题层次清晰、非悬浮状态边框可辨（过深/过浅再微调一档）。
 

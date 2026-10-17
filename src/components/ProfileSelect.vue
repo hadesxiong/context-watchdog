@@ -22,6 +22,9 @@ const CREATE_VALUE = '__create_profile__'
 
 const store = useDetectionStore()
 const showSettings = ref(false)
+// 菜单开合受控：编辑齿轮需在不触发 Item 选中的前提下显式关闭菜单
+// （SelectItem 的选中/关菜单挂在 pointerup 上，拦掉后菜单不会自行关闭）
+const menuOpen = ref(false)
 
 // 自定义档案判定：非内置即用户自定义（见 ProfileConfig.builtin）
 const isCustom = (profile: { builtin?: boolean }) => profile.builtin === false
@@ -40,12 +43,15 @@ const onUpdate = (value: string) => {
     void store.setActiveProfile(value)
 }
 
-// 菜单项内点编辑齿轮：先激活该档案再编辑（受控 model-value 保证菜单显示不闪错位）
-const onEdit = async (profileId: string, event: MouseEvent) => {
+// 菜单项内点编辑齿轮：同步「关菜单 → 切档案 → 开编辑弹窗」（一次 flush 内完成）。
+// 档案切换不 await（store 内 activeProfileId 是同步更新的，弹窗读取即为新档案；
+// 若有待检文本，重检在后台跑，不阻塞弹窗打开）
+const onEdit = (profileId: string, event: MouseEvent) => {
     // 阻断 SelectItem 的选中/关闭流程，只执行编辑
     event.preventDefault()
     event.stopPropagation()
-    await store.setActiveProfile(profileId)
+    menuOpen.value = false
+    void store.setActiveProfile(profileId)
     showSettings.value = true
 }
 
@@ -58,7 +64,9 @@ const onDelete = async () => {
 </script>
 
 <template>
-    <SelectRoot :model-value="store.activeProfileId" @update:model-value="onUpdate">
+    <SelectRoot :model-value="store.activeProfileId" :open="menuOpen"
+        @update:open="menuOpen = $event"
+        @update:model-value="onUpdate">
         <SelectTrigger
             :title="store.activeProfile.description"
             class="flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-input
@@ -93,9 +101,12 @@ const onDelete = async () => {
                         <p class="text-xs text-muted-foreground leading-snug line-clamp-2 mt-0.5">
                             {{ profile.description }}</p>
                     </div>
-                    <!-- 编辑齿轮：仅自定义档案；阻断选中流程，只打开编辑弹窗 -->
+                    <!-- 编辑齿轮：仅自定义档案；pointerup/touchend 必须拦（SelectItem 在
+                         pointerup 上选中并关菜单，菜单在 click 派发前就卸载 → 点击丢失；
+                         item 的 touchend prevent 还会吞掉触屏合成 click） -->
                     <button v-if="isCustom(profile)"
-                        @pointerdown.stop @click="onEdit(profile.id, $event)"
+                        @pointerdown.stop @pointerup.stop @touchend.stop
+                        @click="onEdit(profile.id, $event)"
                         class="shrink-0 p-1.5 rounded-sm text-muted-foreground
                             hover:text-foreground hover:bg-accent transition-colors"
                         :title="`编辑「${profile.name}」`">
