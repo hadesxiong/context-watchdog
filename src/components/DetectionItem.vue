@@ -23,13 +23,14 @@ const isReplace = computed({
 })
 
 const confidenceConfig = computed(() => {
+    // 颜色语义 = 风险等级（红=高风险/黄=中/绿=低），与「高=分析认为是敏感信息」的直觉一致
     switch (props.item.confidence) {
         case 'high':
-            return { variant: 'success' as const, label: '高' }
+            return { variant: 'danger' as const, label: '高' }
         case 'medium':
             return { variant: 'warning' as const, label: '中' }
         case 'low':
-            return { variant: 'danger' as const, label: '低' }
+            return { variant: 'success' as const, label: '低' }
         default:
             return { variant: 'default' as const, label: '未知' }
     }
