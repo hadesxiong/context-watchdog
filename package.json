@@ -14,7 +14,6 @@
     "icons": "node scripts/generate-icons.mjs"
   },
   "dependencies": {
-    "@huggingface/transformers": "^4.2.0",
     "@xenova/transformers": "^2.17.2",
     "gliner": "^0.0.19",
     "onnxruntime-web": "1.19.2",
