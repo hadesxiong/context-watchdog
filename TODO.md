@@ -19,7 +19,7 @@
   - E 组 UI 收尾轮（7 commits：`0d7a9b2`…`f35ceae`）：2026-10-18 完成
 - **勾选标准**：代码实现 + 三类证据至少其一（静态核对 / 单测 / 实测）→ 代码侧打勾；
   必须真机运行才能判定的保持 `[ ]`，见下方清单。
-- 本地未推送提交 10 条（`origin/main = f676c97`），待实机验证通过后推送。
+- 本地未推送提交 8 条（`origin/main = f35ceae`），待实机验证通过后推送。
 
 ## 待实机验证清单（代码完成，逐项对应 docs/test-cases.md）
 
@@ -43,12 +43,14 @@
 - [ ] **B-5 Switch 深色观感**（把手 `bg-background`）：深色主题下开关把手可辨。→ **TC-08-2**
 - [ ] **C-4 新权限体验**：扩展更新后 Chrome 权限提示观感；粘贴拦截站点授权弹窗文案。
       → **TC-01-2 / TC-07-1**
-- [ ] **B-就绪路径推理**（含 2026-10-18 AI 推理修复复验）：AI 级联推理曾因
-      `modelType: 'gliner'` 走错 TokenModel 分支而**每次都静默失败**
-      （`input 'span_idx' is missing in 'feeds'`，模型实为 span-level），
-      已修为 `'span-level'`；修复后重开 AI 输入姓名/地址文本，控制台应见
-      `Found N entities from model`（不再出现 span_idx 报错）。软预期：中文自由文本
-      召回不保证，未检出记为模型召回弱而非缺陷。→ **TC-06-5**
+- [ ] **B-就绪路径推理**（2026-10-18 连修两轮后待复验）：AI 级联推理此前**从未跑通过**，
+  已连修两处：① `modelType: 'gliner'` 走错 TokenModel 分支（`span_idx is missing`，
+  已改 `'span-level'`，`e157024`）；② `maxWidth: 256` 与模型 ONNX 导出不兼容（导出把
+  span 宽度常量烘焙死为 12，Reshape 必崩——浏览器里表现为裸数字
+  `Content detection failed: <数字>`，已改回 12；Node 真模型复现已跑通）。
+  复验：重开 AI 输入姓名/地址文本，控制台应见 `Found N entities from model`，
+  不再有 span_idx / 裸数字报错。软预期：中文自由文本召回不保证（复现中姓名/地址未命中，
+  仅低分误报被 0.35 阈值过滤），未检出记为模型召回弱而非缺陷。→ **TC-06-5**
 - [ ] **A-4 heap 数值回填**：JS 堆快照日志实测峰值，回填至 `docs/spec.md` §14。→ **TC-06-4**
 - [x] **样例 A 行 1 顶格复核**（2026-10-18 已结案）：顶格重贴后控制台实测
       `Found ENV_PASSWORD: DB_PASSWORD = Tr0ub4dor!#2024`、检出 1 条——确认漏检系
@@ -57,6 +59,10 @@
 ## 后续候选（未排期，均已拍板暂缓或待设计）
 
 - [ ] 移除 manifest 中未使用的 `contextMenus` 权限声明（本轮盘点发现：全 src 无引用，历史遗留）
+- [ ] AI 推理运行时收敛：gliner 默认把 ort `wasmPaths` 指向 jsdelivr CDN（模型本体已缓存，
+      但离线时 wasm 拉不到，推理不可用）；且打包内的 ~32MB ort wasm 资产实际未被运行时引用。
+      后续改为 `wasmPaths` 指向扩展内资产并清理冗余；顺带评估移除未被 src 引用的
+      `@huggingface/transformers` 依赖
 - [ ] 粘贴拦截支持 `contenteditable` 富文本区域（当前仅 `input[type=text/search]` 与 `textarea`）
 - [ ] 粘贴自动拦截生效时显示「已脱敏 N 处」轻提示（当前完全静默）
 - [ ] 短密钥规则（需先定阈值策略，避免高误报；2026-10-17 拍板暂缓）
