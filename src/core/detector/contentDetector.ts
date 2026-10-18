@@ -2,6 +2,7 @@
 
 import type { SceneType } from './sceneDetector'
 import { downloadModel, createSingleFlight, type ModelProgress } from './modelDownload'
+import { isPlausibleEntity } from './entityShape'
 
 // 密钥相关实体类型（GLiNER 零样本标签）
 const SECRET_LABELS = [
@@ -172,7 +173,7 @@ export const detectContent = async (
       return []
     }
 
-    return results[0].map((e: any) => ({
+    const raw: ContentEntity[] = results[0].map((e: any) => ({
       text: e.spanText,
       startIndex: e.start,
       endIndex: e.end,
@@ -180,6 +181,20 @@ export const detectContent = async (
       confidence: e.score,
       scene
     }))
+
+    // 形状门禁：不形似其标签的模型检出视为幻觉直接丢弃（entityShape.ts）。
+    // 实机例：中文幻觉「户」→ person name 0.456、「订」→ email 0.330，
+    // 不拦会经 uncertain 低置信保留路径变成错误替换
+    const kept: ContentEntity[] = []
+    const dropped: string[] = []
+    for (const e of raw) {
+      if (isPlausibleEntity(e.text, e.entityType)) kept.push(e)
+      else dropped.push(`${e.entityType} "${e.text}" (${e.confidence.toFixed(2)})`)
+    }
+    if (dropped.length > 0) {
+      console.log('[PasteGuard] Dropped', dropped.length, 'implausible model entities:', dropped.join('; '))
+    }
+    return kept
   } catch (error) {
     console.warn('[PasteGuard] Content detection failed:', error)
     return []
