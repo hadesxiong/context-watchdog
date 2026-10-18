@@ -39,3 +39,10 @@ export const applySanitized = (
   if (value.slice(range.start, range.end) !== expected) return null
   return value.slice(0, range.start) + sanitized + value.slice(range.end)
 }
+
+// 超长粘贴守卫上限（与 service-worker.ts / pasteEntryPoint.ts 的 MAX_PASTE_CHARS 一致）。
+// 入口层直接放行才是真守卫：SW 侧仅对检测范围 slice 截断，若入口照单全收，
+// 超限粘贴会被「截断后的脱敏结果」整体改写，尾部文本被静默吞掉
+export const MAX_PASTE_CHARS = 20000
+
+export const exceedsPasteLimit = (text: string): boolean => text.length > MAX_PASTE_CHARS

@@ -1,6 +1,6 @@
 // 单元用例 - 粘贴「先插入后就地替换」的纯逻辑
 import { describe, it, expect } from 'vitest'
-import { computeInsertionRange, applySanitized, normalizeNewlines } from '../../src/content/pasteText'
+import { computeInsertionRange, applySanitized, normalizeNewlines, exceedsPasteLimit, MAX_PASTE_CHARS } from '../../src/content/pasteText'
 
 describe('normalizeNewlines', () => {
   it('CRLF → LF（Windows 剪贴板多行文本的常见形态）', () => {
@@ -103,5 +103,15 @@ describe('applySanitized', () => {
   it('区间越界 → null', () => {
     expect(applySanitized(value, { start: -1, end: 3 }, 'x', 'sk-abc')).toBeNull()
     expect(applySanitized(value, { start: 5, end: 999 }, 'x', 'sk-abc')).toBeNull()
+  })
+})
+
+describe('exceedsPasteLimit（超长粘贴真放行守卫）', () => {
+  it('恰好等于上限仍正常处理', () => {
+    expect(exceedsPasteLimit('a'.repeat(MAX_PASTE_CHARS))).toBe(false)
+  })
+
+  it('超过上限即放行（入口层不发检测消息，防 SW 截断改写吞尾）', () => {
+    expect(exceedsPasteLimit('a'.repeat(MAX_PASTE_CHARS + 1))).toBe(true)
   })
 })
