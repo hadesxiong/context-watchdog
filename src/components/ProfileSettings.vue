@@ -369,15 +369,18 @@ const onSave = async () => {
                 placeholder="person name, phone number" />
         </div>
 
-        <!-- 操作：导入导出与保存/删除合并一行（关闭由标题栏 × / Esc 承担，不再设取消） -->
-        <div class="space-y-1.5 pt-3 border-t border-border">
+        <!-- 操作：sticky 固定于弹窗可视区底部（与顶部标题同逻辑，不随内容滚动）；
+             bg-card 覆盖滚过的内容，border-t 与标题区 border-b 呼应；
+             关闭由标题栏 × / Esc 承担，不设取消 -->
+        <div class="sticky bottom-0 bg-card border-t border-border pt-3 space-y-1.5">
             <div class="flex items-center gap-2">
                 <Button variant="secondary" btnType="outline" size="sm"
                     title="复制全部自定义档案 JSON 到剪贴板" @click="onExport">导出</Button>
                 <Button variant="secondary" btnType="outline" size="sm"
                     title="从剪贴板读取档案 JSON 并导入" @click="onImport">导入</Button>
                 <div class="ml-auto flex items-center gap-2">
-                    <Button variant="danger" btnType="text" size="sm" @click="emit('delete')">
+                    <!-- 删除：primary 形状（实心），危险红配色 -->
+                    <Button variant="danger" size="sm" @click="emit('delete')">
                         删除档案</Button>
                     <Button size="sm" :loading="saving" @click="onSave">
                         {{ saving ? '保存中…' : '保存' }}</Button>

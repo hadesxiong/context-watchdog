@@ -50,8 +50,9 @@ const onOpenChange = (open: boolean) => {
                     'data-[state=open]:pg-dialog-in data-[state=closed]:pg-dialog-out',
                     width
                 ]">
-                <!-- 标题区：独立固定（shrink-0），长表单滚动时标题/描述/关闭按钮不跟随 -->
-                <div class="flex items-start justify-between gap-3 shrink-0">
+                <!-- 标题区：独立固定（shrink-0），长表单滚动时标题/描述/关闭按钮不跟随；
+                     border-b 与底部操作区的 border-t 呼应 -->
+                <div class="flex items-start justify-between gap-3 shrink-0 border-b border-border">
                     <div class="space-y-1">
                         <DialogTitle v-if="title" class="text-base font-semibold text-foreground">
                             {{ title }}
