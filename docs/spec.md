@@ -250,8 +250,15 @@ CSP 收紧后扩展页无任何外部脚本/连接可能。
 5. `contextMenus` 权限声明未使用（清理候选）；
 6. tokenizer/config 由 gliner 内部 transformers 下载，走其自带缓存，不受 §10 版本管理。
 
-## 14. 待回填实测数据
+## 14. 实测数据（2026-10-18，Chrome，TC-06-4 / A-4 结案）
 
-- [ ] JS 堆峰值（模型下载完成 / 初始化释放引用两个时点的快照值）——
-      实机打开侧栏、观察控制台 `[PasteGuard] 内存快照` 日志后回填此处；
-      验收用例见 `docs/test-cases.md` TC-06-4。
+- JS 堆快照（`performance.memory.usedJSHeapSize`；Chromium 专有，Firefox 静默跳过），
+  走缓存命中路径（模型 174.9MB 从 Cache Storage 物化为 ArrayBuffer）：
+
+  | 时点 | JS 堆 | 说明 |
+  |---|---|---|
+  | 模型下载完成 | **179.3 MB** | ≈ 模型 ArrayBuffer + 页面基线，符合预期 |
+  | 初始化完成并释放引用（未 GC 时刻） | **224.5 MB** | 高于前值属正常：ORT 建会话在 JS 侧解析 175MB protobuf 的对象图转为垃圾、`modelBuffer` 局部绑定尚在 `runLoad` 作用域（async 跨 await 保守保活），GC 前均计入 `usedJSHeapSize` |
+
+- 口径说明：模型本体在 ORT wasm 线性内存，**不计入** `usedJSHeapSize`；此组数值仅验证
+  JS 侧引用管理（§7/§15 释放机制），不代表进程总内存。
