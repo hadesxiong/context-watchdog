@@ -151,12 +151,12 @@ vite 别名把 gliner 静态引用的 `onnxruntime-web/webgpu|webgl` 打桩（EP
 | 机制 | 说明 |
 |------|------|
 | 多源轮换 | ModelScope 主源（302 + ACAO:*，国内 ~14MB/s）→ HuggingFace 兜底，共 5 次。**hf-mirror 已禁用**（308 无 ACAO，CORS 逐跳校验必失败） |
-| 断点续传 | 会话内 + 跨会话（Cache Storage `?partial`，元数据在条目响应头 `x-model-bytes/total/etag/saved-at`，读取三重一致性校验）；仅同源+强 etag 发 `If-Range` |
+| 断点续传 | 会话内 + 跨会话（Cache Storage `?partial`，元数据在条目响应头 `x-model-bytes/total/etag/last-modified/saved-at`，读取三重一致性校验）；仅同源+强 etag 发 `If-Range` |
 | 重试退避 | 指数退避、尊重 `Retry-After`、封顶 16s |
 | 停滞看门狗 | 30s 无字节中断（下次从断点续）；进度心跳续期，杜绝无 Content-Length 的假超时 |
 | 完整性校验 | 字节数不符不入缓存，绝不拼脏数据 |
 | 多窗口去重 | storage 单键锁 `pasteguard.modelLock`（owner + 30s 心跳 TTL + 进度转发）；抢锁方等待显示「另一窗口下载中」，等待 ≤~5 分钟超时后自行下载；接管前再查缓存 |
-| 缓存失效 | 缓存 key 固定（不带版本号）；命中后 1 字节探测（`Range: bytes=0-0`，5s 超时）比对 ETag → 长度兜底；离线优先沿用缓存；旧 `?v=` key 一次性搬迁 |
+| 缓存失效 | 缓存 key 固定（不带版本号）；命中后 1 字节探测（`Range: bytes=0-0`，5s 超时）**三级比对 ETag → Last-Modified → 总长**；⚠️ 浏览器跨源只读得到 CORS 安全列表头（ModelScope CDN 无 `Access-Control-Expose-Headers` → ETag/Content-Range 读不到，206 的 `content-length=1` 绝不当总长，否则 183MB ≠ 1 误判 stale → 每个探测窗重下 183MB，TC-06-9 回归）；离线/信息不可知时优先沿用缓存；旧 `?v=` key 一次性搬迁 |
 | 单飞门闩 | `createSingleFlight`：并发加载复用同一 promise，重试不产生并行下载 |
 | 内存释放 | `initialize()` 后置空对 183MB ArrayBuffer 的引用（ORT session 已持 wasm 堆副本）；前后打 JS 堆快照日志 |
 
@@ -237,7 +237,7 @@ CSP 收紧后扩展页无任何外部脚本/连接可能。
 
 ## 12. 测试体系
 
-`npm test`：**187 tests / 19 文件**（`npm run typecheck` 0 错误为另一道闸）：
+`npm test`：**190 tests / 19 文件**（`npm run typecheck` 0 错误为另一道闸）：
 
 - `tests/golden/`（4）：内置三档 + 白名单端到端金样例；
 - `tests/unit/`（12）：规则与值过滤、短密钥族、自定义规则 ReDoS、管线配置、store 状态机、
