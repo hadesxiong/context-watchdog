@@ -13,10 +13,7 @@ const emit = defineEmits<{
     (e: 'clear'): void
 }>()
 
-const textareaRef = ref<HTMLTextAreaElement | null>(null)
 const localText = ref(props.modelValue)
-
-let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
 watch(
     () => props.modelValue,
@@ -27,16 +24,6 @@ watch(
 
 watch(localText, (newVal) => {
     emit('update:modelValue', newVal)
-
-    if (debounceTimer) {
-        clearTimeout(debounceTimer)
-    }
-
-    if (newVal.trim()) {
-        debounceTimer = setTimeout(() => {
-            emit('detect', newVal)
-        }, 300)
-    }
 })
 
 const handleDetect = () => {
@@ -49,14 +36,6 @@ const handleClear = () => {
     localText.value = ''
     emit('update:modelValue', '')
     emit('clear')
-}
-
-const handlePaste = (_event: ClipboardEvent) => {
-    setTimeout(() => {
-        if (textareaRef.value) {
-            localText.value = textareaRef.value.value
-        }
-    }, 0)
 }
 </script>
 
@@ -85,9 +64,8 @@ const handlePaste = (_event: ClipboardEvent) => {
         </div>
 
         <div class="p-0 min-[720px]:flex-1 min-[720px]:flex min-[720px]:flex-col">
-            <textarea ref="textareaRef"
+            <textarea
                 v-model="localText"
-                @paste="handlePaste"
                 placeholder="粘贴或输入包含敏感信息的文本..."
                 class="w-full min-h-40 h-full px-3 py-2 text-sm font-mono rounded-sm resize-none 
                 text-foreground bg-background 
