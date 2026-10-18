@@ -28,12 +28,12 @@ export const MODEL_SOURCES = [
 ]
 
 // 当前模型文件字节数：只作"期望大小"的文档参考，不再用作缓存版本号
-// （缓存是否失效改由 1 字节探测比对 ETag / 长度自动决定，见 probeRemoteVersion）
+// （缓存是否失效改由 1 字节探测三级比对 ETag / Last-Modified / 长度自动决定，见 probeRemoteVersion）
 export const MODEL_FILE_BYTES = 183403734
 
 export const MODEL_CACHE_NAME = 'pasteguard-models'
 // 缓存 key 固定（合成 URL，.invalid 永不解析、不参与网络请求）；
-// 版本信息（ETag / 长度 / 时间）存进条目的响应头，由探测结果决定是否作废
+// 版本信息（ETag / Last-Modified / 长度 / 时间）存进条目的响应头，由探测结果决定是否作废
 export const MODEL_CACHE_URL = 'https://pasteguard.invalid/models/gliner_small-v2/model_quantized.onnx'
 // 未完成下载的部分文件（跨会话断点续传的落点）
 export const MODEL_PARTIAL_URL = `${MODEL_CACHE_URL}?partial`
@@ -78,6 +78,9 @@ const discardBody = (response: Response): void => {
 // 远端当前版本（来自 1 字节探测）
 export interface RemoteVersion {
   etag: string | null
+  // Last-Modified：CORS 安全列表头（浏览器恒可见）；ModelScope CDN 不暴露
+  // Access-Control-Expose-Headers → 浏览器里 ETag/Content-Range 恒为 null，靠它比对版本
+  lastModified?: string | null
   total: number
   source: string
 }
@@ -86,6 +89,8 @@ export interface RemoteVersion {
 export interface CachedModel {
   buffer: ArrayBuffer
   etag: string | null
+  // 下载时远端的 Last-Modified（安全列表头，浏览器里读得到也存得下）
+  lastModified?: string | null
   total: number
   savedAt: number
   // 下载自哪个源（host）：跨源比对 ETag 必然不一致（各源自行生成），须退回比总长
@@ -97,6 +102,8 @@ export interface PartialModelMeta {
   total: number
   etag: string | null
   source: string | null
+  // 续传完成后写入完整条目时保住版本身份（旧部分文件无此字段 → 缺席，比对自然降级）
+  lastModified?: string | null
   savedAt: number
 }
 
@@ -108,7 +115,10 @@ export interface PartialStore {
 
 export interface ModelCache {
   match: () => Promise<CachedModel | null>
-  put: (buffer: ArrayBuffer, meta?: { etag?: string | null; source?: string | null }) => Promise<void>
+  put: (
+    buffer: ArrayBuffer,
+    meta?: { etag?: string | null; source?: string | null; lastModified?: string | null }
+  ) => Promise<void>
   clear: () => Promise<void>
   // 旧版 key 一次性迁移；返回是否发生了迁移
   migrateLegacy?: () => Promise<boolean>
@@ -195,16 +205,22 @@ export const isWeakEtag = (etag: string | null): boolean => !etag || etag.trim()
 
 // 本地缓存与远端版本比对：'stale' 才需要重新下载；
 // 探测失败（离线 / 被限流 / 超时）→ 'unknown' → 沿用缓存（离线优先）
-// ⚠️ ETag 只在同源（或任一侧来源未知）时才可比对：ModelScope 与 HuggingFace 各自
-// 生成 ETag，跨源直接比对必然不一致 → 误判 'stale' → 清缓存重下 183MB。
+// ⚠️ ETag / Last-Modified 只在同源（或任一侧来源未知）时才可比对：ModelScope 与
+// HuggingFace 各自生成，跨源直接比对必然不一致 → 误判 'stale' → 清缓存重下 183MB。
 // 跨源时退回比总字节数（两源对同一文件返回一致的 183,403,734 字节）
+// ⚠️ 浏览器跨源读不到非安全列表头（Fetch 规范只放行 Cache-Control / Content-Language /
+// Content-Length / Content-Type / Expires / Last-Modified / Pragma）：ModelScope CDN 不发
+// Access-Control-Expose-Headers → JS 里 ETag / Content-Range 恒为 null。故三级比对：
+// ETag → Last-Modified（安全列表头，恒可见）→ 总长；三级都无信息才 'unknown' → 沿用缓存。
 export const compareCachedVersion = (
-  cached: { etag: string | null; total: number; source?: string | null },
+  cached: { etag: string | null; total: number; source?: string | null; lastModified?: string | null },
   remote: RemoteVersion | null
 ): 'current' | 'stale' | 'unknown' => {
   if (!remote) return 'unknown'
   const sameSource = !cached.source || !remote.source || cached.source === remote.source
   if (sameSource && cached.etag && remote.etag) return cached.etag === remote.etag ? 'current' : 'stale'
+  if (sameSource && cached.lastModified && remote.lastModified)
+    return cached.lastModified === remote.lastModified ? 'current' : 'stale'
   if (cached.total > 0 && remote.total > 0) return cached.total === remote.total ? 'current' : 'stale'
   return 'unknown'
 }
@@ -224,7 +240,8 @@ export const shouldProbeRemote = (
 const buildModelHeaders = (
   byteLength: number,
   etag?: string | null,
-  source?: string | null
+  source?: string | null,
+  lastModified?: string | null
 ): Record<string, string> => {
   const headers: Record<string, string> = {
     'Content-Length': String(byteLength),
@@ -235,6 +252,8 @@ const buildModelHeaders = (
   if (etag) headers.ETag = etag
   // 记录下载来源（host）：版本探测跨源比对时据此只退回比总长，防止 ETag 误判清缓存
   if (source) headers['X-Model-Source'] = source
+  // Last-Modified 是 CORS 安全列表头：浏览器里 ETag 读不到时靠它完成版本比对
+  if (lastModified) headers['X-Model-Last-Modified'] = lastModified
   return headers
 }
 
@@ -255,6 +274,7 @@ export const createBrowserModelCache = (): ModelCache | null => {
         return {
           buffer,
           etag: response.headers.get('etag'),
+          lastModified: response.headers.get('x-model-last-modified'),
           total: Number(response.headers.get('x-model-total')) || buffer.byteLength,
           savedAt: Number(response.headers.get('x-model-saved-at')) || 0,
           source: response.headers.get('x-model-source')
@@ -269,7 +289,9 @@ export const createBrowserModelCache = (): ModelCache | null => {
         const cache = await caches.open(MODEL_CACHE_NAME)
         await cache.put(
           MODEL_CACHE_URL,
-          new Response(buffer, { headers: buildModelHeaders(buffer.byteLength, meta?.etag, meta?.source) })
+          new Response(buffer, {
+            headers: buildModelHeaders(buffer.byteLength, meta?.etag, meta?.source, meta?.lastModified)
+          })
         )
         console.log(`[PasteGuard] 模型已写入缓存（${(buffer.byteLength / 1048576).toFixed(1)} MB），下次启动零下载`)
       } catch (error) {
@@ -333,6 +355,7 @@ export const createBrowserPartialStore = (): PartialStore | null => {
             total: Number(response.headers.get('x-model-total')) || 0,
             etag: response.headers.get('x-model-etag') || null,
             source: response.headers.get('x-model-source') || null,
+            lastModified: response.headers.get('x-model-last-modified') || null,
             savedAt: Number(response.headers.get('x-model-saved-at')) || 0
           }
         }
@@ -353,6 +376,7 @@ export const createBrowserPartialStore = (): PartialStore | null => {
               'X-Model-Total': String(meta.total),
               'X-Model-Etag': meta.etag ?? '',
               'X-Model-Source': meta.source ?? '',
+              'X-Model-Last-Modified': meta.lastModified ?? '',
               'X-Model-Saved-At': String(meta.savedAt)
             }
           })
@@ -478,11 +502,16 @@ export const probeRemoteVersion = async (options: ProbeOptions = {}): Promise<Re
       }
       const range = parseContentRange(response.headers.get('content-range'))
       const contentLength = Number(response.headers.get('content-length')) || 0
-      // 206 用 total，200（源站忽略 Range）用 content-length
-      const total = range && range.total > 0 ? range.total : contentLength
+      // ⚠️ 总长只信两处：206 的 Content-Range（安全列表外，浏览器里可能读不到）或
+      // 200（源站忽略 Range）的 Content-Length。206 的 Content-Length 是本次响应体长
+      // （Range: 0-0 → 1 字节），读不到 Content-Range 时它绝不能当总长——曾导致
+      // 183MB ≠ 1 误判 'stale' → 清缓存重下整包（见 test-cases TC-06-9）
+      const total = range && range.total > 0 ? range.total : response.status === 200 ? contentLength : 0
       const etag = response.headers.get('etag')
+      // Last-Modified 在 CORS 安全列表内恒可见 → ETag 被隐藏时的替代比对信号
+      const lastModified = response.headers.get('last-modified')
       discardBody(response)
-      if (total > 0 || etag) return { etag, total, source: new URL(url).host }
+      if (total > 0 || etag || lastModified) return { etag, lastModified, total, source: new URL(url).host }
     } catch {
       // 离线 / 超时 / CORS → 换下一个源
     } finally {
@@ -630,6 +659,7 @@ export const downloadModel = async (options: DownloadModelOptions = {}): Promise
   let total = 0 // 期望总字节；0 = 未知
   let resumeEtag: string | null = null
   let resumeSource: string | null = null
+  let resumeLastModified: string | null = null
 
   const storedPartial = await partial?.load()
   if (storedPartial) {
@@ -638,6 +668,7 @@ export const downloadModel = async (options: DownloadModelOptions = {}): Promise
     total = storedPartial.meta.total
     resumeEtag = storedPartial.meta.etag
     resumeSource = storedPartial.meta.source
+    resumeLastModified = storedPartial.meta.lastModified ?? null
     console.log(
       `[PasteGuard] 命中未完成的下载（${(received / 1048576).toFixed(1)} MB${
         total > 0 ? ` / ${(total / 1048576).toFixed(0)} MB` : ''
@@ -670,6 +701,7 @@ export const downloadModel = async (options: DownloadModelOptions = {}): Promise
       total,
       etag: resumeEtag,
       source: resumeSource,
+      lastModified: resumeLastModified,
       savedAt: Date.now()
     })
   }
@@ -720,14 +752,19 @@ export const downloadModel = async (options: DownloadModelOptions = {}): Promise
           resumeEtag = responseEtag
           resumeSource = new URL(url).host
         }
+        // Last-Modified 是 CORS 安全列表头：浏览器里 ETag 恒为 null 时全靠它当版本身份
+        const responseLastModified = response.headers.get('last-modified')
+        if (responseLastModified) resumeLastModified = responseLastModified
 
         // 本次响应没有给出新 etag 时，重置分支必须把旧的 (etag, 源) 归属一并作废，
-        // 否则残留的旧 etag 会随部分文件/缓存条目流传，让版本探测比对错对象
+        // 否则残留的旧 etag 会随部分文件/缓存条目流传，让版本探测比对错对象；
+        // Last-Modified 同理：本次响应没带就不留，防比对错对象
         const dropStaleEtag = (): void => {
           if (!responseEtag) {
             resumeEtag = null
             resumeSource = null
           }
+          if (!responseLastModified) resumeLastModified = null
         }
 
         // 断点续传语义核对：源站必须真的从我们给的偏移开始
@@ -799,12 +836,17 @@ export const downloadModel = async (options: DownloadModelOptions = {}): Promise
           total = 0
           resumeEtag = null
           resumeSource = null
+          resumeLastModified = null
           await partial?.clear()
           continue
         }
 
         const buffer = mergeChunks(chunks, total > 0 ? total : undefined)
-        await cache?.put(buffer, { etag: resumeEtag, source: resumeSource })
+        await cache?.put(buffer, {
+          etag: resumeEtag,
+          source: resumeSource,
+          lastModified: resumeLastModified
+        })
         await partial?.clear()
         // 完成心跳：等待方看到 100% 才会去读缓存，避免它每轮都拉 183MB
         await lock?.heartbeat({ percent: 100, received: buffer.byteLength, total: buffer.byteLength })

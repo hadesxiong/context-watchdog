@@ -108,16 +108,23 @@ const makeHangingResponse = (
 
 // 内存版完整缓存（替代 Cache Storage 的完整模型条目）
 const createMemoryCache = (initial?: ArrayBuffer, etag?: string | null, source?: string | null) => {
-  let stored: { buffer: ArrayBuffer; etag: string | null; total: number; savedAt: number; source: string | null } | null =
-    initial
-      ? { buffer: initial, etag: etag ?? null, total: initial.byteLength, savedAt: Date.now(), source: source ?? null }
-      : null
+  let stored: {
+    buffer: ArrayBuffer
+    etag: string | null
+    lastModified?: string | null
+    total: number
+    savedAt: number
+    source: string | null
+  } | null = initial
+    ? { buffer: initial, etag: etag ?? null, total: initial.byteLength, savedAt: Date.now(), source: source ?? null }
+    : null
   const cache: ModelCache = {
     match: async () => stored,
     put: async (buffer, meta) => {
       stored = {
         buffer,
         etag: meta?.etag ?? null,
+        lastModified: meta?.lastModified ?? null,
         total: buffer.byteLength,
         savedAt: Date.now(),
         source: meta?.source ?? null
@@ -243,6 +250,51 @@ describe('纯函数', () => {
     expect(compareCachedVersion({ etag: null, total: 0 }, remote(null, 0))).toBe('unknown')
   })
 
+  it('compareCachedVersion：CORS 隐藏 ETag 时用 Last-Modified 三级比对（修复二次打开误判重下）', () => {
+    // ModelScope 浏览器实况：CDN 不发 Access-Control-Expose-Headers → 两侧 etag 均读不到（null），
+    // 只有安全列表头 Last-Modified 可见可比
+    const cached = {
+      etag: null,
+      lastModified: 'Wed, 11 Dec 2024 14:46:20 GMT',
+      total: 183403734,
+      source: 'modelscope.cn'
+    }
+    // 探测侧 total=0（206 读不到 Content-Range）也必须能判 current，不依赖总长
+    expect(
+      compareCachedVersion(cached, {
+        etag: null,
+        lastModified: 'Wed, 11 Dec 2024 14:46:20 GMT',
+        total: 0,
+        source: 'modelscope.cn'
+      })
+    ).toBe('current')
+    // 远端换了文件 → Last-Modified 变 → stale（即便总长未知，也不放行）
+    expect(
+      compareCachedVersion(cached, {
+        etag: null,
+        lastModified: 'Fri, 09 Jan 2026 03:14:15 GMT',
+        total: 0,
+        source: 'modelscope.cn'
+      })
+    ).toBe('stale')
+    // 跨源：Last-Modified 各源生成，不可比 → 退回总长；总长又不可知 → unknown（沿用缓存）
+    expect(
+      compareCachedVersion(cached, {
+        etag: null,
+        lastModified: 'Wed, 11 Dec 2024 14:46:20 GMT',
+        total: 0,
+        source: 'huggingface.co'
+      })
+    ).toBe('unknown')
+    // 一侧没有 Last-Modified（旧条目 / 非浏览器环境）→ 退回总长，行为与从前一致
+    expect(
+      compareCachedVersion(
+        { etag: null, total: 10, source: 'x' },
+        { etag: null, lastModified: 'any', total: 10, source: 'x' }
+      )
+    ).toBe('current')
+  })
+
   it('compareCachedVersion：跨源时 ETag 不可比，退回比总长（防误判清缓存）', () => {
     // HF 下载（etag hf-*）+ ModelScope 探测（etag ms-*）：同文件不同源 ETag 必然不同 → 不能判 stale
     const cached = { etag: '"hf-abc"', total: 183403734, source: 'huggingface.co' }
@@ -288,11 +340,49 @@ describe('纯函数', () => {
 describe('版本探测（1 字节）', () => {
   it('206 响应取 total 与 etag，正文立即丢弃', async () => {
     const { fetchImpl, calls } = createFakeFetch(() =>
-      makeResponse(206, { 'content-range': 'bytes 0-0/183403734', etag: '"abc"' }, [new Uint8Array(1)])
+      makeResponse(
+        206,
+        {
+          'content-range': 'bytes 0-0/183403734',
+          etag: '"abc"',
+          'last-modified': 'Wed, 11 Dec 2024 14:46:20 GMT'
+        },
+        [new Uint8Array(1)]
+      )
     )
     const version = await probeRemoteVersion({ fetchImpl })
-    expect(version).toEqual({ etag: '"abc"', total: 183403734, source: new URL(MODEL_SOURCES[0]).host })
+    expect(version).toEqual({
+      etag: '"abc"',
+      lastModified: 'Wed, 11 Dec 2024 14:46:20 GMT',
+      total: 183403734,
+      source: new URL(MODEL_SOURCES[0]).host
+    })
     expect(calls[0].headers.range).toBe('bytes=0-0')
+  })
+
+  it('浏览器视角（CORS 未暴露）：206 读不到 Content-Range/ETag 时 content-length(1) 不当总长', async () => {
+    // ModelScope CDN 实测无 Access-Control-Expose-Headers → JS 只剩安全列表头：
+    // content-length=1（Range:0-0 的响应体长）可见、Content-Range 与 ETag 不可见、Last-Modified 可见。
+    // 曾把 183MB ≠ 1 误判为 stale → 清缓存重下整包（实机现象：第二次打开必重下、第三次起正常）
+    const { fetchImpl } = createFakeFetch(() =>
+      makeResponse(206, { 'content-length': '1', 'last-modified': 'Wed, 11 Dec 2024 14:46:20 GMT' }, [
+        new Uint8Array(1)
+      ])
+    )
+    const version = await probeRemoteVersion({ fetchImpl })
+    expect(version).toEqual({
+      etag: null,
+      lastModified: 'Wed, 11 Dec 2024 14:46:20 GMT',
+      total: 0, // 绝不能是 1
+      source: new URL(MODEL_SOURCES[0]).host
+    })
+  })
+
+  it('浏览器视角：206 没有任何可用元数据 → 返回 null（调用方沿用缓存，不误判 stale）', async () => {
+    const { fetchImpl } = createFakeFetch(() =>
+      makeResponse(206, { 'content-length': '1' }, [new Uint8Array(1)])
+    )
+    expect(await probeRemoteVersion({ fetchImpl })).toBeNull()
   })
 
   it('首源失败时换次源；全失败返回 null（调用方据此沿用缓存）', async () => {
@@ -380,7 +470,15 @@ describe('downloadModel', () => {
 
   it('正常下载：进度单调推进、结果写入缓存、只请求一次', async () => {
     const { fetchImpl, calls } = createFakeFetch(() =>
-      makeResponse(200, { 'content-length': String(sample.length), etag: '"v1"' }, [sample])
+      makeResponse(
+        200,
+        {
+          'content-length': String(sample.length),
+          etag: '"v1"',
+          'last-modified': 'Wed, 11 Dec 2024 14:46:20 GMT'
+        },
+        [sample]
+      )
     )
     const progress: number[] = []
     const { cache, read } = createMemoryCache()
@@ -401,6 +499,7 @@ describe('downloadModel', () => {
     expect([...progress].sort((a, b) => a - b)).toEqual(progress) // 单调不减
     expect(read()?.etag).toBe('"v1"') // ETag 已随条目保存，供版本探测比对
     expect(read()?.source).toBe(new URL(MODEL_SOURCES[0]).host) // 来源已保存，跨源比对退回比总长
+    expect(read()?.lastModified).toBe('Wed, 11 Dec 2024 14:46:20 GMT') // Last-Modified 随条目保存（浏览器读不到 ETag 时的比对依据）
   })
 
   it('缓存命中 + 探测一致：零网络请求', async () => {
