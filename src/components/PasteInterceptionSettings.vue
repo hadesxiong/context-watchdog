@@ -70,11 +70,13 @@ onMounted(loadSites)
 </script>
 
 <template>
-    <!-- 块内分隔统一走 padding（12px 基准 = 标题栏 p-3），不用 margin -->
-    <div class="p-3 rounded-lg bg-muted/50">
-        <div class="pr-3">
+    <!-- 与引擎卡片同规格的全宽贴边区块（p-3 = 内容到面板边框 12px），
+         块内分隔统一走 padding，不用 margin -->
+    <div class="p-3 bg-muted/50">
+        <div>
             <p class="text-sm font-medium text-foreground">粘贴自动拦截</p>
-            <p class="text-xs text-muted-foreground pt-0.5">
+            <!-- 描述：最多 2 行，超出省略 -->
+            <p class="text-xs text-muted-foreground pt-0.5 line-clamp-2">
                 在已授权站点粘贴时自动脱敏（正则档检测，无需模型）；未授权站点完全不受影响</p>
         </div>
 
