@@ -17,9 +17,11 @@
   - 遗留项 A 组（模型下载健壮性）/ B 组（代码卫生）/ C 组（粘贴拦截、CSP、双目标）：2026-10-17 完成
   - D 组 UX 实测反馈轮（5 commits：`6df1167`…`eb5b0da`）：2026-10-17 完成
   - E 组 UI 收尾轮（7 commits：`0d7a9b2`…`f35ceae`）：2026-10-18 完成
+  - AI 推理链路实机修复轮（`e157024` modelType / `aee9dfd` maxWidth / `44c4dd5` 形状门禁 /
+    `93d229b` wasm 资产本地化）：2026-10-18 完成，TC-06-5 已实测通过
 - **勾选标准**：代码实现 + 三类证据至少其一（静态核对 / 单测 / 实测）→ 代码侧打勾；
   必须真机运行才能判定的保持 `[ ]`，见下方清单。
-- 本地未推送提交 11 条（`origin/main = f35ceae`），待实机验证通过后推送。
+- 本地未推送提交 15 条（`origin/main = f35ceae`），待实机验证通过后推送。
 
 ## 待实机验证清单（代码完成，逐项对应 docs/test-cases.md）
 
@@ -43,14 +45,17 @@
 - [ ] **B-5 Switch 深色观感**（把手 `bg-background`）：深色主题下开关把手可辨。→ **TC-08-2**
 - [ ] **C-4 新权限体验**：扩展更新后 Chrome 权限提示观感；粘贴拦截站点授权弹窗文案。
       → **TC-01-2 / TC-07-1**
-- [ ] **B-就绪路径推理**（2026-10-18 三轮修复，剩形状门禁复验）：① `modelType` 改
+- [x] **B-就绪路径推理**（2026-10-18 三轮修复，**TC-06-5 已实测通过**）：① `modelType` 改
       `'span-level'`（`e157024`）② `maxWidth` 改 12（`aee9dfd`，导出把宽度常量烘焙死 12）
-      ——两项均已实机验证推理跑通（`Found 11 entities from model`、无 span_idx/裸数字报错）；
       ③ 中文单字幻觉替换（`户`→姓名、`订`→邮箱）由形状门禁拦截（`44c4dd5`，
-      `entityShape.ts`）。复验：样例 D 全部替换后**除 `<<手机号>>` 外无任何占位符**，
-      控制台有 `Dropped N implausible model entities`；姓名/地址检出仍为加分软预期
+      `entityShape.ts`）——用户实测「替换结果符合预期」：除 `<<手机号>>` 外无占位符、
+      `Dropped N implausible model entities` 日志出现；姓名/地址检出为加分软预期
       （spec §13-4）。→ **TC-06-5**
 - [ ] **A-4 heap 数值回填**：JS 堆快照日志实测峰值，回填至 `docs/spec.md` §14。→ **TC-06-4**
+- [ ] **离线推理复验（wasm 本地化）**（2026-10-18 运行时收敛：`wasmPaths` 空对象走
+      打包内资产 + webgpu/webgl 打桩剔除 21.3MB jsep + 移除 `@huggingface/transformers`，
+      产物 ~34MB → ~12MB）：断网下 AI 就绪、推理照常可用，Network 无 `cdn.jsdelivr`
+      请求。→ **TC-06-8**
 - [x] **样例 A 行 1 顶格复核**（2026-10-18 已结案）：顶格重贴后控制台实测
       `Found ENV_PASSWORD: DB_PASSWORD = Tr0ub4dor!#2024`、检出 1 条——确认漏检系
       复制带前导空白（env 规则 `^` 锚点失配），非缺陷。→ **TC-02-1**
@@ -58,10 +63,6 @@
 ## 后续候选（未排期，均已拍板暂缓或待设计）
 
 - [ ] 移除 manifest 中未使用的 `contextMenus` 权限声明（本轮盘点发现：全 src 无引用，历史遗留）
-- [ ] AI 推理运行时收敛：gliner 默认把 ort `wasmPaths` 指向 jsdelivr CDN（模型本体已缓存，
-      但离线时 wasm 拉不到，推理不可用）；且打包内的 ~32MB ort wasm 资产实际未被运行时引用。
-      后续改为 `wasmPaths` 指向扩展内资产并清理冗余；顺带评估移除未被 src 引用的
-      `@huggingface/transformers` 依赖
 - [ ] 粘贴拦截支持 `contenteditable` 富文本区域（当前仅 `input[type=text/search]` 与 `textarea`）
 - [ ] 粘贴自动拦截生效时显示「已脱敏 N 处」轻提示（当前完全静默）
 - [ ] 短密钥规则（需先定阈值策略，避免高误报；2026-10-17 拍板暂缓）
