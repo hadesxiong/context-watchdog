@@ -92,10 +92,18 @@ const runLoad = async (
       modelPath: string | ArrayBufferLike
       executionProvider: 'wasm'
       multiThread: false
+      // 空对象 = 让 wasm 走本地打包资产。gliner 默认把 env.wasm.wasmPaths 设为
+      // jsdelivr CDN（index.mjs:615）——CDN 拉 wasm：离线推理必挂，且包内已发出的
+      // 11MB ort-wasm-simd-threaded.wasm 成了死重。传空对象（非 undefined，绕过其
+      // 默认值）后 ort 门面视同「不覆盖」：locateFile 不设置，emscripten 回落到
+      // 构建时已改写的本地资产 URL；胶水加载器 zp 忽略参数恒用打包内模块（1.19.2 实证）。
+      // 配合 contentDetector 的 numThreads=1（单实例，已生效）无 worker 拉取需求。
+      wasmPaths: Record<string, never>
     } = {
       modelPath: modelBuffer,
       executionProvider: 'wasm',
-      multiThread: false
+      multiThread: false,
+      wasmPaths: {}
     }
 
     glinerInstance = new Gliner({
