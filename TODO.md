@@ -18,10 +18,10 @@
   - D 组 UX 实测反馈轮（5 commits：`6df1167`…`eb5b0da`）：2026-10-17 完成
   - E 组 UI 收尾轮（7 commits：`0d7a9b2`…`f35ceae`）：2026-10-18 完成
   - AI 推理链路实机修复轮（`e157024` modelType / `aee9dfd` maxWidth / `44c4dd5` 形状门禁 /
-    `93d229b` wasm 资产本地化）：2026-10-18 完成，TC-06-5 已实测通过
+    `93d229b` wasm 资产本地化）：2026-10-18 完成，TC-06-5 / TC-06-8 已实测通过
 - **勾选标准**：代码实现 + 三类证据至少其一（静态核对 / 单测 / 实测）→ 代码侧打勾；
   必须真机运行才能判定的保持 `[ ]`，见下方清单。
-- 本地未推送提交 15 条（`origin/main = f35ceae`），待实机验证通过后推送。
+- 本地未推送提交 16 条（`origin/main = f35ceae`），待实机验证通过后推送。
 
 ## 待实机验证清单（代码完成，逐项对应 docs/test-cases.md）
 
@@ -52,10 +52,11 @@
       `Dropped N implausible model entities` 日志出现；姓名/地址检出为加分软预期
       （spec §13-4）。→ **TC-06-5**
 - [ ] **A-4 heap 数值回填**：JS 堆快照日志实测峰值，回填至 `docs/spec.md` §14。→ **TC-06-4**
-- [ ] **离线推理复验（wasm 本地化）**（2026-10-18 运行时收敛：`wasmPaths` 空对象走
-      打包内资产 + webgpu/webgl 打桩剔除 21.3MB jsep + 移除 `@huggingface/transformers`，
-      产物 ~34MB → ~12MB）：断网下 AI 就绪、推理照常可用，Network 无 `cdn.jsdelivr`
-      请求。→ **TC-06-8**
+- [x] **离线推理复验（wasm 本地化）**（2026-10-18 已结案）：断网实测推理跑通——
+      `Models loaded successfully`、级联送 2 片段、11 条单字幻觉（户/订/注/放…）全被
+      形状门禁 `Dropped`、`Found 0 entities` 与在线 TC-06-5 结果一致（真召回为零系
+      模型能力限制，spec §13-4，非缺陷）；断网即铁证 wasm ~11MB/模型均本地、无 CDN
+      依赖，产物 ~34MB → ~12MB。→ **TC-06-8**
 - [x] **样例 A 行 1 顶格复核**（2026-10-18 已结案）：顶格重贴后控制台实测
       `Found ENV_PASSWORD: DB_PASSWORD = Tr0ub4dor!#2024`、检出 1 条——确认漏检系
       复制带前导空白（env 规则 `^` 锚点失配），非缺陷。→ **TC-02-1**
