@@ -13,7 +13,7 @@
 |------|------|------|
 | 侧栏手动脱敏 | ✅ | 粘贴 → 检出列表 → 单条/一键脱敏 → 复制 |
 | 正则基础引擎 | ✅ 恒开 | 14 类检测（密钥 5 + PII 7 + 高熵 + 自定义），SW 亦可用 |
-| AI 增强（GLiNER） | ✅ 可选 | 级联触发，仅处理正则未覆盖片段；首次需下载 ~183MB 模型 |
+| AI 增强（GLiNER） | ✅ 可选 | 级联触发，仅处理正则未覆盖片段；首次需下载 ~183MB 模型（ort wasm ~11MB 随包本地加载，推理本身离线可用） |
 | 检测档案 | ✅ | 内置 3 档 + 用户自定义（类别/灵敏度/分类型策略/白名单/GLiNER 标签） |
 | 自定义正则规则 | ✅ | ReDoS 双层防护；档案 JSON 剪贴板导入导出 |
 | 粘贴自动拦截 | ✅ 可选 | 逐站授权，在已授权站点粘贴时自动就地替换（正则档） |
@@ -134,6 +134,13 @@ ID_CARD / BANK_CARD / IP_ADDRESS / PLATE / NAME / ADDRESS`
 183,403,734 字节 ≈183MB）；运行栈 `gliner` + `onnxruntime-web`（WASM，单线程，
 CSP 需 `wasm-unsafe-eval`）+ `@xenova/transformers`（tokenizer）。场景识别为启发式
 （`sceneDetector.ts`），不占模型。
+
+**wasm 资产本地化**（2026-10-18）：gliner 默认把 `env.wasm.wasmPaths` 指向 jsdelivr
+CDN（`index.mjs:615`），改传空对象绕过其默认值 → ORT 门面视同「不覆盖」，`locateFile`
+不设置，emscripten 回落到构建时改写好的打包内资产（胶水加载器 `zp` 忽略参数恒用打包内
+模块，ort 1.19.2 实证）→ wasm ~11MB 随扩展分发，**离线推理可用、零 CDN 依赖**；同时
+vite 别名把 gliner 静态引用的 `onnxruntime-web/webgpu|webgl` 打桩（EP 固定 `'wasm'`），
+剔除 21.3MB `jsep.wasm` 死重——产物总量 ~34MB → ~12MB。
 
 **下载器**（`modelDownload.ts`，全部依赖可注入以便 node 环境单测）：
 
