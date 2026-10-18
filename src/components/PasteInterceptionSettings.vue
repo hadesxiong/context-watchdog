@@ -70,9 +70,9 @@ onMounted(loadSites)
 </script>
 
 <template>
-    <!-- 与引擎卡片同规格的全宽贴边区块（p-3 = 内容到面板边框 12px），
+    <!-- 与引擎卡片同规格的全宽贴边区块（p-4 = 内容到面板边框 16px），
          块内分隔统一走 padding，不用 margin -->
-    <div class="p-3 bg-muted/50">
+    <div class="p-4 bg-muted/50">
         <div>
             <p class="text-sm font-medium text-foreground">粘贴自动拦截</p>
             <!-- 描述：最多 2 行，超出省略 -->
@@ -82,18 +82,18 @@ onMounted(loadSites)
 
         <!-- 输入与按钮等高 32px（Input h-8 = Button sm 档 h-8）；按钮 shrink-0 防被压窄
              导致文字换行，输入 min-w-0 允许收缩 -->
-        <div class="pt-3 flex items-center gap-2">
+        <div class="pt-4 flex items-center gap-2">
             <Input v-model="siteInput" placeholder="例如 chat.example.com" :disabled="busy"
                 class="h-8 min-w-0" @keyup.enter="addSite" />
             <Button size="sm" :disabled="busy" @click="addSite" class="shrink-0">添加</Button>
         </div>
 
-        <p v-if="notice" class="pt-3 text-xs"
+        <p v-if="notice" class="pt-4 text-xs"
             :class="noticeKind === 'error' ? 'text-warning' : 'text-muted-foreground'">
             {{ notice }}
         </p>
 
-        <ul v-if="sites.length" class="pt-3 space-y-1">
+        <ul v-if="sites.length" class="pt-4 space-y-1">
             <li v-for="site in sites" :key="site" class="flex items-center justify-between gap-2">
                 <span class="text-xs font-mono text-foreground truncate">{{ site }}</span>
                 <button class="text-xs text-warning hover:underline shrink-0" @click="removeSite(site)">
@@ -101,7 +101,7 @@ onMounted(loadSites)
                 </button>
             </li>
         </ul>
-        <p v-else class="pt-3 text-xs text-muted-foreground">
+        <p v-else class="pt-4 text-xs text-muted-foreground">
             未添加站点：粘贴行为保持原样
         </p>
     </div>

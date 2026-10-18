@@ -178,14 +178,14 @@ const loadingCaption = computed(() => {
             </div>
         </header>
         <!-- 引擎状态面板：外壳无内边距，三个功能区块全宽贴边——
-             内容（正则规则等）到面板边框的距离统一由区块自身 p-3 提供
-             （12px，与标题行到边框的距离一致），无任何 margin -->
+             内容（正则规则等）到面板边框的距离统一由区块自身 p-4 提供
+             （16px，与标题行到边框的距离一致），无任何 margin -->
         <div v-if="showEngineStatus"
             class="rounded-lg shadow-lg border fixed z-50 w-80 overflow-hidden
                 max-w-[calc(100vw-1.5rem)] bg-card border-border"
                 :style="{ top: 'var(--header-height)', right: '12px' }">
-            <!-- 标题行：px-3 pt-3 距上/左/右边框 12px，pb-3 与下方区块间隔 12px -->
-            <div class="flex items-center justify-between px-3 pt-3 pb-3">
+            <!-- 标题行：px-4 pt-4 距上/左/右边框 16px，pb-4 与下方区块间隔 16px -->
+            <div class="flex items-center justify-between px-4 pt-4 pb-4">
                 <h3 class="text-sm font-semibold text-foreground">
                     检测引擎状态</h3>
                 <button @click="showEngineStatus = false"
@@ -201,10 +201,10 @@ const loadingCaption = computed(() => {
                 </button>
             </div>
             <!-- 引擎开关：正则恒开（禁改）+ AI 开关（含场景识别，合并下载）；
-                 区块全宽贴边（无内缩），区块间 gap-3（12px），无 margin -->
-            <div class="flex flex-col gap-3">
+                 区块全宽贴边（无内缩），区块间 gap-4（16px），无 margin -->
+            <div class="flex flex-col gap-4">
                 <div v-for="item in engineStatusItems" :key="item.name"
-                    class="p-3 bg-muted/50">
+                    class="p-4 bg-muted/50">
                     <!-- gap-3：文字块与 Switch 之间保留间距（行内自由空间为 0 时也不贴合） -->
                     <div class="flex items-center justify-between gap-3">
                         <div class="min-w-0 flex items-center gap-3">
