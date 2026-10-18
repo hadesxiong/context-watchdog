@@ -64,7 +64,9 @@
        结果仅作 GLiNER 提示词，不影响正则检出；AI 关闭时整步省去）
    3b. buildUncoveredSegments：只取正则未覆盖片段（≤20 段、总计 ≤8000 字符、
        去空白后 ≥8 字符），偏移映射回全文
-   3c. GLiNER 实体分类 → 阈值分档：>0.65 sensitive / <0.35 not / 其间 uncertain
+   3c. GLiNER 实体分类 → 形状门禁 isPlausibleEntity（检出必须形似标签：单字姓名、
+       无@邮箱、短地址等幻觉直接丢弃并记 Dropped 日志）→ 阈值分档：
+       >0.65 sensitive / <0.35 not / 其间 uncertain
    3d. sensitive 经 validateSensitiveEntity 正则验证后采纳（已覆盖区跳过）
    3e. uncertain 回流正则复检；复检不中的以 ≤0.5 低置信保留（默认档案
        tierLowConfidence=true 下仅提示不替换）
@@ -235,6 +237,9 @@ CSP 收紧后扩展页无任何外部脚本/连接可能。
 2. 拦截为正则档——GLiNER 推理仅侧栏手动流程可用；
 3. AI 模型 ~183MB 首次下载依赖网络（支持断点续传与多窗口去重）；
 4. GLiNER 对自由文本（无格式姓名/地址）的召回依赖模型能力，中低置信默认仅提示；
+   2026-10-18 实机：中文真召回为零，0.25–0.65 区间多为单字幻觉（「户」→姓名 0.456、
+   「订」→邮箱 0.330），已由形状门禁（`entityShape.ts` 的 `isPlausibleEntity`）拦截；
+   形似词幻觉（如 2 字词→姓名）仍可能通过，属模型能力限制，换更强模型才能收敛；
 5. `contextMenus` 权限声明未使用（清理候选）；
 6. tokenizer/config 由 gliner 内部 transformers 下载，走其自带缓存，不受 §10 版本管理。
 
