@@ -16,7 +16,7 @@
 | AI 增强（GLiNER） | ✅ 可选 | 级联触发，仅处理正则未覆盖片段；首次需下载 ~183MB 模型（ort wasm ~11MB 随包本地加载，推理本身离线可用） |
 | 检测档案 | ✅ | 内置 3 档 + 用户自定义（类别/灵敏度/分类型策略/白名单/GLiNER 标签） |
 | 自定义正则规则 | ✅ | ReDoS 双层防护；档案 JSON 剪贴板导入导出 |
-| 粘贴自动拦截 | ✅ 可选 | 逐站授权，在已授权站点粘贴时自动就地替换（正则档） |
+| 粘贴自动拦截 | ✅ 可选 | 逐站授权，粘贴时自动就地替换（正则档；input/textarea 与 contenteditable 均支持，命中显示「已脱敏 N 处」提示） |
 | 明暗主题 | ✅ | 跟随系统 `prefers-color-scheme` |
 | 双目标构建 | ✅ | Chrome `dist/` / Firefox `dist-firefox/` |
 
@@ -96,13 +96,17 @@ ID_CARD / BANK_CARD / IP_ADDRESS / PLATE / NAME / ADDRESS`
 | `valueFilters.ts` | 值质量过滤：弱密码字典（password/admin/secret…）、最小长度、纯数字剔除 |
 | `envPasswordRules.ts` / `kvRules.ts` | `KEY=VALUE` / YAML / JSON 键值对密码 |
 | `dbPasswordRules.ts` | 连接串（含独立 scheme 表，多 `@` 不截断） |
-| `apiKeyRules.ts` | sk-/AKIA/ghp_/xox- 前缀 + 通用长随机串 |
+| `apiKeyRules.ts` | sk-/AKIA/ghp_/xox- 等前缀规则 + 通用长随机串 + 短密钥族（前缀即证据，10 家官方格式） |
 | `highEntropyRules.ts` | 高熵检测（字符类 ≥2，阈值随灵敏度档） |
 | `privateKeyRules.ts` / `emailRules.ts` / `piiRules.ts` | 私钥 / 邮箱 / PII（手机号、身份证、银行卡 Luhn、IP、车牌） |
 | `customRules.ts` | 用户自定义规则（见 §5 ReDoS） |
 | `scanner.ts` | 统一扫描器（extractor 按捕获组精确定位原文区间） |
 
 空值、过短（<4）、纯数字、弱密码字典值一律不检出（防误报基线，金样例回归覆盖）。
+短密钥阈值策略（2026-10-18 拍板落地）：无前缀的 8–32 位随机串维持不检测（会话号/
+设备号撞形误报不可控，高熵阈值不动）；独特厂商前缀的官方短格式（Anthropic、HuggingFace、
+npm、GitLab、SendGrid、Postman、Shopify、DigitalOcean、Mailgun、Twilio）按规格精确收录；
+「短但有上下文」由 env/kv 键值规则行锚定兜底。
 
 ## 5. 档案系统（core/detector/profiles.ts + userProfiles.ts）
 
@@ -166,13 +170,21 @@ vite 别名把 gliner 静态引用的 `onnxruntime-web/webgpu|webgl` 打桩（EP
   未授权站点零接触；
 - **注入时机**：`tabs.onUpdated`（loading 且 URL 匹配）+ 站点列表变化时对已开页面即时注入；
   `chrome.scripting.executeScript({ allFrames: true })`，无 manifest 常驻脚本；
-- **就地替换策略**：先插入后就地替换（不阻塞输入）；站点规范化与匹配在
-  `core/sites.ts`（单测 11 例）；插入区间推导与改写守卫为纯函数
-  （`content/pasteText.ts`，单测 6 例）；
-- **四重守卫**：`password`/隐藏输入框绝不处理；插入文本与剪贴板逐字吻合才改写；
-  检测期间用户继续输入（文本发散）即放弃改写；单次超 20,000 字符直接放行；
-- **已知限制**：仅 `input[type=text/search]` 与 `textarea`（contenteditable 待后续）；
-  拦截为正则档（模型不进 SW）。
+- **就地替换策略**：input/textarea 走「先插入后就地替换」（不阻塞输入）；站点规范化
+  与匹配在 `core/sites.ts`（单测 11 例）；插入区间推导与改写守卫为纯函数
+  （`content/pasteText.ts`，单测 6+2 例）；
+- **contenteditable 策略**：富文本区域做不了逐字校验（innerText 与 Range.toString 对
+  `<div>/<br>` 的换行建模互不一致、Lexical/ProseMirror 类编辑器会重排 DOM）→
+  「阻止默认 → 选区快照 → 检测 → `execCommand('insertText')` 插入」：快照 Range 随
+  后续 DOM 编辑自动调整（语义等价「文本发散即放弃」守卫且更稳），走编辑器标准输入
+  管线（beforeinput/input + 撤销栈），异常路径一律补插原文不吞粘贴；
+- **轻提示**：改写生效时视口右上「已脱敏 N 处」（2s 自消、pointer-events:none、
+  纯内联样式——不依赖也不污染宿主页面的 CSS/主题）；
+- **守卫**：`password`/隐藏输入框绝不处理；input/textarea 插入文本与剪贴板逐字吻合
+  才改写；检测期间用户继续输入（文本发散）即放弃；单次超 20,000 字符在入口层直接
+  真放行（此前仅 SW 侧 slice 截断检测范围，入口照单全收会用截断结果整体改写、
+  吞掉尾部文本——已修）；
+- **已知限制**：拦截为正则档（模型不进 SW）。
 
 ## 9. 权限与安全模型
 
@@ -186,7 +198,6 @@ vite 别名把 gliner 静态引用的 `onnxruntime-web/webgpu|webgl` 打桩（EP
 | `unlimitedStorage` | 183MB 模型缓存配额 |
 | `scripting` | 仅向已授权站点注入粘贴监听 |
 | `optional_host_permissions` | 粘贴拦截逐站授权（运行时按需申请） |
-| `contextMenus` | ⚠️ 声明但当前未使用（历史遗留，清理候选见 TODO） |
 
 **CSP**（extension_pages）：`script-src 'self' 'wasm-unsafe-eval'; object-src 'self';
 connect-src 'self' https:`——无 `http:`/`ws:`；`wasm-unsafe-eval` 为 ORT WASM 必需
@@ -226,10 +237,10 @@ CSP 收紧后扩展页无任何外部脚本/连接可能。
 
 ## 12. 测试体系
 
-`npm test`：**163 断言 / 17 文件**（`npm run typecheck` 0 错误为另一道闸）：
+`npm test`：**187 tests / 19 文件**（`npm run typecheck` 0 错误为另一道闸）：
 
 - `tests/golden/`（4）：内置三档 + 白名单端到端金样例；
-- `tests/unit/`（10）：规则与值过滤、自定义规则 ReDoS、管线配置、store 状态机、
+- `tests/unit/`（12）：规则与值过滤、短密钥族、自定义规则 ReDoS、管线配置、store 状态机、
   模型下载（续传/退避/看门狗/完整性/缓存/锁/单飞）、粘贴改写纯函数、站点匹配、
   档案 CRUD 与 IO、替换引擎、基础功能；
 - `tests/perf/`（1）：长文本性能护栏；
@@ -240,15 +251,13 @@ CSP 收紧后扩展页无任何外部脚本/连接可能。
 
 ## 13. 已知限制
 
-1. 粘贴拦截不支持 `contenteditable` 富文本区域；
-2. 拦截为正则档——GLiNER 推理仅侧栏手动流程可用；
-3. AI 模型 ~183MB 首次下载依赖网络（支持断点续传与多窗口去重）；
-4. GLiNER 对自由文本（无格式姓名/地址）的召回依赖模型能力，中低置信默认仅提示；
+1. 拦截为正则档——GLiNER 推理仅侧栏手动流程可用；
+2. AI 模型 ~183MB 首次下载依赖网络（支持断点续传与多窗口去重）；
+3. GLiNER 对自由文本（无格式姓名/地址）的召回依赖模型能力，中低置信默认仅提示；
    2026-10-18 实机：中文真召回为零，0.25–0.65 区间多为单字幻觉（「户」→姓名 0.456、
    「订」→邮箱 0.330），已由形状门禁（`entityShape.ts` 的 `isPlausibleEntity`）拦截；
    形似词幻觉（如 2 字词→姓名）仍可能通过，属模型能力限制，换更强模型才能收敛；
-5. `contextMenus` 权限声明未使用（清理候选）；
-6. tokenizer/config 由 gliner 内部 transformers 下载，走其自带缓存，不受 §10 版本管理。
+4. tokenizer/config 由 gliner 内部 transformers 下载，走其自带缓存，不受 §10 版本管理。
 
 ## 14. 实测数据（2026-10-18，Chrome，TC-06-4 / A-4 结案）
 
