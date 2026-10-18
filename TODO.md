@@ -21,5 +21,7 @@ npm run typecheck && npm test && npm run build && npm run build:firefox
 
 ## 待办
 
-- 暂无。新候选在此登记（挂 `docs/test-cases.md` TC 编号）；实现 + 实机验收闭环后
+- [ ] **H-1 输入区去自动检测**（`f81ced0`）：粘贴与手动输入均不再自动检测，仅「检测」按钮
+  触发；检测后继续编辑旧结果保留（「清空」一并清）。→ **TC-02-1**（含负向判据）
+- 暂无其他。新候选在此登记（挂 `docs/test-cases.md` TC 编号）；实现 + 实机验收闭环后
   移入 `CHANGELOG.md` 对应轮次并清空本清单。
