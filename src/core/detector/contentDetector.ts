@@ -76,6 +76,9 @@ const runLoad = async (
     reportHeapSnapshot('模型下载完成')
 
     const { Gliner } = await import('gliner')
+    // 此处的 onnxruntime-web 必须与 gliner 内部用的是同一实例：package.json 已将其钉死
+    // 1.19.2（与 gliner@0.0.19 的依赖精确一致），npm 去重后单实例，下面的 numThreads
+    // 才能作用到 gliner 的推理会话；否则两份 ort 共存，wasm 资产与线程配置各管各的
     const ort = await import('onnxruntime-web')
 
     ort.env.wasm.numThreads = 1
@@ -101,8 +104,13 @@ const runLoad = async (
         allowLocalModels: false,
         useBrowserCache: true
       },
-      // Phase 2: 12 → 256，长连接串/长 PII 不再被切成多个块
-      maxWidth: 256,
+      // 模型导出宽度约束（曾为「长连接串/长 PII 不切块」将默认 12 提到 256，真机推理即崩）：
+      // onnx-community/gliner_small-v2 的 ONNX 导出把 span_rep_layer 的宽度常量烘焙死为 12
+      // （Reshape 目标 [batch, num_words, 12, hidden]），maxWidth≠12 时 span 行数
+      // （num_words × maxWidth）对不上必报 Reshape 失败——浏览器里表现为裸数字错误
+      // （ORT 的 OrtStatus 指针未透出消息），AI 级联静默归零。超过 12 词的跨度会被截到
+      // 12 词窗口，这是该导出的固有限制（中文姓名/地址/手机号远短于 12 词，不受影响）。
+      maxWidth: 12,
       // 关键：gliner@0.0.19 只认 "span-level"（index.mjs:691 分支），传其他值会走
       // TokenModel（只喂 input_ids/attention_mask/words_mask/text_lengths），
       // 而 onnx-community/gliner_small-v2 是 span-level 模型（图声明 span_idx 输入），
