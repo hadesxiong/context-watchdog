@@ -372,20 +372,21 @@ const onSave = async () => {
     </div>
 
     <!-- 操作：sticky 固定于弹窗可视区底部（与顶部标题同逻辑，不随内容滚动）；
-         模板第二根节点，占满弹窗宽度、自身 px-4 提供边距；
+         模板第二根节点，占满弹窗宽度、自身 px-4 提供边距（pb-4 与标题区 pt-4 对称）；
          bg-card 覆盖滚过的内容，border-t 与标题区 border-b 呼应；
          关闭由标题栏 × / Esc 承担，不设取消 -->
-    <div class="sticky bottom-0 bg-card border-t border-border px-4 pt-3 space-y-1.5">
+    <div class="sticky bottom-0 bg-card border-t border-border px-4 pt-3 pb-4 space-y-1.5">
         <div class="flex items-center gap-2">
-            <Button variant="secondary" btnType="outline" size="sm"
+            <!-- md 档（px-3 py-1.5 text-sm）：字号/内边距与表单内预设按钮（个人信息集等）一致 -->
+            <Button variant="secondary" btnType="outline"
                 title="复制全部自定义档案 JSON 到剪贴板" @click="onExport">导出</Button>
-            <Button variant="secondary" btnType="outline" size="sm"
+            <Button variant="secondary" btnType="outline"
                 title="从剪贴板读取档案 JSON 并导入" @click="onImport">导入</Button>
             <div class="ml-auto flex items-center gap-2">
                 <!-- 删除：primary 形状（实心），危险红配色 -->
-                <Button variant="danger" size="sm" @click="emit('delete')">
+                <Button variant="danger" @click="emit('delete')">
                     删除档案</Button>
-                <Button size="sm" :loading="saving" @click="onSave">
+                <Button :loading="saving" @click="onSave">
                     {{ saving ? '保存中…' : '保存' }}</Button>
             </div>
         </div>

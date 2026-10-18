@@ -70,26 +70,28 @@ onMounted(loadSites)
 </script>
 
 <template>
-    <div class="mt-4 p-3 rounded-lg bg-muted/50">
+    <!-- 块内分隔统一走 padding（12px 基准 = 标题栏 p-3），不用 margin -->
+    <div class="p-3 rounded-lg bg-muted/50">
         <div class="pr-3">
             <p class="text-sm font-medium text-foreground">粘贴自动拦截</p>
-            <p class="text-xs text-muted-foreground mt-0.5">
+            <p class="text-xs text-muted-foreground pt-0.5">
                 在已授权站点粘贴时自动脱敏（正则档检测，无需模型）；未授权站点完全不受影响</p>
         </div>
 
-        <!-- 输入与按钮等高（40px）；按钮 shrink-0 防被压窄导致文字换行，输入 min-w-0 允许收缩 -->
-        <div class="mt-2 flex items-center gap-2">
+        <!-- 输入与按钮等高 32px（Input h-8 = Button sm 档 h-8）；按钮 shrink-0 防被压窄
+             导致文字换行，输入 min-w-0 允许收缩 -->
+        <div class="pt-3 flex items-center gap-2">
             <Input v-model="siteInput" placeholder="例如 chat.example.com" :disabled="busy"
-                class="h-10 min-w-0" @keyup.enter="addSite" />
-            <Button :disabled="busy" @click="addSite" class="shrink-0">添加</Button>
+                class="h-8 min-w-0" @keyup.enter="addSite" />
+            <Button size="sm" :disabled="busy" @click="addSite" class="shrink-0">添加</Button>
         </div>
 
-        <p v-if="notice" class="mt-2 text-xs"
+        <p v-if="notice" class="pt-3 text-xs"
             :class="noticeKind === 'error' ? 'text-warning' : 'text-muted-foreground'">
             {{ notice }}
         </p>
 
-        <ul v-if="sites.length" class="mt-2 space-y-1">
+        <ul v-if="sites.length" class="pt-3 space-y-1">
             <li v-for="site in sites" :key="site" class="flex items-center justify-between gap-2">
                 <span class="text-xs font-mono text-foreground truncate">{{ site }}</span>
                 <button class="text-xs text-warning hover:underline shrink-0" @click="removeSite(site)">
@@ -97,7 +99,7 @@ onMounted(loadSites)
                 </button>
             </li>
         </ul>
-        <p v-else class="mt-2 text-xs text-muted-foreground">
+        <p v-else class="pt-3 text-xs text-muted-foreground">
             未添加站点：粘贴行为保持原样
         </p>
     </div>

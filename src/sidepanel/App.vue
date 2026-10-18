@@ -88,6 +88,9 @@ const toggleEngineStatus = () => {
     showEngineStatus.value = !showEngineStatus.value
 }
 
+// 独立打开新标签页：暂时隐藏（保留实现与模板引用，恢复时把常量改回 true）
+const SHOW_OPEN_IN_NEW_TAB = false
+
 const openInNewTab = () => {
     chrome.tabs.create({ url: chrome.runtime.getURL('src/sidepanel/index.html') })
 }
@@ -150,22 +153,24 @@ const loadingCaption = computed(() => {
                         </div>
                     </div>
                     <div class="flex items-center gap-2">
-                        <!-- 独立打开按钮 -->
-                        <Button @click="openInNewTab" variant="secondary"
+                        <!-- 独立打开按钮：暂时隐藏（见 SHOW_OPEN_IN_NEW_TAB） -->
+                        <Button v-if="SHOW_OPEN_IN_NEW_TAB" @click="openInNewTab" variant="secondary"
                             btn-type="text" size="sm">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                     d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                             </svg>
                         </Button>
-                        <!-- 引擎状态按钮 -->
+                        <!-- 引擎状态按钮（齿轮入口） -->
                         <Button @click="toggleEngineStatus" variant="secondary"
-                            btn-type="text" size="sm"
+                            btn-type="text" size="sm" title="检测引擎状态"
                             :class="{ 'text-success': store.isNERReady }">
                             <svg class="w-5 h-5" fill="none"
                                 stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                    d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
                             </svg>
                         </Button>
                     </div>
@@ -177,7 +182,8 @@ const loadingCaption = computed(() => {
             class="p-3 rounded-lg shadow-lg border fixed z-50 w-80
                 max-w-[calc(100vw-1.5rem)] bg-card border-border"
                 :style="{ top: 'var(--header-height)', right: '12px' }">
-            <div class="flex items-center justify-between mb-4">
+            <!-- 标题行：面板内分隔统一走 padding（12px 基准 = 标题栏 p-3），不用 margin -->
+            <div class="flex items-center justify-between pb-3">
                 <h3 class="text-sm font-semibold text-foreground">
                     检测引擎状态</h3>
                 <button @click="showEngineStatus = false"
@@ -192,8 +198,9 @@ const loadingCaption = computed(() => {
                 </svg>
                 </button>
             </div>
-            <!-- 引擎开关：正则恒开（禁改）+ AI 开关（含场景识别，合并下载） -->
-            <div class="flex flex-col gap-3">
+            <!-- 引擎开关：正则恒开（禁改）+ AI 开关（含场景识别，合并下载）；
+                 卡间距 gap-3、与下方粘贴块的分隔 pb-3，均为 12px 基准 -->
+            <div class="flex flex-col gap-3 pb-3">
                 <div v-for="item in engineStatusItems" :key="item.name"
                     class="p-3 rounded-lg bg-muted/50">
                     <!-- gap-3：文字块与 Switch 之间保留间距（行内自由空间为 0 时也不贴合） -->
@@ -215,7 +222,7 @@ const loadingCaption = computed(() => {
                     <!-- AI 卡片附属：加载进度（仅真网络下载；缓存命中静默初始化）/ 失败重试 -->
                     <template v-if="item.key === 'ai'">
                         <div v-if="store.nerStatus === 'loading' && store.nerDownloadStarted"
-                            class="mt-2 w-full">
+                            class="pt-2 w-full">
                             <div class="flex justify-between text-xs text-muted-foreground mb-1">
                                 <span>{{ loadingCaption }}</span>
                                 <span>{{ progressLabel }}</span>
@@ -229,7 +236,7 @@ const loadingCaption = computed(() => {
                         </div>
                         <!-- 失败提示（关闭开关或重试） -->
                         <div v-if="store.nerStatus === 'error' || store.nerStatus === 'timeout'"
-                            class="mt-2 flex items-center justify-between gap-2">
+                            class="pt-2 flex items-center justify-between gap-2">
                             <p class="text-xs text-warning">
                                 {{ store.nerError || '模型加载失败；基础检测不受影响' }}</p>
                             <Button @click="store.retryLoadNER" variant="secondary"
