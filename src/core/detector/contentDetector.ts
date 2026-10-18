@@ -103,7 +103,12 @@ const runLoad = async (
       },
       // Phase 2: 12 → 256，长连接串/长 PII 不再被切成多个块
       maxWidth: 256,
-      modelType: 'gliner'
+      // 关键：gliner@0.0.19 只认 "span-level"（index.mjs:691 分支），传其他值会走
+      // TokenModel（只喂 input_ids/attention_mask/words_mask/text_lengths），
+      // 而 onnx-community/gliner_small-v2 是 span-level 模型（图声明 span_idx 输入），
+      // 推理必报 `input 'span_idx' is missing in 'feeds'` → AI 级联静默归零。
+      // 原值 'gliner' 系沿用 HF 仓库 config 的 model_type 命名，与本包分支约定不符。
+      modelType: 'span-level'
     })
 
     await glinerInstance.initialize()
