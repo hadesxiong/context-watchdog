@@ -77,10 +77,11 @@ onMounted(loadSites)
                 在已授权站点粘贴时自动脱敏（正则档检测，无需模型）；未授权站点完全不受影响</p>
         </div>
 
-        <div class="mt-2 flex gap-2">
+        <!-- 输入与按钮等高（40px）；按钮 shrink-0 防被压窄导致文字换行，输入 min-w-0 允许收缩 -->
+        <div class="mt-2 flex items-center gap-2">
             <Input v-model="siteInput" placeholder="例如 chat.example.com" :disabled="busy"
-                @keyup.enter="addSite" />
-            <Button size="sm" :disabled="busy" @click="addSite">添加</Button>
+                class="h-10 min-w-0" @keyup.enter="addSite" />
+            <Button :disabled="busy" @click="addSite" class="shrink-0">添加</Button>
         </div>
 
         <p v-if="notice" class="mt-2 text-xs"

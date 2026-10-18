@@ -97,8 +97,8 @@ const onDelete = async () => {
                             <span :class="profile.id === store.activeProfileId && 'font-medium'">
                                 {{ profile.name }}</span>
                         </SelectItemText>
-                        <!-- 档案说明：选项内第二行小字（截断防撑高） -->
-                        <p class="text-xs text-muted-foreground leading-snug line-clamp-2 mt-0.5">
+                        <!-- 档案说明：选项内第二行小字，超一行省略号截断（预设/自定义一致） -->
+                        <p class="text-xs text-muted-foreground leading-snug truncate mt-0.5">
                             {{ profile.description }}</p>
                     </div>
                     <!-- 编辑齿轮：仅自定义档案；pointerup/touchend 必须拦（SelectItem 在
@@ -107,10 +107,10 @@ const onDelete = async () => {
                     <button v-if="isCustom(profile)"
                         @pointerdown.stop @pointerup.stop @touchend.stop
                         @click="onEdit(profile.id, $event)"
-                        class="shrink-0 p-1.5 rounded-sm text-muted-foreground
+                        class="shrink-0 p-2 rounded-sm text-muted-foreground
                             hover:text-foreground hover:bg-accent transition-colors"
                         :title="`编辑「${profile.name}」`">
-                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"

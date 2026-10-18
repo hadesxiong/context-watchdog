@@ -174,8 +174,8 @@ const loadingCaption = computed(() => {
         </header>
         <!-- 引擎状态面板 -->
         <div v-if="showEngineStatus"
-            class="p-3 rounded-lg shadow-lg border fixed z-50
-                bg-card border-border"
+            class="p-3 rounded-lg shadow-lg border fixed z-50 w-80
+                max-w-[calc(100vw-1.5rem)] bg-card border-border"
                 :style="{ top: 'var(--header-height)', right: '12px' }">
             <div class="flex items-center justify-between mb-4">
                 <h3 class="text-sm font-semibold text-foreground">
@@ -196,8 +196,9 @@ const loadingCaption = computed(() => {
             <div class="flex flex-col gap-3">
                 <div v-for="item in engineStatusItems" :key="item.name"
                     class="p-3 rounded-lg bg-muted/50">
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center gap-3">
+                    <!-- gap-3：文字块与 Switch 之间保留间距（行内自由空间为 0 时也不贴合） -->
+                    <div class="flex items-center justify-between gap-3">
+                        <div class="min-w-0 flex items-center gap-3">
                             <div>
                                 <p class="text-sm font-medium text-foreground">
                                     {{ item.name }}
@@ -380,7 +381,7 @@ const loadingCaption = computed(() => {
         <!-- 首启引导弹窗：AI 增强为可选项，开启才下载模型（选择权交还用户） -->
         <Dialog :open="showOnboarding" title="启用 AI 增强检测？"
             @update:open="(v: boolean) => { if (!v) onDismissOnboarding() }">
-            <div class="space-y-3">
+            <div class="px-4 py-4 space-y-3">
                 <p class="text-xs text-muted-foreground leading-relaxed">
                     AI 增强可识别姓名、地址等无固定格式内容，让检测更全面。
                     开启后需下载约 180MB 量化模型（仅此一次，本地处理，不上传任何数据）。

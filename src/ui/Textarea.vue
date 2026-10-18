@@ -27,8 +27,9 @@ const textareaClasses = computed(() => [
   'bg-background border',
   'text-foreground',
   'placeholder:text-muted-foreground',
-  'focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent',
-  'border-input',
+  // 焦点样式与主功能区 textarea 统一（见 InputArea）：1px ring + 聚焦时边框透明
+  'focus:outline-none focus:ring-1 focus:ring-ring focus:border-transparent',
+  'border-border',
   props.disabled && 'opacity-50 cursor-not-allowed'
 ])
 </script>

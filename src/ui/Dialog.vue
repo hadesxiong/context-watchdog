@@ -46,13 +46,14 @@ const onOpenChange = (open: boolean) => {
                     'fixed left-1/2 top-1/2 z-50 w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2',
                     'max-h-[calc(100vh-4rem)] overflow-hidden flex flex-col',
                     'rounded-lg border border-border bg-card text-card-foreground shadow-lg',
-                    'p-4 space-y-3',
+                    // 各区域（标题/正文/操作区）占满弹窗宽度，边距由各区自身 padding 提供
+                    'p-0',
                     'data-[state=open]:pg-dialog-in data-[state=closed]:pg-dialog-out',
                     width
                 ]">
                 <!-- 标题区：独立固定（shrink-0），长表单滚动时标题/描述/关闭按钮不跟随；
-                     border-b 与底部操作区的 border-t 呼应 -->
-                <div class="flex items-start justify-between gap-3 shrink-0 border-b border-border">
+                     占满弹窗宽度、自身 px-4 提供边距，border-b 与底部操作区的 border-t 呼应 -->
+                <div class="flex items-start justify-between gap-3 shrink-0 px-4 pt-4 pb-3 border-b border-border">
                     <div class="space-y-1">
                         <DialogTitle v-if="title" class="text-base font-semibold text-foreground">
                             {{ title }}
