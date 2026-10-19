@@ -128,6 +128,12 @@ const typePriority: Record<DetectionType, number> = {
   PLATE: 2,
   NAME: 2,
   ADDRESS: 2,
+  // 区域标识符（SSN/EIN/IBAN/VAT）是强校验的高可信标识，与身份证/银行卡同级：
+  // 它们比包住自己的高熵串更具体，仲裁时应胜出
+  SSN: 2,
+  EIN: 2,
+  IBAN: 2,
+  VAT: 2,
   HIGH_ENTROPY: 1
 }
 

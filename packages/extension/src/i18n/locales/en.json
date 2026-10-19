@@ -117,6 +117,8 @@
   "ps_category_secret": "Credentials",
   "ps_category_pii": "Personal data",
   "ps_category_entropy": "High-entropy strings",
+  "ps_category_us": "US regional rules (SSN / EIN / phone)",
+  "ps_category_eu": "EU regional rules (IBAN / VAT)",
   "ps_entropy_sensitivity": "High-entropy sensitivity",
   "ps_sensitivity_loose": "Loose",
   "ps_sensitivity_standard": "Standard",

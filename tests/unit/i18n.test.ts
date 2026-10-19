@@ -147,13 +147,27 @@ describe('i18n - 代码里用到的 key 必须存在', () => {
   })
 
   it('每个内置 Profile 都有 profile_<id>_name / _desc 词条', () => {
+    // 从源码里解析 id，新增内置档案会自动被这条测试覆盖（不必回来改测试）
     const profilesSource = readFileSync(resolve(ROOT, 'packages/engine/src/detector/profiles.ts'), 'utf8')
-    const ids = ['universal', 'text', 'code']
-    expect(profilesSource).toContain("id: 'universal'")
+    const builtinBlock = profilesSource.match(/BUILTIN_PROFILES[^=]*=\s*\[([\s\S]*?)\n\]/)?.[1] ?? ''
+    const ids = [...builtinBlock.matchAll(/id:\s*'([a-z_]+)'/g)].map((m) => m[1])
+    expect(ids.length).toBeGreaterThan(2)
     const missing = ids.flatMap((id) =>
       en[`profile_${id}_name`] && en[`profile_${id}_desc`] && zh[`profile_${id}_name`] && zh[`profile_${id}_desc`]
         ? []
         : [id]
+    )
+    expect(missing).toEqual([])
+  })
+
+  it('每个 RuleCategory 都有 ps_category_* 词条（自定义档案编辑器用它渲染勾选项）', () => {
+    const typesSource = readFileSync(resolve(ROOT, 'packages/engine/src/types/index.ts'), 'utf8')
+    const union = typesSource.match(/export type RuleCategory =([\s\S]*?)\n/)
+    expect(union).not.toBeNull()
+    const categories = [...union![1].matchAll(/'([a-z]+)'/g)].map((m) => m[1])
+    expect(categories.length).toBeGreaterThan(2)
+    const missing = categories.flatMap((cat) =>
+      en[`ps_category_${cat}`] && zh[`ps_category_${cat}`] ? [] : [cat]
     )
     expect(missing).toEqual([])
   })

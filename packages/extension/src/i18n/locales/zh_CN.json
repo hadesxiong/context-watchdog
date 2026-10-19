@@ -117,6 +117,8 @@
   "ps_category_secret": "密钥凭据",
   "ps_category_pii": "个人信息",
   "ps_category_entropy": "高熵字符串",
+  "ps_category_us": "美国区域规则（社保号 / 税号 / 电话）",
+  "ps_category_eu": "欧盟区域规则（IBAN / 增值税号）",
   "ps_entropy_sensitivity": "高熵灵敏度",
   "ps_sensitivity_loose": "宽松",
   "ps_sensitivity_standard": "标准",

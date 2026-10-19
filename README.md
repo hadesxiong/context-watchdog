@@ -13,7 +13,7 @@ PasteGuard 是 Chrome / Firefox 浏览器扩展（Manifest V3），在用户将�
 npm install
 npm run build           # Chrome 包 → dist/，加载到 chrome://extensions
 npm run build:firefox   # Firefox 包 → dist-firefox/，about:debugging → 此 Firefox → 加载临时附加组件 → 选 dist-firefox/manifest.json
-npm run test            # 运行测试套件（263 项断言）
+npm run test            # 运行测试套件（288 项断言）
 ```
 
 ## 架构
@@ -30,6 +30,8 @@ npm run test            # 运行测试套件（263 项断言）
 正则规则（按 Profile 启用类别）
   ├─ secret 类别: ENV/YAML/JSON/连接串/API Key/JWT/私钥
   ├─ pii 类别:    手机号/身份证(校验位)/银行卡(Luhn)/IP/车牌/邮箱
+  ├─ us 类别:     社保号(号段校验)/税号(带标签)/北美电话(NANP)  ← 默认关
+  ├─ eu 类别:     IBAN(mod-97)/增值税号(逐国格式)                ← 默认关
   └─ entropy:     高熵字符串（阈值随 Profile 灵敏度档位变化）
   │
   ▼（级联触发，仅处理正则未覆盖片段）
@@ -42,7 +44,7 @@ GLiNER 模型（gliner + @xenova/transformers + onnxruntime-web，可选）
 去重 → 重叠归并仲裁 → 值传播 → 占位符按值共享
   │
   ▼
-语义化中文占位符: <<手机号>> / <<密码:2>> / <<API密钥>>
+语义化占位符（zh_CN: <<手机号>> / en: <<PHONE>>，随界面语言切换）
 ```
 
 ### Profile（场景 Tab）
@@ -52,8 +54,26 @@ GLiNER 模型（gliner + @xenova/transformers + onnxruntime-web，可选）
 | 不限（默认） | 全场景 | 规则并集 + 仲裁，中低置信度仅提示 |
 | 通用文本 | 聊天/文档/工单 | PII 为主，高熵 strict（30 字符） |
 | 代码开发 | 配置/代码/日志 | 密钥全开，高熵 loose（20 字符），PII 仅提示 |
+| 美国个人信息 | 含美国数据的文本 | 在通用之上追加 `us` 类别（SSN/EIN/电话） |
+| 欧盟个人信息 | 含欧洲数据的文本 | 在通用之上追加 `eu` 类别（IBAN/VAT） |
 
-新增场景 = 在 `src/core/detector/profiles.ts` 加一条配置，无新代码路径。Profile 选择持久化于 `chrome.storage.local`。
+新增场景 = 在 `packages/engine/src/detector/profiles.ts` 加一条配置，无新代码路径。Profile 选择持久化于 `chrome.storage.local`。
+
+### 区域规则集（`us` / `eu`）
+
+区域规则**默认全关**，只有选了对应档案（或在自定义档案里勾上该类别）才参与扫描。这不是保守，而是误报控制：`\d{3}-\d{2}-\d{4}` 这种形状在任何地区的文本里都可能出现，把它塞进通用集会让所有非美区用户承担误报代价。
+
+每条规则都带校验，裸正则在真实文本里不可用：
+
+| 规则 | 校验方式 |
+|------|---------|
+| SSN（社保号） | 号段校验：排除区号 000/666/9xx、组号 00、序号 0000、三段全同数字 |
+| EIN（税号） | **要求带标签**（EIN/FEIN/TIN/Tax ID）——裸 `\d{2}-\d{7}` 与日期区间无法区分；再校验 IRS 已分配前缀 |
+| 北美电话 | NANP：区号与局号首位必须为 2-9（这一条即挡掉 `2024-01-0100` 这类日期） |
+| IBAN | ISO 13616 mod-97（15~34 位任意串通过率约 1/97），紧凑与分组写法都收 |
+| 增值税号 | 逐国格式表（希腊用 `EL` 而非 `GR`，这是 VIES 的定义） |
+
+增值税号目前**只有格式校验**（无通用校验位），因此置信度为 `medium`；DE/FR 等逐国校验位属后续迭代。
 
 ### 自定义档案（Phase 4/5）
 
@@ -193,7 +213,7 @@ npm run test:watch    # 监听模式
 |------|------|
 | `tests/golden/` | 按 Profile 分组的端到端用例（universal/text/code/whitelist） |
 | `tests/regression/` | Phase 1 修复点回归（含@密码/重复值/重叠/CJK 偏移/吞值） |
-| `tests/unit/` | 场景启发式/占位符/校验算法/替换引擎/用户档案 CRUD/模型下载器/检测 store 状态机/站点匹配/粘贴就地替换 |
+| `tests/unit/` | 场景启发式/占位符/校验算法/替换引擎/用户档案 CRUD/模型下载器/检测 store 状态机/站点匹配/粘贴就地替换/i18n 防漂移/区域规则集（US·EU） |
 | `tests/perf/` | 长文本基准（5000 字 < 2s） |
 
 手动验证用例见 `docs/phase1-verification.md`、`docs/phase2-verification.md`、`docs/phase4-verification.md`。

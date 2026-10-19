@@ -26,7 +26,11 @@ const PLACEHOLDER_NAMES: Record<PlaceholderLocale, Record<DetectionType, string>
     'IP_ADDRESS': 'IP地址',
     'PLATE': '车牌号',
     'NAME': '姓名',
-    'ADDRESS': '地址'
+    'ADDRESS': '地址',
+    'SSN': '社保号',
+    'EIN': '税号',
+    'IBAN': 'IBAN',
+    'VAT': '增值税号'
   },
   en: {
     'ENV_PASSWORD': 'PASSWORD',
@@ -42,7 +46,11 @@ const PLACEHOLDER_NAMES: Record<PlaceholderLocale, Record<DetectionType, string>
     'IP_ADDRESS': 'IP',
     'PLATE': 'LICENSE_PLATE',
     'NAME': 'NAME',
-    'ADDRESS': 'ADDRESS'
+    'ADDRESS': 'ADDRESS',
+    'SSN': 'SSN',
+    'EIN': 'EIN',
+    'IBAN': 'IBAN',
+    'VAT': 'VAT'
   }
 }
 

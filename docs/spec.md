@@ -56,7 +56,9 @@
 正则为基础引擎恒开，无关闭入口）。处理链：
 
 ```
-1. 正则规则     按 profile.enabledCategories（secret/pii/entropy）取规则集扫描
+1. 正则规则     按 profile.enabledCategories 取规则集扫描
+                （secret / pii / entropy / us / eu；区域类别默认全关，
+                  由 us / eu 档案显式开启，避免给其他地区抬高误报）
                 熵阈值随类别灵敏度档（loose/standard/strict）变化
 2. 自定义正则   profile.customRules 中 enabled 的规则（ReDoS 防护后）并入
 3. AI 级联      （enableContentDetection && 模型就绪时）

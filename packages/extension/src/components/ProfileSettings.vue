@@ -50,7 +50,11 @@ const RULE_TYPE_OPTIONS: DetectionType[] = [
     'IP_ADDRESS',
     'PLATE',
     'NAME',
-    'ADDRESS'
+    'ADDRESS',
+    'SSN',
+    'EIN',
+    'IBAN',
+    'VAT'
 ]
 
 const addRule = () => {
@@ -167,7 +171,9 @@ watch(customLabelsText, () => {
 const CATEGORY_LABELS: Array<{ key: RuleCategory; labelKey: string }> = [
     { key: 'secret', labelKey: 'ps_category_secret' },
     { key: 'pii', labelKey: 'ps_category_pii' },
-    { key: 'entropy', labelKey: 'ps_category_entropy' }
+    { key: 'entropy', labelKey: 'ps_category_entropy' },
+    { key: 'us', labelKey: 'ps_category_us' },
+    { key: 'eu', labelKey: 'ps_category_eu' }
 ]
 
 const toggleCategory = (cat: RuleCategory) => {
@@ -194,7 +200,11 @@ const ACTION_TYPES: DetectionType[] = [
     'ID_CARD',
     'BANK_CARD',
     'IP_ADDRESS',
-    'PLATE'
+    'PLATE',
+    'SSN',
+    'EIN',
+    'IBAN',
+    'VAT'
 ]
 
 const currentAction = (key: DetectionType): 'replace' | 'keep' =>

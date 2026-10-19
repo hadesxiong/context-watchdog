@@ -14,6 +14,10 @@ export type DetectionType =
   | 'PLATE'
   | 'NAME'
   | 'ADDRESS'
+  | 'SSN'
+  | 'EIN'
+  | 'IBAN'
+  | 'VAT'
 
 // 置信度类型
 export type Confidence = 'high' | 'medium' | 'low'
@@ -22,7 +26,9 @@ export type Confidence = 'high' | 'medium' | 'low'
 export type DetectionSource = 'model' | 'regex'
 
 // 规则类别（Profile 按类别启用/停用规则集）
-export type RuleCategory = 'secret' | 'pii' | 'entropy'
+// 'us' / 'eu' 是区域类别：这两个集里的模式只在对应地区的语境下成立，
+// 混进通用集会显著抬高其他地区用户的误报率，因此默认全关、由 Profile 显式开启
+export type RuleCategory = 'secret' | 'pii' | 'entropy' | 'us' | 'eu'
 
 // 场景类型（启发式判定）
 export type SceneType = 'yaml' | 'env' | 'code' | 'log' | 'json' | 'plain'

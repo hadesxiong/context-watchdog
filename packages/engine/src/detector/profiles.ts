@@ -65,6 +65,30 @@ export const BUILTIN_PROFILES: ProfileConfig[] = [
     },
     tierLowConfidence: false,
     glinerLabels: SECRET_LABELS
+  },
+  // 区域档案：在通用规则之上追加对应地区的规则集。
+  // tierLowConfidence: false —— 用户显式选了区域档案，就是希望检出的都替换掉
+  {
+    id: 'us',
+    name: '美国个人信息',
+    description: '在通用规则之外追加美国社保号 / 税号 / 电话（含号段校验）',
+    builtin: true,
+    enabledCategories: ['secret', 'pii', 'entropy', 'us'],
+    sensitivity: { entropy: 'standard' },
+    defaultActions: { EMAIL: 'keep', HIGH_ENTROPY: 'keep', IP_ADDRESS: 'keep' },
+    tierLowConfidence: false,
+    glinerLabels: ALL_LABELS
+  },
+  {
+    id: 'eu',
+    name: '欧盟个人信息',
+    description: '在通用规则之外追加 IBAN（mod-97 校验）与增值税号',
+    builtin: true,
+    enabledCategories: ['secret', 'pii', 'entropy', 'eu'],
+    sensitivity: { entropy: 'standard' },
+    defaultActions: { EMAIL: 'keep', HIGH_ENTROPY: 'keep', IP_ADDRESS: 'keep' },
+    tierLowConfidence: false,
+    glinerLabels: ALL_LABELS
   }
 ]
 

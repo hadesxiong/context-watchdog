@@ -28,7 +28,7 @@ export const createChromeStorage = (): KeyValueStorage | null => {
   }
 }
 
-const RULE_CATEGORIES: RuleCategory[] = ['secret', 'pii', 'entropy']
+const RULE_CATEGORIES: RuleCategory[] = ['secret', 'pii', 'entropy', 'us', 'eu']
 const SENSITIVITIES: Sensitivity[] = ['loose', 'standard', 'strict']
 
 // 深拷贝并规范化档案（防御存储数据损坏 / 版本漂移）
