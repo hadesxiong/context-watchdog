@@ -18,13 +18,10 @@
   },
   "download": {
     "title": "Install",
-    "lead": "Beyond the three store channels, manual installation stays available — it does not depend on any store's review queue.",
     "edge": "Edge Add-ons",
-    "edgeHint": "Official store reachable without a proxy in mainland China — recommended",
     "cws": "Chrome Web Store",
     "amo": "Firefox Add-ons (AMO)",
     "manual": "Manual install (GitHub)",
-    "manualHint": "Download the ZIP → chrome://extensions → Load unpacked",
     "pending": "Coming soon"
   },
   "demo": {
@@ -61,27 +58,27 @@
     "items": [
       {
         "claim": "The extension never sends your text to a server",
-        "how": "There are exactly two fetch calls in the whole repository, both in modelDownload.ts, both injectable fetchImpls (defaulting to globalThis.fetch) used solely to download the model. No XMLHttpRequest, sendBeacon, WebSocket or EventSource anywhere."
+        "how": "Exactly two fetch calls exist in the repository, both in modelDownload.ts, both used only to download the model. No XHR, sendBeacon or WebSocket anywhere."
       },
       {
         "claim": "The only network activity is the model download, and only if you enable it",
-        "how": "The AI tier is off by default. Once enabled, model files are fetched from whitelisted sources (a ModelScope mirror, falling back to huggingface.co). Downloads only — nothing is uploaded."
+        "how": "The AI tier is off by default. Once you enable it, model files are fetched from whitelisted sources (a ModelScope mirror, falling back to huggingface.co)."
       },
       {
         "claim": "Zero contact with unauthorised sites",
-        "how": "The manifest declares no content_scripts and does not request <all_urls>; it asks only for optional_host_permissions. The paste listener is injected only after you authorise a site yourself."
+        "how": "The manifest declares no content_scripts and does not request <all_urls>, only optional_host_permissions. The paste listener is injected only after your approval."
       },
       {
         "claim": "No telemetry, no analytics, no crash reporting",
-        "how": "There is no analytics or reporting SDK in the repository. Run npm run build yourself and inspect the bundle for suspicious requests."
+        "how": "There is no analytics or reporting SDK in the repository. Run npm run build yourself and inspect the bundle for suspicious requests or remote domains."
       },
       {
         "claim": "Password fields are never processed",
-        "how": "type=password inputs and hidden fields are skipped at isTextEditable, and that guard exists on both the paste-injection and side-panel paths."
+        "how": "type=password inputs and hidden fields are skipped at isTextEditable, and that guard sits on both the paste-injection and the side-panel paths, with no exceptions."
       },
       {
         "claim": "Releases are verifiable",
-        "how": "Each Release ships sha256 checksums; LICENSE and THIRD-PARTY-NOTICES.txt travel with the bundle."
+        "how": "Every Release ships sha256 checksums, and LICENSE and THIRD-PARTY-NOTICES.txt travel with the bundle, so any change to the source code alters them."
       }
     ]
   },

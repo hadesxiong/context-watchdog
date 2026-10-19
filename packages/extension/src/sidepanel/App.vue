@@ -242,7 +242,7 @@ const loadingCaption = computed(() => {
                 <p class="text-sm font-medium text-foreground">{{ t('settings_language') }}</p>
                 <select v-model="localeChoice"
                     class="px-2 py-1.5 rounded-md border border-input bg-background text-sm text-foreground
-                        focus:outline-none focus:ring-2 focus:ring-ring">
+                        focus:outline-none focus:ring-1 focus:ring-ring focus:border-transparent">
                     <option value="auto">{{ t('settings_language_auto') }}</option>
                     <option v-for="code in availableLocales" :key="code" :value="code">
                         {{ localeNames[code] }}</option>

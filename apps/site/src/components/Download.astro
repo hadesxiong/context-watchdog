@@ -8,8 +8,11 @@
 // 状态本身不写在这里，全部来自 src/data/links.json（构建期校验，见 links.ts）。
 //
 // 布局：四个渠道排成一行矩形卡片（auto-fit，窄屏自动折行）。原来用无列定义的
-// pg-grid 会退化成单列长条，四个渠道占满四屏高度；卡片把「名称 + 状态」放第一行、
-// 说明放第二行，宽屏四并排时高度由 grid 行统一。
+// pg-grid 会退化成单列长条，四个渠道占满四屏高度。
+//
+// 卡片内不放说明文字：手动安装的步骤在 GitHub Release 页上有，页面上再抄一遍
+// 既长又不保证同步（旧版的 edgeHint / manualHint 已删）。卡片只留
+// 「名称 + 状态/跳转标记」，保持 flex-col（见 global.css 的 .pg-channel）。
 import { dict, type SiteLocale } from '@site/i18n'
 import { channels, manualZip } from '@site/data/links'
 
@@ -22,14 +25,11 @@ const d = dict(locale)
 
 const labelOf = (key: string): string =>
   key === 'edge' ? d.download.edge : key === 'cws' ? d.download.cws : d.download.amo
-
-const hintOf = (key: string): string => (key === 'edge' ? d.download.edgeHint : '')
 ---
 
 <section class="pg-section" id="download">
   <div class="pg-shell">
     <h2 class="pg-section-title">{d.download.title}</h2>
-    <p class="pg-lead">{d.download.lead}</p>
 
     <div class="pg-channels">
       {
@@ -40,7 +40,6 @@ const hintOf = (key: string): string => (key === 'edge' ? d.download.edgeHint : 
                 <span class="pg-channel-name">{labelOf(channel.key)}</span>
                 <span class="pg-tag pg-tag-ok" aria-hidden="true">↗</span>
               </span>
-              {hintOf(channel.key) && <span class="pg-channel-hint">{hintOf(channel.key)}</span>}
             </a>
           ) : (
             <span class="pg-channel" aria-disabled="true">
@@ -58,7 +57,6 @@ const hintOf = (key: string): string => (key === 'edge' ? d.download.edgeHint : 
           <span class="pg-channel-name">{d.download.manual}</span>
           <span class="pg-tag pg-tag-ok" aria-hidden="true">↗</span>
         </span>
-        <span class="pg-channel-hint">{d.download.manualHint}</span>
       </a>
     </div>
   </div>

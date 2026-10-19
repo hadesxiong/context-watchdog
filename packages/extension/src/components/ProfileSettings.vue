@@ -355,12 +355,12 @@ const onSave = async () => {
                 <div class="flex gap-1.5">
                     <select v-model="newRule.type"
                         class="flex-1 px-2 py-1.5 rounded-md border border-input bg-background text-sm text-foreground
-                            focus:outline-none focus:ring-2 focus:ring-ring">
+                            focus:outline-none focus:ring-1 focus:ring-ring focus:border-transparent">
                         <option v-for="opt in RULE_TYPE_OPTIONS" :key="opt" :value="opt">{{ typeLabel(opt) }}</option>
                     </select>
                     <select v-model="newRule.confidence"
                         class="px-2 py-1.5 rounded-md border border-input bg-background text-sm text-foreground
-                            focus:outline-none focus:ring-2 focus:ring-ring">
+                            focus:outline-none focus:ring-1 focus:ring-ring focus:border-transparent">
                         <option value="high">{{ t('ps_rule_confidence_high') }}</option>
                         <option value="medium">{{ t('ps_rule_confidence_medium') }}</option>
                         <option value="low">{{ t('ps_rule_confidence_low') }}</option>
