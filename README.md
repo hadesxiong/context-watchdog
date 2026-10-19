@@ -1,290 +1,295 @@
-# PasteGuard - AI脱敏助手
+# PasteGuard
 
-PasteGuard 是 Chrome / Firefox 浏览器扩展（Manifest V3），在用户将文本发送给 AI 前，自动检测并替换敏感信息。**双轨检测**：通用文本 PII（手机号/身份证/银行卡/邮箱/车牌/IP）与开发场景密钥（API Key/密码/连接串/JWT/私钥）并重。所有处理在本地完成。
+**English** | [简体中文](README.zh-CN.md)
 
-两种用法：
+PasteGuard is a Chrome / Firefox extension (Manifest V3) that detects and replaces sensitive information before you send text to an AI. It covers **two tracks at once**: general-text PII (phone numbers, national IDs, bank cards, email, license plates, IP addresses) and developer secrets (API keys, passwords, connection strings, JWTs, private keys). Everything runs locally.
 
-- **侧栏手动脱敏**（默认）：侧栏粘贴 → 检出列表 → 一键脱敏 → 复制
-- **粘贴自动拦截**（可选，逐站授权）：在已授权站点粘贴时自动就地替换为占位符，无需打开侧栏
+Two ways to use it:
 
-## 快速开始
+- **Manual redaction in the side panel** (default): paste into the panel → review the detected list → redact → copy
+- **Paste interception** (optional, per-site opt-in): paste on an authorised site and the text is replaced in place with placeholders — no need to open the panel
+
+## Quick start
 
 ```bash
 npm install
-npm run build           # Chrome 包 → dist/，加载到 chrome://extensions
-npm run build:firefox   # Firefox 包 → dist-firefox/，about:debugging → 此 Firefox → 加载临时附加组件 → 选 dist-firefox/manifest.json
-npm run test            # 运行测试套件（288 项断言）
+npm run build           # Chrome bundle → dist/        (load via chrome://extensions)
+npm run build:firefox   # Firefox bundle → dist-firefox/ (about:debugging → This Firefox → Load Temporary Add-on → pick dist-firefox/manifest.json)
+npm run test            # run the suite (288 assertions)
 ```
 
-## 架构
+## Architecture
 
-### 检测管线
+### Detection pipeline
 
 ```
-输入文本
+input text
   │
   ▼
-场景启发式（env/yaml/json/log/code/plain，零延迟离线可用）
+scene heuristics (env/yaml/json/log/code/plain — offline, zero latency)
   │
   ▼
-正则规则（按 Profile 启用类别）
-  ├─ secret 类别: ENV/YAML/JSON/连接串/API Key/JWT/私钥
-  ├─ pii 类别:    手机号/身份证(校验位)/银行卡(Luhn)/IP/车牌/邮箱
-  ├─ us 类别:     社保号(号段校验)/税号(带标签)/北美电话(NANP)  ← 默认关
-  ├─ eu 类别:     IBAN(mod-97)/增值税号(逐国格式)                ← 默认关
-  └─ entropy:     高熵字符串（阈值随 Profile 灵敏度档位变化）
+regex rules (categories enabled by the active profile)
+  ├─ secret:  ENV/YAML/JSON/connection strings/API keys/JWTs/private keys
+  ├─ pii:     phone / national ID (checksum) / bank card (Luhn) / IP / plate / email
+  ├─ us:      SSN (area-segment validation) / EIN (labelled) / NANP phone   ← off by default
+  ├─ eu:      IBAN (mod-97) / VAT (per-country format)                      ← off by default
+  └─ entropy: high-entropy strings (thresholds follow the profile's sensitivity tier)
   │
-  ▼（级联触发，仅处理正则未覆盖片段）
-GLiNER 模型（gliner + @xenova/transformers + onnxruntime-web，可选）
-  ├─ 高置信(>0.65) → 验证后采纳
-  ├─ uncertain(0.35-0.65) → 回流正则复检
-  └─ 复检不中 → 低置信保留（默认仅提示）
-  │
-  ▼
-去重 → 重叠归并仲裁 → 值传播 → 占位符按值共享
+  ▼ (cascaded — only runs on spans the regex stage did not cover)
+GLiNER model (gliner + @xenova/transformers + onnxruntime-web — optional)
+  ├─ high confidence (>0.65)     → accepted after validation
+  ├─ uncertain (0.35–0.65)       → fed back into the regex stage for a second look
+  └─ still unmatched             → kept at low confidence (flag only, by default)
   │
   ▼
-语义化占位符（zh_CN: <<手机号>> / en: <<PHONE>>，随界面语言切换）
+dedupe → overlap arbitration → value propagation → placeholders shared per value
+  │
+  ▼
+semantic placeholders (zh_CN: <<手机号>> / en: <<PHONE>> — follows the interface language)
 ```
 
-### Profile（场景 Tab）
+### Profiles
 
-| Profile | 定位 | 特点 |
-|---------|------|------|
-| 不限（默认） | 全场景 | 规则并集 + 仲裁，中低置信度仅提示 |
-| 通用文本 | 聊天/文档/工单 | PII 为主，高熵 strict（30 字符） |
-| 代码开发 | 配置/代码/日志 | 密钥全开，高熵 loose（20 字符），PII 仅提示 |
-| 美国个人信息 | 含美国数据的文本 | 在通用之上追加 `us` 类别（SSN/EIN/电话） |
-| 欧盟个人信息 | 含欧洲数据的文本 | 在通用之上追加 `eu` 类别（IBAN/VAT） |
+| Profile | For | Notes |
+|---------|-----|-------|
+| Universal (default) | anything | union of all rules + arbitration; medium/low confidence is flag-only |
+| General text | chat / docs / tickets | PII-first; entropy `strict` (30 chars) |
+| Code | configs / code / logs | all secret rules on; entropy `loose` (20 chars); PII is flag-only |
+| US personal data | text containing US data | adds the `us` category on top of Universal (SSN/EIN/phone) |
+| EU personal data | text containing European data | adds the `eu` category on top of Universal (IBAN/VAT) |
 
-新增场景 = 在 `packages/engine/src/detector/profiles.ts` 加一条配置，无新代码路径。Profile 选择持久化于 `chrome.storage.local`。
+Adding a scenario = adding one entry in `packages/engine/src/detector/profiles.ts`; there is no new code path. The selected profile is persisted in `chrome.storage.local`.
 
-### 区域规则集（`us` / `eu`）
+### Regional rule sets (`us` / `eu`)
 
-区域规则**默认全关**，只有选了对应档案（或在自定义档案里勾上该类别）才参与扫描。这不是保守，而是误报控制：`\d{3}-\d{2}-\d{4}` 这种形状在任何地区的文本里都可能出现，把它塞进通用集会让所有非美区用户承担误报代价。
+Regional rules are **off by default** and only participate when you pick the matching profile (or tick the category in a custom profile). This is not caution for its own sake — it is false-positive control: a shape like `\d{3}-\d{2}-\d{4}` can show up in text from anywhere, and folding it into the general set would make every non-US user pay the false-positive cost.
 
-每条规则都带校验，裸正则在真实文本里不可用：
+Every rule carries validation, because bare regex is unusable on real text:
 
-| 规则 | 校验方式 |
-|------|---------|
-| SSN（社保号） | 号段校验：排除区号 000/666/9xx、组号 00、序号 0000、三段全同数字 |
-| EIN（税号） | **要求带标签**（EIN/FEIN/TIN/Tax ID）——裸 `\d{2}-\d{7}` 与日期区间无法区分；再校验 IRS 已分配前缀 |
-| 北美电话 | NANP：区号与局号首位必须为 2-9（这一条即挡掉 `2024-01-0100` 这类日期） |
-| IBAN | ISO 13616 mod-97（15~34 位任意串通过率约 1/97），紧凑与分组写法都收 |
-| 增值税号 | 逐国格式表（希腊用 `EL` 而非 `GR`，这是 VIES 的定义） |
+| Rule | Validation |
+|------|-----------|
+| SSN | area-segment validation: rejects area 000/666/9xx, group 00, serial 0000, and all-same-digit values |
+| EIN | **label required** (`EIN`/`FEIN`/`TIN`/`Tax ID`) — a bare `\d{2}-\d{7}` is indistinguishable from a date range; the IRS-assigned prefixes are checked too |
+| North-American phone | NANP: area code and exchange must start with 2–9 — this one rule filters out dates like `2024-01-0100` |
+| IBAN | ISO 13616 mod-97 (≈1 in 97 pass rate for arbitrary 15–34 char strings); both compact and 4-char-grouped notation |
+| VAT | per-country format table (Greece uses `EL`, not `GR` — that is the VIES definition) |
 
-增值税号目前**只有格式校验**（无通用校验位），因此置信度为 `medium`；DE/FR 等逐国校验位属后续迭代。
+VAT currently has **format validation only** (there is no universal check digit), hence its `medium` confidence; per-country check digits (DE, FR, …) are a follow-up.
 
-### 自定义档案（Phase 4/5）
+### Custom profiles
 
-Tab 栏「＋」基于当前档案克隆出用户自定义档案（⚙ 按钮编辑），可配置：
+The «＋» in the profile bar clones the current profile into a user profile (edit with the ⚙ button):
 
-- **检测类别开关**：密钥凭据 / 个人信息 / 高熵字符串
-- **高熵灵敏度**：宽松（20 字符）/ 标准（25）/ 严格（30）
-- **分类型默认策略**：10 种类型逐项选择替换/保留
-- **值白名单**：每行一个精确值，命中不检测不替换（含值传播的所有出现）
-- **AI 模型检测目标**：GLiNER 标签集（个人信息集/密钥集/全部/自定义）
-- **自定义正则规则**（Phase 5）：零样本之外补位，带 ReDoS 双层防护——静态拒绝嵌套量词（星号高度检查）+ 运行时 50ms/条执行预算与匹配上限；结果走完整管线（去重/重叠归并/值传播/白名单）
-- **JSON 导入导出**（Phase 5）：全部自定义档案经剪贴板导入导出；导入时重新生成 id、重名加序号、危险正则被 sanitize 过滤
+- **Detection categories**: secrets / personal data / high-entropy strings (plus the regional categories)
+- **High-entropy sensitivity**: loose (20 chars) / standard (25) / strict (30)
+- **Per-type default action**: replace or keep, set individually per detection type
+- **Value whitelist**: one exact value per line; matches are neither detected nor replaced (including every propagated occurrence)
+- **AI detection targets**: the GLiNER label set (personal-data set / secret set / all / custom)
+- **Custom regex rules**: fill the gaps zero-shot labelling leaves, with two layers of ReDoS defence — static rejection of nested quantifiers (star-height check) plus a 50 ms per-rule runtime budget and a match cap; results go through the full pipeline (dedupe / overlap arbitration / value propagation / whitelist)
+- **JSON import & export**: all custom profiles via the clipboard; on import, ids are regenerated, duplicate names get a numeric suffix, and dangerous regexes are filtered by the sanitiser
 
-自定义档案持久化于 `chrome.storage.local`（`pasteguard.userProfiles`），内置档案不可改删；数据经 sanitize 校验，存储损坏自动丢弃。详见 `docs/phase4-verification.md`、`docs/phase5-verification.md`。
+Custom profiles live in `chrome.storage.local` (`pasteguard.userProfiles`); built-in profiles cannot be edited or deleted. Stored data is sanitised, and corrupt entries are silently dropped. Implementation details: `docs/spec.md`; test cases: `docs/test-cases.md`.
 
-### 粘贴自动拦截（可选，逐站授权）
+### Paste interception (optional, per-site opt-in)
 
-侧栏「粘贴自动拦截」卡片中添加站点（如 `chat.example.com`），浏览器会弹出该站点的访问授权。授权后：
+Add a site (e.g. `chat.example.com`) in the "Paste interception" card of the side panel; the browser will ask you to grant access to that site. Once granted:
 
-- 在该站点的输入框 / 文本域粘贴时，**先正常插入原文**（不阻塞输入），检测完成后**就地替换**为占位符
-- 检测在 service worker 中跑现有正则管线（GLiNER 模型不会在 SW 加载），无需下载模型
-- 站点列表持久化在 `chrome.storage.local`（`pasteguard.protectedSites`），SW 按 `tabs.onUpdated` 按需注入粘贴监听——**未授权站点零接触**（manifest 不声明 `content_scripts`，也不申请 `<all_urls>`）
-- 安全护栏：password/隐藏输入框绝不处理；插入文本与剪贴板逐字吻合才改写（站点改写粘贴内容则放弃）；检测期间用户继续输入则放弃改写，绝不覆盖新内容；未检出则完全不动
+- Pasting into an input/textarea on that site **inserts the original text normally first** (input is never blocked), then **replaces it in place** with placeholders once detection finishes
+- Detection runs the existing regex pipeline inside the service worker (the GLiNER model is never loaded in the SW), so no model download is needed
+- The site list is stored in `chrome.storage.local` (`pasteguard.protectedSites`); the SW injects the paste listener on demand via `tabs.onUpdated` — **unauthorised sites are never touched** (the manifest declares no `content_scripts` and does not request `<all_urls>`)
+- Safety rails: password fields and hidden inputs are never processed; the rewrite only happens if the inserted text still matches the clipboard character-for-character (if the site rewrote the paste, we back off); if the user keeps typing during detection we back off rather than overwrite new content; if nothing is detected, nothing is touched
 
-v1 范围限制：只支持 `input[type=text/search]` 与 `textarea`；`contenteditable` 富文本区域暂不处理（粘贴片段难以可靠定位，待后续版本）。
+v1 limits: only `input[type=text/search]` and `textarea`; `contenteditable` rich-text areas are not handled yet (paste fragments are hard to locate reliably — planned for a later version).
 
-### Firefox 兼容
+### Firefox compatibility
 
-按目标浏览器分别出包，两边 manifest 均为「纯目标键」，加载零警告：
+Bundles are built per target, and both manifests contain only keys valid for that target, so loading produces zero warnings:
 
 ```bash
 npm run build           # Chrome → dist/
 npm run build:firefox   # Firefox 121+ → dist-firefox/
 ```
 
-- 两个目标**共用同一份输入 manifest**（CRXJS 必须靠 `side_panel` / `service_worker` 发现打包入口，分叉输入会漏打包），`--mode firefox` 只切换输出目录
-- 差异转换统一由 `scripts/postbuild.mjs` 在构建后完成：`background.service_worker → scripts`、`side_panel → sidebar_action`、移除 `sidePanel` 未知权限、补 `browser_specific_settings.gecko` id
-- 侧栏打开：SW 内运行时探测 `chrome.sidePanel.open` → 失败回退 `chrome.sidebarAction.open`，两者打开同一面板页面
-- 因此 Chrome 包不含 `sidebar_action`/`scripts`/gecko 键（不会报「requires manifest version of 2 or lower」），Firefox 包不含 `side_panel`/`sidePanel`/`service_worker`（无未知键/未知权限警告）
+- Both targets **share one input manifest** (CRXJS has to discover the entry points through `side_panel` / `service_worker`; forking the input would drop entries from the bundle), and `--mode firefox` only switches the output directory
+- All differences are applied after the build by `scripts/postbuild.mjs`: `background.service_worker → scripts`, `side_panel → sidebar_action`, dropping the unknown `sidePanel` permission, and adding `browser_specific_settings.gecko` id
+- Opening the side panel: runtime probe for `chrome.sidePanel.open`, falling back to `chrome.sidebarAction.open` — both open the same panel page
+- The Chrome bundle therefore has no `sidebar_action`/`scripts`/gecko keys (no "requires manifest version of 2 or lower"), and the Firefox bundle has no `side_panel`/`sidePanel`/`service_worker` (no unknown-key or unknown-permission warnings)
 
-### 防泄漏保证
+### No-leak guarantees
 
-- **同值必同占位符**：同一敏感值出现 N 处 → N 处全部替换为同一占位符（值传播覆盖无上下文的裸露出现）
-- **区间不重叠**：重叠检测项经仲裁归并（类型优先级：凭据 > PII > 高熵），替换输出永不互切
-- **校验防误报**：身份证过 ISO 7064 校验位，银行卡过 Luhn，弱口令字典（含数字后缀变体）过滤
+- **Same value, same placeholder**: a value appearing N times is replaced by the *same* placeholder everywhere (value propagation covers bare occurrences that carry no context)
+- **No overlapping spans**: overlapping detections are merged by arbitration (type priority: secrets > PII > high entropy), so replacement output is never cut into itself
+- **Validation over false positives**: national IDs go through the ISO 7064 check digit, bank cards through Luhn, and weak-password dictionaries (including digit-suffixed variants) are filtered out
 
-### 可核验的隐私承诺
+### Verifiable privacy claims
 
-以下每一条都可以直接在本仓库核验，而不是相信一句话：
+Every row below can be checked in this repository instead of taken on faith:
 
-| 承诺 | 核验方式 |
-|------|----------|
-| **扩展不会把你的文本发送到任何服务器** | `rg -n '\bfetch\s*\(' src` → 只有 `modelDownload.ts` 两处（且都是可注入的 `fetchImpl`，默认取 `globalThis.fetch`，仅用于下载模型）。全仓库无 `XMLHttpRequest` / `sendBeacon` / `WebSocket` / `EventSource` / `navigator.sendBeacon` |
-| **唯一的出网行为是模型下载** | 同上。只有在用户主动开启 AI 档后才会发生，且只访问白名单模型源 |
-| **未授权站点零接触** | `rg -n 'content_scripts\|all_urls' src/manifest.json` → 无匹配。manifest 不声明 `content_scripts`，只申请 `optional_host_permissions`，由用户逐站授权 |
-| **不采集任何遥测数据** | 仓库内无统计 SDK、无崩溃上报、无行为追踪；构建产物可用 `npm run build` 后自行检查 |
-| **凭据类数据绝不处理** | `password` 类型与隐藏输入框在 `isTextEditable` 处一律跳过，且在粘贴注入与侧栏两条链路上都有护栏 |
-| **发布产物可校验** | 每个 Release 附 `sha256`；许可与第三方声明随产物分发（`LICENSE` / `THIRD-PARTY-NOTICES.txt`） |
+| Claim | How to verify |
+|-------|---------------|
+| **The extension never sends your text to a server** | `rg -n '\bfetch\s*\(' packages/extension/src` → only two hits, both in `modelDownload.ts` (each an injectable `fetchImpl` defaulting to `globalThis.fetch`, used solely to download the model). No `XMLHttpRequest` / `sendBeacon` / `WebSocket` / `EventSource` anywhere |
+| **The only network activity is the model download** | Same as above. It only happens after you explicitly enable the AI tier, and only against whitelisted model sources |
+| **Zero contact with unauthorised sites** | `rg -n 'content_scripts\|all_urls' packages/extension/src/manifest.json` → no match. The manifest declares no `content_scripts` and requests only `optional_host_permissions`, granted per site by the user |
+| **No telemetry of any kind** | No analytics SDK, no crash reporting, no behavioural tracking in the repository; inspect the bundle yourself after `npm run build` |
+| **Credential fields are never processed** | `password` inputs and hidden fields are skipped at `isTextEditable`, with a guard on both the paste-injection and side-panel paths |
+| **Releases are verifiable** | Each Release ships `sha256` sums; licences and third-party notices travel with the bundle (`LICENSE` / `THIRD-PARTY-NOTICES.txt`) |
 
-## 项目结构
+## Project layout
 
 ```
 packages/
-├── engine/                  # 检测与替换引擎（纯逻辑，宿主无关）
+├── engine/                  # detection & replacement engine (pure logic, host-agnostic)
 │   └── src/
 │       ├── detector/
-│       │   ├── pipeline.ts        # 主管线（级联调度 + 仲裁 + 值传播）
-│       │   ├── backend.ts         # InferenceBackend 抽象 + 单例注入 + 置信度分档
-│       │   ├── profiles.ts        # Profile 注册表（场景配置）
-│       │   ├── sceneDetector.ts   # 场景启发式（纯规则，无模型）
-│       │   ├── entityShape.ts     # 实体形状门禁（拦截模型幻觉）
-│       │   └── rules/             # 规则模块（按类别分组）
+│       │   ├── pipeline.ts        # main pipeline (cascade scheduling + arbitration + value propagation)
+│       │   ├── backend.ts         # InferenceBackend abstraction + singleton injection + confidence tiers
+│       │   ├── profiles.ts        # profile registry (scenario configs)
+│       │   ├── sceneDetector.ts   # scene heuristics (pure rules, no model)
+│       │   ├── entityShape.ts     # entity shape gate (rejects model hallucinations)
+│       │   └── rules/             # rule modules, grouped by category
 │       │       ├── envPasswordRules / kvRules / dbPasswordRules
 │       │       ├── apiKeyRules / privateKeyRules / emailRules
-│       │       ├── piiRules       # 手机号/身份证/银行卡/IP/车牌
+│       │       ├── piiRules       # phone / national ID / bank card / IP / plate
+│       │       ├── usRules        # SSN / EIN / NANP phone
+│       │       ├── euRules        # IBAN / VAT
 │       │       ├── highEntropyRules / valueFilters / constants
-│       │       └── scanner        # 扫描器（类别开关 + 类型合并）
-│       ├── replacer/              # 替换引擎（纯函数 apply）
-│       │   ├── placeholder.ts     # 语义化中文占位符（生成/反解析）
-│       │   └── mapping.ts         # 映射表（同值共享）
-│       ├── sites.ts               # 受保护站点规范化/匹配（粘贴拦截）
-│       ├── messages.ts            # content ↔ SW 消息契约
-│       ├── types/                 # 类型定义（DetectionType/ProfileConfig）
-│       └── utils/id.ts            # 统一 ID 生成
-└── design-tokens/                 # 设计 token 唯一来源（扩展与落地页共用）
+│       │       └── scanner        # scanner (category switches + type merging)
+│       ├── replacer/              # replacement engine (pure `apply`)
+│       │   ├── placeholder.ts     # semantic placeholders, per locale (generate / parse)
+│       │   └── mapping.ts         # mapping table (shared per value)
+│       ├── sites.ts               # protected-site normalisation/matching (paste interception)
+│       ├── messages.ts            # content ↔ SW message contract
+│       ├── types/                 # type definitions (DetectionType/ProfileConfig)
+│       └── utils/id.ts            # unified id generation
+└── design-tokens/                 # single source of design tokens (extension + landing page)
 
-packages/extension/                # 扩展（宿主层）
+packages/extension/                # the extension (host layer)
 └── src/
-    ├── model/                     # 模型宿主：GLiNER + onnxruntime-web + 下载器
-    │   ├── contentDetector.ts     #   GLiNER 调用与就绪状态
-    │   ├── modelDownload.ts       #   断点续传 / 多源回退 / 多窗口锁 / Cache Storage
-    │   ├── localBackend.ts        #   把 GLiNER 适配成引擎的 InferenceBackend
-    │   └── index.ts               #   宿主入口（installModelBackend / preloadModels）
-    ├── components/                # Vue 组件（ProfileTabs/DetectionItem/PasteInterceptionSettings...）
-    ├── content/pasteText.ts       # 粘贴就地替换纯逻辑（区间推导与改写守卫）
-    ├── stores/detection.ts        # Pinia（Profile 持久化 + 默认策略分层）
-    ├── i18n/                      # 界面文案：单一 catalog，UI 与 _locales 共用
-    │   ├── locales/{en,zh_CN}.json #   扁平词条（键名用 Chrome messages.json 的合法字符集）
+    ├── model/                     # model host: GLiNER + onnxruntime-web + downloader
+    │   ├── contentDetector.ts     #   GLiNER calls and readiness state
+    │   ├── modelDownload.ts       #   resumable download / source fallback / multi-window lock / Cache Storage
+    │   ├── localBackend.ts        #   adapts GLiNER to the engine's InferenceBackend
+    │   └── index.ts               #   host entry (installModelBackend / preloadModels)
+    ├── components/                # Vue components (ProfileSelect/DetectionItem/PasteInterceptionSettings/…)
+    ├── content/pasteText.ts       # pure logic for paste-in-place replacement (span derivation + rewrite guards)
+    ├── stores/detection.ts        # Pinia (profile persistence + default-action layering)
+    ├── i18n/                      # interface copy: a single catalog, shared by the UI and _locales
+    │   ├── locales/{en,zh_CN}.json #   flat entries (keys use the Chrome messages.json charset)
     │   └── index.ts               #   t() / useI18n / typeLabel / profileLabel
-    ├── sidepanel/                 # Side Panel 主界面
-    ├── background/                # Service Worker（侧栏入口跨浏览器 + 粘贴检测服务 + 站点注入）
-    ├── shims/                     # 构建期打桩（ort GPU 子路径）
-    └── style.css                  # 引入 @tokens/tokens.css + Tailwind theme 映射
+    ├── sidepanel/                 # Side Panel UI
+    ├── background/                # service worker (cross-browser panel entry + paste detection service + site injection)
+    ├── shims/                     # build-time stubs (ort GPU subpaths)
+    └── style.css                  # imports @tokens/tokens.css + Tailwind theme mapping
 
-public/                            # 仓库级共享静态资源（icons、_locales）
-tests/  scripts/  docs/            # 测试 / 构建与探针脚本 / 设计文档
+public/                            # repo-level shared static assets (icons)
+tests/  scripts/  docs/            # tests / build & probe scripts / design docs
+docs/design/                       # design decisions and future lines (defensive publication — see its README)
 ```
 
-引擎通过别名 `@engine/*` 被扩展引用（`tsconfig.json` 与 `vite.config.ts` 各自声明）。**引擎不依赖任何宿主 API**：不静态 import `chrome` / `node:*` / `vue` / `gliner` / `onnxruntime-web` / `@xenova/transformers`，宿主能力一律通过适配器注入。这条约束有自动化断言保护（`tests/unit/engineBoundaries.test.ts`）——它是同一份代码能同时服务浏览器扩展与后续 Node 代理服务的前提。
+The extension references the engine through the `@engine/*` alias (declared in both `tsconfig.json` and `vite.config.ts`). **The engine depends on no host API**: it never statically imports `chrome` / `node:*` / `vue` / `gliner` / `onnxruntime-web` / `@xenova/transformers`; host capabilities are always injected through adapters. That constraint is protected by automated assertions (`tests/unit/engineBoundaries.test.ts`) — it is the precondition for the same code serving both the browser extension and a future Node proxy service.
 
-模型运行时（`packages/extension/src/model/`）与检测管线（`packages/engine/`）之间只有一道接口：`InferenceBackend`。宿主在启动时 `installModelBackend()` 注册自己的实现；未注册时 `getInferenceBackend()` 返回 `null`，管线自动退化为纯正则。这也是 `tests/` 里全部用例能在 Node 下直接跑起来的原因。
+There is exactly one interface between the model runtime (`packages/extension/src/model/`) and the detection pipeline (`packages/engine/`): `InferenceBackend`. The host registers its implementation at startup via `installModelBackend()`; when nothing is registered, `getInferenceBackend()` returns `null` and the pipeline degrades to pure regex. That is also why every test under `tests/` can run directly on Node.
 
-**vite 的 root 指向 `packages/extension`**（而非仓库根），这样 manifest 里的入口路径保持包内相对形式（`src/sidepanel/index.html`），产物布局与重构前逐字节一致，运行时 `chrome.runtime.getURL` 无需改动。副作用是 Tailwind 的扫描范围恰好收敛到扩展包内——扫描仓库根会把 `package-lock.json` 里的英文单词也当成类名。`scripts/postbuild.mjs` 会抽查产物 CSS 里的 utility 与设计 token，两者缺失都会让构建**硬失败**。
+**Vite's `root` points at `packages/extension`** (not the repo root) so that the manifest entry paths stay package-relative (`src/sidepanel/index.html`), keeping the output layout byte-identical to the pre-refactor layout — no runtime `chrome.runtime.getURL` change needed. A side effect is that Tailwind's scan scope happens to be confined to the extension package; scanning the repo root would treat English words inside `package-lock.json` as class names. `scripts/postbuild.mjs` spot-checks the emitted CSS for utilities and design tokens, and a missing either one makes the build **fail hard**.
 
-设计 token 通过别名 `@tokens/tokens.css` 被 `packages/extension/src/style.css` 引用，**且产物内会被完整内联**（同样有构建期校验）。
+Design tokens are referenced from `packages/extension/src/style.css` through the `@tokens/tokens.css` alias, and are **fully inlined into the output** (also verified at build time).
 
-### 界面语言（i18n）
+### Interface language (i18n)
 
-词条只有**一份**：`packages/extension/src/i18n/locales/{en,zh_CN}.json`。它同时供两个消费方使用——UI 走自带 `t()`（需要运行时切换语言，字典必须进包），manifest 的 `__MSG_*__` 与 service worker 的 `chrome.i18n.getMessage` 走 `_locales/*/messages.json`（Chrome 原生机制，且不必把字典打进 SW 包）。后者由 `scripts/generate-locales.mjs` 在构建时从前者生成，**不手抄**。
+There is **one** copy of every string: `packages/extension/src/i18n/locales/{en,zh_CN}.json`. Two consumers read it — the UI through the bundled `t()` (language must switch at runtime, so the dictionary has to be in the bundle), and the manifest's `__MSG_*__` plus the service worker's `chrome.i18n.getMessage` through `_locales/*/messages.json` (the native Chrome mechanism, which also keeps the dictionary out of the SW bundle). The latter is generated from the former at build time by `scripts/generate-locales.mjs` — **never copied by hand**.
 
-键名一律 snake_case：Chrome 的 `messages.json` 只接受 `[a-zA-Z0-9_@]`，用点号分层就无法共用一份清单。
+Keys are always snake_case: Chrome's `messages.json` only accepts `[a-zA-Z0-9_@]`, so dot-separated hierarchies would make a shared list impossible.
 
-语言来源：`pasteguard.locale`（localStorage，显式选择，同步可读）→ `chrome.i18n.getUILanguage()` → `navigator.language` → `en`。设置入口在侧栏的「检测引擎状态」面板里。
+Locale resolution: `pasteguard.locale` (localStorage, explicit choice, synchronously readable) → `chrome.i18n.getUILanguage()` → `navigator.language` → `en`. The switch lives in the side panel's "Detection engine status" panel.
 
-**占位符也会跟着语言走**：替换后写进文本的是 `<<手机号>>` 还是 `<<PHONE>>`，取决于当前界面语言。引擎自己读不到浏览器 API，因此由宿主在启动时 `setPlaceholderLocale()` 注入；解析侧同时接受两种语言的名称，所以切换语言后旧映射表仍可还原。
+**Placeholders follow the language too**: whether redacted text ends up with `<<手机号>>` or `<<PHONE>>` depends on the current interface language. The engine cannot read browser APIs itself, so the host injects this at startup via `setPlaceholderLocale()`; the parser accepts names from both languages, so mapping tables written before a language switch still round-trip.
 
-`tests/unit/i18n.test.ts` 兜住四类「构建全绿、界面才露馅」的漂移：新文案只写中文、词条加了一门语言、`t('xxx')` 拼错、manifest 的 `__MSG_*__` 没有对应词条。
+`tests/unit/i18n.test.ts` catches the four classes of drift that build green and only show up in the UI: new copy written in one language only, an entry added to one language but not the other, a mistyped `t('xxx')`, and a `__MSG_*__` in the manifest with no matching entry.
 
-## 测试
+## Tests
 
 ```bash
-npm test              # 全量（golden + 回归 + 单元 + 性能）
-npm run test:watch    # 监听模式
+npm test              # everything (golden + regression + unit + perf)
+npm run test:watch    # watch mode
 ```
 
-| 目录 | 内容 |
-|------|------|
-| `tests/golden/` | 按 Profile 分组的端到端用例（universal/text/code/whitelist） |
-| `tests/regression/` | Phase 1 修复点回归（含@密码/重复值/重叠/CJK 偏移/吞值） |
-| `tests/unit/` | 场景启发式/占位符/校验算法/替换引擎/用户档案 CRUD/模型下载器/检测 store 状态机/站点匹配/粘贴就地替换/i18n 防漂移/区域规则集（US·EU） |
-| `tests/perf/` | 长文本基准（5000 字 < 2s） |
+| Directory | Contents |
+|-----------|----------|
+| `tests/golden/` | end-to-end cases grouped by profile (universal/text/code/whitelist) |
+| `tests/regression/` | regressions for Phase 1 fixes (passwords with @, repeated values, overlaps, CJK offsets, swallowed values) |
+| `tests/unit/` | scene heuristics / placeholders / validation algorithms / replacement engine / user-profile CRUD / model downloader / detection store state machine / site matching / paste-in-place replacement / i18n drift guards / regional rule sets (US · EU) |
+| `tests/perf/` | long-text benchmark (5000 chars < 2 s) |
 
-手动验证用例见 `docs/phase1-verification.md`、`docs/phase2-verification.md`、`docs/phase4-verification.md`。
+Manual verification cases: `docs/test-cases.md`; implementation details: `docs/spec.md`.
 
-## 技术栈
+## Tech stack
 
 - Vue 3 + Pinia + Tailwind CSS 4 + Reka UI
-- @crxjs/vite-plugin（Manifest V3 构建）
-- gliner + @xenova/transformers + onnxruntime-web（GLiNER 模型，WASM，可选增强）
-- 模型远程加载（主源 ModelScope 镜像，回退 huggingface.co；Range 断点续传 + 指数退避重试 + 停滞看门狗 + Cache Storage 落盘，重开侧栏零下载；失败时静默降级为纯正则，UI 显示降级状态）
+- @crxjs/vite-plugin (Manifest V3 build)
+- gliner + @xenova/transformers + onnxruntime-web (GLiNER model, WASM, optional enhancement)
+- Remote model loading (primary source: ModelScope mirror; fallback: huggingface.co; Range-resumable download + exponential-backoff retries + a stall watchdog + Cache Storage persistence, so reopening the panel downloads nothing; on failure it silently degrades to pure regex and the UI shows the degraded state)
 
-## 第三方组件与模型归属
+## Third-party components and model attribution
 
-构建时会生成 `THIRD-PARTY-NOTICES.txt` 并随产物一同分发（Apache-2.0 第 4 条、MIT 的版权与许可通知均有此要求）。下面是人可读版本：
+`THIRD-PARTY-NOTICES.txt` is generated at build time and distributed with the bundle (required by Apache-2.0 §4 and by MIT's copyright/licence notice clause). Here is the human-readable version:
 
-| 组件 | 用途 | 许可 |
-|-------|------|------|
-| vue / pinia / reka-ui | UI 框架与组件 | MIT |
-| @crxjs/vite-plugin / vite / tailwindcss / typescript | 构建链 | MIT |
-| gliner | 零样本文本实体识别 | Apache-2.0 ※ |
-| @xenova/transformers | 模型运行时（transformers.js） | Apache-2.0 |
-| onnxruntime-web / onnxruntime-common | ONNX Runtime（WASM 后端） | MIT |
-| @huggingface/jinja | 模板引擎（transformers 依赖） | MIT |
-| 模型 `onnx-community/gliner_small-v2`（运行时下载，不随包分发） | AI 检测 | Apache-2.0 |
+| Component | Purpose | Licence |
+|-----------|---------|---------|
+| vue / pinia / reka-ui | UI framework and components | MIT |
+| @crxjs/vite-plugin / vite / tailwindcss / typescript | build chain | MIT |
+| gliner | zero-shot text entity recognition | Apache-2.0 ※ |
+| @xenova/transformers | model runtime (transformers.js) | Apache-2.0 |
+| onnxruntime-web / onnxruntime-common | ONNX Runtime (WASM backend) | MIT |
+| @huggingface/jinja | template engine (transformers dependency) | MIT |
+| model `onnx-community/gliner_small-v2` (downloaded at runtime, not redistributed) | AI detection | Apache-2.0 |
 
-> ※ `gliner` 的 `package.json` 声明为 MIT，但其包内 `LICENSE` 文件是 Apache-2.0 全文。**以 `LICENSE` 文件为准**，按 Apache-2.0 处理。这个差异已记录在 `THIRD-PARTY-NOTICES.txt` 中。
+> ※ `gliner`'s `package.json` declares MIT, but the `LICENSE` file inside the package is the full Apache-2.0 text. **The `LICENSE` file wins**, so it is treated as Apache-2.0. This discrepancy is recorded in `THIRD-PARTY-NOTICES.txt`.
 
-**一处值得注意的合规决策**：GLiNER 的 **v0 / v1 是 `cc-by-nc-4.0`（禁止商用）**，自 **v2 起改为 Apache-2.0**。本项目**锁定 v2**，这本身就是一次许可合规决策——如果误用 v1，本项目将无法以任何允许商业化的许可发布。
+**One compliance decision worth noting**: GLiNER **v0/v1 are `cc-by-nc-4.0` (non-commercial)**, and the licence changed to Apache-2.0 starting with **v2**. This project **pins v2**, which is itself a licensing decision — had we used v1 by mistake, this project could not have been released under any licence permitting commercial use.
 
-## 数据流与隐私声明
+## Data flow and privacy
 
-| 环节 | 数据去向 |
-|------|----------|
-| 文本检测与替换 | **本地**（service worker / 侧栏内存），不离开设备 |
-| AI 模型推理 | **本地**（WASM / ONNX Runtime），不离开设备 |
-| 模型下载 | 白名单模型源（ModelScope → huggingface.co 回退）；**仅下载模型文件，不上传任何用户数据** |
-| 站点授权 | 逐站授权，存于 `chrome.storage.local`；未授权站点零接触 |
-| 遥测 / 统计 / 崩溃上报 | **无** |
-| 第三方分析 SDK | **无** |
+| Stage | Where the data goes |
+|-------|--------------------|
+| Text detection and replacement | **on-device** (service worker / side-panel memory); never leaves the machine |
+| AI model inference | **on-device** (WASM / ONNX Runtime); never leaves the machine |
+| Model download | whitelisted model sources (ModelScope → huggingface.co fallback); **model files only, no user data is ever uploaded** |
+| Site authorisation | granted per site, stored in `chrome.storage.local`; unauthorised sites are never touched |
+| Telemetry / analytics / crash reporting | **none** |
+| Third-party analytics SDKs | **none** |
 
-**没有云、没有后端、没有账号体系。** 这是一个完全离线可用的本地工具——除了首次下载 AI 模型之外，断网状态下功能完整。
+**No cloud, no backend, no accounts.** This is a fully offline tool — apart from the initial AI model download, it is fully functional with the network unplugged.
 
-## 贡献方式
+## Contributing
 
-本项目由作者**单人维护**，**不接收代码合并请求**——这是有意的维护策略，不是对社区的拒绝（详见 [CONTRIBUTING.md](CONTRIBUTING.md)）。
+This project is maintained by a **single author** and **does not accept code contributions** — a deliberate maintenance policy rather than a rejection of the community (see [CONTRIBUTING.md](CONTRIBUTING.md)).
 
-欢迎：
+Welcome:
 
-- ✅ 提 Issue 报告误报 / 漏报 / 崩溃
-- ✅ 分享使用场景与设计讨论
-- ✅ Fork 后按自己的需求改造（须使用你自己的名称与图标）
+- ✅ Issues reporting false positives / false negatives / crashes
+- ✅ Sharing use cases and design discussions
+- ✅ Forking and adapting it to your own needs (under your own name and icons)
 
-## 署名与商标
+## Attribution and trademark
 
-- 本项目由 **hadesxiong** 开发并维护。
-- **`PasteGuard` 名称与图标是作者的商标**，不在 Apache-2.0 的授权范围内（该许可第 6 条明确排除商标授权，只保留"描述来源"的合理使用）。
-- 允许：事实性引用，例如 `Based on PasteGuard (https://github.com/hadesxiong/paste-guard)`。
-- 不允许：把 `PasteGuard` 用作你的衍生作品名称、图标或包名；暗示你的作品是官方版本或获得原作者背书。
+- Developed and maintained by **hadesxiong**.
+- **The `PasteGuard` name and icon are the author's trademark** and are not covered by the Apache-2.0 grant (§6 of that licence explicitly excludes trademark rights and preserves only "describing the origin" fair use).
+- Allowed: factual references such as `Based on PasteGuard (https://github.com/hadesxiong/paste-guard)`.
+- Not allowed: using `PasteGuard` as the name, icon, or package name of your derivative; implying that your work is the official version or endorsed by the original author.
 
-详见 [NOTICE](NOTICE) 与 [CONTRIBUTING.md](CONTRIBUTING.md)。
+See [NOTICE](NOTICE) and [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## 专利声明
+## Patents
 
-本项目**不申请任何专利**（含后续全部迭代内容），全部设计文档与实现细节均以公开形式发布，构成可实施的现有技术。详见 [PATENTS.md](PATENTS.md)。
+This project **files no patents** (including all future iterations). Every design document and implementation detail is published openly, constituting prior art that can be practised. See [PATENTS.md](PATENTS.md).
 
 ## License
 
-本项目以 [Apache License, Version 2.0](LICENSE) 发布。
+Released under the [Apache License, Version 2.0](LICENSE).
 
 ```
 Copyright 2026 hadesxiong
 ```
 
-你可以自由使用、修改、分发本项目，包括用于闭源商业目的——但须保留版权与 `NOTICE` 声明、标注改动，并使用你自己的名称与图标。
+You are free to use, modify, and redistribute this project, including for closed-source commercial purposes — provided you keep the copyright and `NOTICE` notices, mark your changes, and use your own name and icons.

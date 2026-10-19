@@ -1,8 +1,38 @@
 # Changelog
 
 > PasteGuard 实现轮次与结案记录（按时间倒序，压缩版）。
-> 技术规格：`docs/spec.md`；手动验收判据：`docs/test-cases.md`；当前状态：`TODO.md`。
+> 技术规格：`docs/spec.md`；手动验收判据：`docs/test-cases.md`；当前状态：`TODO.md`；
+> 设计决策与后续迭代规划：`docs/design/`。
 > 单条提交详情见 `git log`；被清退的历史规划文档见 `f35ceae` 之前的 TODO。
+
+## 2026-10-19
+
+### 1.0.0 发布准备 A–D · 关键节点结案
+
+路线图见 `docs/design/roadmap.md`（A–F 六个关键节点）。本轮完成 A–D：
+
+- **A 许可与文档**（`2c61c0b`）：`LICENSE`（Apache-2.0 全文）、`NOTICE`、`PATENTS.md`、
+  `CONTRIBUTING.md`、`SECURITY.md`；`scripts/third-party-notices.mjs` 生成
+  `THIRD-PARTY-NOTICES.txt` 并随产物分发（Apache-2.0 §4 / MIT 通知条款要求）。
+  许可选型逐条对齐作者诉求——Apache-2.0 §4(b)(c)(d) 强制署名 + 标注改动 + 随附 NOTICE，
+  §6 不授予商标。**不申请专利**，转防御性公开。
+- **B/C 目录重排**（`fdda367`、`1307d06`）：`src/core` → `packages/engine`（宿主无关，
+  带边界断言护栏）、`src` → `packages/extension`、设计 token 抽出 `packages/design-tokens`。
+  引擎侧引入 `InferenceBackend` 抽象：模型运行时不进引擎，宿主注入；未注册时管线自动
+  退化为纯正则——这也是全部用例能在 Node 下直接跑的前提。
+- **D i18n + 区域规则集 + 能力矩阵**（`b3f1fe4`、`e18294b`、`51fd642`）：
+  - 单一 catalog（`packages/extension/src/i18n/locales/*.json`）同时供 UI 的 `t()` 与
+    manifest/SW 的 `_locales` 使用，后者构建时生成、不手抄；占位符语言随界面语言切换
+  - 区域规则集 `us`/`eu` **默认全关**：SSN 号段校验、EIN 带标签 + 前缀校验、
+    NANP 电话、IBAN mod-97、VAT 逐国格式
+  - 能力矩阵面板（头部 ℹ）把三轴分开说明（界面语言 / 区域规则集 / 模型语言能力），
+    唯一一处明确「模型语言能力不承诺」
+  - README 双语（`README.md` 英文 + `README.zh-CN.md` 中文）；设计文档公开进 `docs/design/`
+- **基线**：typecheck 0 error / **288 passed（22 文件）** / 双目标构建零警告 /
+  `probe:layout` 全通过。新增护栏：引擎依赖白名单、产物 `ort-wasm` 恰好一份、
+  `.vue` 无未翻译汉字、`_locales` key ≡ catalog、i18n 词条完整性。
+
+待做：E Astro 落地页、F 发布 1.0.0。
 
 ## 2026-10-18
 
