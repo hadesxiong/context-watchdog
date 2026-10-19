@@ -84,7 +84,7 @@ onMounted(loadSites)
              导致文字换行，输入 min-w-0 允许收缩 -->
         <div class="pt-4 flex items-center gap-2">
             <Input v-model="siteInput" placeholder="例如 chat.example.com" :disabled="busy"
-                class="h-8 min-w-0" @keyup.enter="addSite" />
+                class="h-8 min-w-0 input-fixed" @keyup.enter="addSite" />
             <Button size="sm" :disabled="busy" @click="addSite" class="shrink-0">添加</Button>
         </div>
 
@@ -106,3 +106,9 @@ onMounted(loadSites)
         </p>
     </div>
 </template>
+
+<style scoped>
+.input-fixed {
+    padding: 10px !important
+}
+</style>

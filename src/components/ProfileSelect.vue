@@ -68,13 +68,17 @@ const onDelete = async () => {
         @update:open="menuOpen = $event"
         @update:model-value="onUpdate">
         <SelectTrigger
-            :title="store.activeProfile.description"
+            :title="'模式:' + store.activeProfile.description"
             class="flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-input
                 bg-background text-sm font-medium text-foreground max-w-45
                 hover:bg-muted/60 transition-colors outline-none
                 focus-visible:ring-2 focus-visible:ring-ring
-                data-[placeholder]:text-muted-foreground">
-            <SelectValue placeholder="选择档案" class="truncate" />
+                data-placeholder:text-muted-foreground">
+            <!-- <SelectValue placeholder="选择档案" class="truncate" /> -->
+            <span class="flex items-center min-w-0 gap-1">
+                <span class="shrink-0">模式:</span>
+                <SelectValue placeholder="选择档案" class="truncate" />
+            </span>
             <svg class="w-3.5 h-3.5 shrink-0 text-muted-foreground" fill="none"
                 stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -90,8 +94,8 @@ const onDelete = async () => {
                     :key="profile.id"
                     :value="profile.id"
                     class="relative flex items-center justify-between gap-2 rounded-sm px-2.5 py-2
-                        text-sm cursor-pointer select-none outline-none transition-colors
-                        data-[highlighted]:bg-muted data-[state=checked]:text-primary">
+                        text-sm cursor-pointer select-none outline-none transition-colors text-muted-foreground
+                        data-highlighted:bg-muted data-[state=checked]:text-primary">
                     <div class="min-w-0 flex-1">
                         <SelectItemText>
                             <span :class="profile.id === store.activeProfileId && 'font-medium'">
@@ -124,7 +128,7 @@ const onDelete = async () => {
                     class="relative flex items-center gap-2 rounded-sm px-2.5 py-2 text-sm
                         cursor-pointer select-none outline-none transition-colors
                         text-muted-foreground
-                        data-[highlighted]:bg-muted data-[highlighted]:text-primary">
+                        data-highlighted:bg-muted data-highlighted:text-primary">
                     <SelectItemText>＋ 新建自定义档案</SelectItemText>
                 </SelectItem>
             </SelectViewport>

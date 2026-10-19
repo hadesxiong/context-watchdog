@@ -43,22 +43,22 @@ const handleClear = () => {
     <div class="flex flex-col gap-3 h-full">
         <div class="flex items-center w-full justify-between gap-2">
             <div class="flex items-center gap-2 min-w-0">
-                <label class="text-base font-bold text-foreground shrink-0">
-                    输入文本</label>
+                <!-- <label class="text-base font-bold text-foreground shrink-0">
+                    输入文本</label> -->
                 <!-- 档案下拉选择器（App 侧注入） -->
                 <slot name="profile" />
             </div>
-            <div class="p-0 flex gap-3 border-t border-border/50 bg-background/50 shrink-0">
+            <div class="p-0 flex gap-3 bg-background/50 shrink-0">
                 <Button variant="primary" btnType="text"
                     @click="handleDetect"
                     :disabled="!localText.trim() || isProcessing"
                     :loading="isProcessing"
-                    class="w-fit">
+                    class="w-fit button-fixed">
                     {{ isProcessing ? '检测中...' : '检测' }}</Button>
                 <Button variant="danger" btnType="text"
                     @click="handleClear"
                     :disabled="!localText.trim() || isProcessing"
-                    class="w-fit">
+                    class="w-fit button-fixed">
                     清空</Button>
             </div>
         </div>
@@ -75,3 +75,9 @@ const handleClear = () => {
         </div>
     </div>
 </template>
+
+<style scoped>
+.button-fixed {
+    box-shadow: none !important;
+}
+</style>

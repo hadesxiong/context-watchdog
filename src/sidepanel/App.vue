@@ -202,7 +202,7 @@ const loadingCaption = computed(() => {
             </div>
             <!-- 引擎开关：正则恒开（禁改）+ AI 开关（含场景识别，合并下载）；
                  区块全宽贴边（无内缩），区块间 gap-4（16px），无 margin -->
-            <div class="flex flex-col gap-4">
+            <div class="flex flex-col">
                 <div v-for="item in engineStatusItems" :key="item.name"
                     class="p-4 bg-muted/50">
                     <!-- gap-3：文字块与 Switch 之间保留间距（行内自由空间为 0 时也不贴合） -->
