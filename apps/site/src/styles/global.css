@@ -75,13 +75,12 @@ pre {
   padding: 0 1.25rem;
 }
 
+/* 每节一条 1px 单色细线（--border 同源 token，即 shadcn 的 border-border 惯例）：
+   长页 + 多卡片网格靠它分组，纯留白不够。此前一条 :first-of-type 豁免是死规则
+   （<main> 里首个 <section> 是 .pg-hero 而非 .pg-section），评估后删除。 */
 .pg-section {
   padding: 3.5rem 0;
   border-top: 1px solid var(--border);
-}
-
-.pg-section:first-of-type {
-  border-top: none;
 }
 
 .pg-section-title {
