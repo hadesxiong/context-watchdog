@@ -1,0 +1,19 @@
+---
+// 把 `**重点**` 渲染成 <strong>。
+//
+// 为什么需要：文案里经常要强调半句话（"原文先正常插入（不阻塞输入）"）。在 JSON 里
+// 直接写 HTML 会把标记混进翻译文本，且需要 set:html（有注入面）。用一个极小的
+// 标记语法 + 这里的解析，翻译文本保持纯文本，渲染路径也没有 set:html。
+import { splitBold } from '@site/i18n'
+
+interface Props {
+  text: string
+  class?: string
+}
+const { text, class: className } = Astro.props
+const chunks = splitBold(text)
+---
+
+<p class={className}>
+  {chunks.map((chunk) => (chunk.bold ? <strong>{chunk.text}</strong> : chunk.text))}
+</p>

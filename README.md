@@ -15,7 +15,7 @@ Two ways to use it:
 npm install
 npm run build           # Chrome bundle → dist/        (load via chrome://extensions)
 npm run build:firefox   # Firefox bundle → dist-firefox/ (about:debugging → This Firefox → Load Temporary Add-on → pick dist-firefox/manifest.json)
-npm run test            # run the suite (288 assertions)
+npm run test            # run the suite (307 assertions)
 ```
 
 ## Architecture
@@ -182,6 +182,7 @@ packages/extension/                # the extension (host layer)
     ├── shims/                     # build-time stubs (ort GPU subpaths)
     └── style.css                  # imports @tokens/tokens.css + Tailwind theme mapping
 
+apps/site/                         # landing page (Astro static site, zero client JS — see apps/site/README.md)
 public/                            # repo-level shared static assets (icons)
 tests/  scripts/  docs/            # tests / build & probe scripts / design docs
 docs/design/                       # design decisions and future lines (defensive publication — see its README)
@@ -212,13 +213,15 @@ Locale resolution: `pasteguard.locale` (localStorage, explicit choice, synchrono
 ```bash
 npm test              # everything (golden + regression + unit + perf)
 npm run test:watch    # watch mode
+npm run site:check    # landing page: Astro/TS diagnostics
+npm run site:build    # landing page: static build → apps/site/dist
 ```
 
 | Directory | Contents |
 |-----------|----------|
 | `tests/golden/` | end-to-end cases grouped by profile (universal/text/code/whitelist) |
 | `tests/regression/` | regressions for Phase 1 fixes (passwords with @, repeated values, overlaps, CJK offsets, swallowed values) |
-| `tests/unit/` | scene heuristics / placeholders / validation algorithms / replacement engine / user-profile CRUD / model downloader / detection store state machine / site matching / paste-in-place replacement / i18n drift guards / regional rule sets (US · EU) |
+| `tests/unit/` | scene heuristics / placeholders / validation algorithms / replacement engine / user-profile CRUD / model downloader / detection store state machine / site matching / paste-in-place replacement / i18n drift guards / regional rule sets (US · EU) / landing-page thanks-wall tiers and bilingual dictionary guards |
 | `tests/perf/` | long-text benchmark (5000 chars < 2 s) |
 
 Manual verification cases: `docs/test-cases.md`; implementation details: `docs/spec.md`.

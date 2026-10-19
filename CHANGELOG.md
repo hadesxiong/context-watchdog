@@ -28,11 +28,15 @@
   - 能力矩阵面板（头部 ℹ）把三轴分开说明（界面语言 / 区域规则集 / 模型语言能力），
     唯一一处明确「模型语言能力不承诺」
   - README 双语（`README.md` 英文 + `README.zh-CN.md` 中文）；设计文档公开进 `docs/design/`
-- **基线**：typecheck 0 error / **288 passed（22 文件）** / 双目标构建零警告 /
+- **基线**：typecheck 0 error / **307 passed（24 文件）** / 双目标构建零警告 /
   `probe:layout` 全通过。新增护栏：引擎依赖白名单、产物 `ort-wasm` 恰好一份、
   `.vue` 无未翻译汉字、`_locales` key ≡ catalog、i18n 词条完整性。
+- **E Astro 落地页**：`apps/site/`，`output: 'static'`，产物**零客户端 JS**；
+  视觉 `@import` 自 `packages/design-tokens/tokens.css`（与扩展同源）；版本号构建期
+  从扩展 manifest 注入；测试/探针数由 `scripts/site-evidence.mjs` 实测写入；
+  未上架渠道渲染为「即将上架」而非死链（`links.json` 状态与链接不一致会让构建失败）。
 
-待做：E Astro 落地页、F 发布 1.0.0。
+待做：F 发布 1.0.0（含 E8 演示 GIF 与 E10 收款码两项待作者产出的资产）。
 
 ## 2026-10-18
 

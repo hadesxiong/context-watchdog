@@ -1,0 +1,64 @@
+---
+// 下载渠道区块
+//
+// 关键取舍：商店没上架的时候，**不要渲染一个能点但打不开的链接**。
+// 死链比一句「即将上架」更伤信任，所以未上架的渠道渲染成 aria-disabled 的
+// 非链接元素 + 一个「即将上架」标签，而不是猜一个 URL 填进去。
+//
+// 状态本身不写在这里，全部来自 src/data/links.json（构建期校验，见 links.ts）。
+import { dict, type SiteLocale } from '@site/i18n'
+import { channels, manualZip } from '@site/data/links'
+
+interface Props {
+  locale: SiteLocale
+}
+
+const { locale } = Astro.props
+const d = dict(locale)
+
+const labelOf = (key: string): string =>
+  key === 'edge' ? d.download.edge : key === 'cws' ? d.download.cws : d.download.amo
+
+const hintOf = (key: string): string => (key === 'edge' ? d.download.edgeHint : '')
+
+const anyPending = channels.some((channel) => !channel.available)
+---
+
+<section class="pg-section" id="download">
+  <div class="pg-shell">
+    <h2 class="pg-section-title">{d.download.title}</h2>
+    <p class="pg-lead">{d.download.lead}</p>
+
+    <div class="pg-grid" style="gap: 0.6rem;">
+      {
+        channels.map((channel) =>
+          channel.available ? (
+            <a class="pg-channel" href={channel.url} rel="noopener">
+              <span>
+                <span class="pg-channel-name">{labelOf(channel.key)}</span>
+                {hintOf(channel.key) && <span class="pg-channel-hint"> · {hintOf(channel.key)}</span>}
+              </span>
+              <span class="pg-tag pg-tag-ok" aria-hidden="true">↗</span>
+            </a>
+          ) : (
+            <span class="pg-channel" aria-disabled="true">
+              <span class="pg-channel-name">{labelOf(channel.key)}</span>
+              <span class="pg-tag">{d.download.pending}</span>
+            </span>
+          )
+        )
+      }
+
+      <a class="pg-channel" href={manualZip.url} rel="noopener">
+        <span>
+          <span class="pg-channel-name">{d.download.manual}</span>
+          <span class="pg-channel-hint"> · {d.download.manualHint}</span>
+        </span>
+        <span class="pg-tag pg-tag-ok">↗</span>
+      </a>
+    </div>
+
+    {anyPending && <p class="pg-note">{d.download.pendingNote}</p>}
+    <p class="pg-note">{d.download.integrity}</p>
+  </div>
+</section>

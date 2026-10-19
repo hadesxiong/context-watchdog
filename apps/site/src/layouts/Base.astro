@@ -1,0 +1,99 @@
+---
+// 页面外壳：<head>（含 hreflang）、页头导航、页脚
+//
+// hreflang 是手写的，不是 Astro 生成的：两门语言各是一个独立页面
+// （/ 与 /en/），互相之间必须有 alternate 声明，否则搜索引擎会把它们
+// 当成重复内容。多语言站点最容易漏掉的一环。
+import '@site/styles/global.css'
+import Mark from '@site/components/Mark.astro'
+import { dict, localePath, otherLocale, localeLabel, type SiteLocale } from '@site/i18n'
+import { extensionVersion } from '@site/data/version'
+import { repoUrl, releasesUrl, siteUrl, hasCanonicalOrigin } from '@site/data/links'
+
+interface Props {
+  locale: SiteLocale
+}
+
+const { locale } = Astro.props
+const d = dict(locale)
+const other = otherLocale(locale)
+
+// 部署后 siteUrl 填好就自动生效；为空时输出相对链接（不做假的 canonical）
+const absolute = (path: string): string => (hasCanonicalOrigin ? new URL(path, siteUrl).href : path)
+const canonical = absolute(localePath(locale))
+
+const pageTitle = d.meta.title
+---
+
+<!doctype html>
+<html lang={d.meta.lang}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{pageTitle}</title>
+    <meta name="description" content={d.meta.description} />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="canonical" href={canonical} />
+
+    <!-- 两门语言互为 alternate；x-default 指向中文版（默认语言在根路径） -->
+    <link rel="alternate" hreflang={d.meta.lang} href={absolute(localePath(locale))} />
+    <link
+      rel="alternate"
+      hreflang={dict(other).meta.lang}
+      href={absolute(localePath(other))}
+    />
+    <link rel="alternate" hreflang="x-default" href={absolute(localePath('zh'))} />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={pageTitle} />
+    <meta property="og:description" content={d.meta.description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:locale" content={d.meta.ogLocale} />
+    <meta name="twitter:card" content="summary" />
+
+    <!-- 主题色跟随系统，与扩展一致（token 文件里就是媒体查询切换） -->
+    <meta name="color-scheme" content="light dark" />
+  </head>
+
+  <body>
+    <header class="pg-header">
+      <div class="pg-shell pg-header-inner">
+        <a class="pg-brand" href={localePath(locale)}>
+          <Mark size={26} />
+          <span>PasteGuard</span>
+        </a>
+
+        <nav class="pg-nav" aria-label="Sections">
+          <a href="#how">{d.nav.how}</a>
+          <a href="#privacy">{d.nav.privacy}</a>
+          <a href="#decisions">{d.nav.decisions}</a>
+          <a href="#faq">{d.nav.faq}</a>
+        </nav>
+
+        <a class="pg-lang" href={localePath(other)} hreflang={dict(other).meta.lang} rel="alternate">
+          {localeLabel(other)}
+        </a>
+      </div>
+    </header>
+
+    <main>
+      <slot />
+    </main>
+
+    <footer class="pg-footer">
+      <div class="pg-shell">
+        <div class="pg-footer-links">
+          <a href={repoUrl}>{d.footer.repo}</a>
+          <a href={releasesUrl}>{d.footer.release}</a>
+          <a href={`${repoUrl}/blob/main/LICENSE`}>{d.footer.license}</a>
+          <a href={`${repoUrl}/blob/main/NOTICE`}>{d.footer.trademark}</a>
+          <a href={`${repoUrl}/blob/main/PATENTS.md`}>{d.footer.patents}</a>
+          <a href={`${repoUrl}/tree/main/docs/design`}>{d.footer.designDocs}</a>
+        </div>
+        <p>
+          <span class="pg-footer-version">v{extensionVersion}</span> · {d.footer.static}
+        </p>
+      </div>
+    </footer>
+  </body>
+</html>

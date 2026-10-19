@@ -15,7 +15,7 @@ PasteGuard 是 Chrome / Firefox 浏览器扩展（Manifest V3），在用户将�
 npm install
 npm run build           # Chrome 包 → dist/，加载到 chrome://extensions
 npm run build:firefox   # Firefox 包 → dist-firefox/，about:debugging → 此 Firefox → 加载临时附加组件 → 选 dist-firefox/manifest.json
-npm run test            # 运行测试套件（288 项断言）
+npm run test            # 运行测试套件（307 项断言）
 ```
 
 ## 架构
@@ -182,6 +182,7 @@ packages/extension/                # 扩展（宿主层）
     ├── shims/                     # 构建期打桩（ort GPU 子路径）
     └── style.css                  # 引入 @tokens/tokens.css + Tailwind theme 映射
 
+apps/site/                         # 落地页（Astro 静态站点，零客户端 JS —— 见 apps/site/README.md）
 public/                            # 仓库级共享静态资源（icons）
 tests/  scripts/  docs/            # 测试 / 构建与探针脚本 / 设计文档
 docs/design/                       # 设计决策与后续迭代规划（防御性公开，详见其 README）
@@ -212,13 +213,15 @@ docs/design/                       # 设计决策与后续迭代规划（防御�
 ```bash
 npm test              # 全量（golden + 回归 + 单元 + 性能）
 npm run test:watch    # 监听模式
+npm run site:check    # 落地页：Astro/TS 诊断
+npm run site:build    # 落地页：静态构建 → apps/site/dist
 ```
 
 | 目录 | 内容 |
 |------|------|
 | `tests/golden/` | 按 Profile 分组的端到端用例（universal/text/code/whitelist） |
 | `tests/regression/` | Phase 1 修复点回归（含@密码/重复值/重叠/CJK 偏移/吞值） |
-| `tests/unit/` | 场景启发式/占位符/校验算法/替换引擎/用户档案 CRUD/模型下载器/检测 store 状态机/站点匹配/粘贴就地替换/i18n 防漂移/区域规则集（US·EU） |
+| `tests/unit/` | 场景启发式/占位符/校验算法/替换引擎/用户档案 CRUD/模型下载器/检测 store 状态机/站点匹配/粘贴就地替换/i18n 防漂移/区域规则集（US·EU）/落地页感谢墙分档与双语词典护栏 |
 | `tests/perf/` | 长文本基准（5000 字 < 2s） |
 
 手动验证用例见 `docs/test-cases.md`，实现细节见 `docs/spec.md`。

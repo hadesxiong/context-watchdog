@@ -1,0 +1,194 @@
+{
+  "meta": {
+    "lang": "en",
+    "ogLocale": "en_US",
+    "title": "PasteGuard — redact in place before you paste, without your data leaving the machine",
+    "description": "An open-source, free, serverless browser extension. It detects and replaces secrets and personal data before you send text to an AI — entirely on your own device."
+  },
+  "nav": {
+    "how": "How it works",
+    "privacy": "Privacy",
+    "decisions": "Trade-offs",
+    "faq": "FAQ"
+  },
+  "hero": {
+    "badge": "Open source · Free · No server · No account",
+    "title": "Redact in place, before you paste",
+    "subtitle": "Before you paste a config, a log, a ticket or a stack trace into an AI, PasteGuard finds the secrets and personal data inside it and replaces them with placeholders in place. Detection and replacement happen entirely on your device — the text never leaves it.",
+    "secondary": "Read the source"
+  },
+  "download": {
+    "title": "Get it",
+    "lead": "Beyond the three store channels, manual installation stays available — it does not depend on any store's review queue.",
+    "edge": "Edge Add-ons",
+    "edgeHint": "The official store reachable without a proxy in mainland China — recommended",
+    "cws": "Chrome Web Store",
+    "amo": "Firefox Add-ons (AMO)",
+    "manual": "Manual install (GitHub Release)",
+    "manualHint": "Download the ZIP, then enable Developer mode at chrome://extensions and use \"Load unpacked\"",
+    "pending": "Coming soon",
+    "pendingNote": "Store review is still in progress. Until then, use the manual install — all three channels are built from the same source.",
+    "integrity": "Every channel is built from one source tree with identical contents; each Release ships sha256 checksums."
+  },
+  "demo": {
+    "title": "30 seconds",
+    "caption": "Paste a config containing a database password: the original text is inserted normally first (input is never blocked), then replaced **in place** with placeholders once detection finishes, with a brief \"3 redactions\" toast in the corner. Nothing interrupts what you were doing.",
+    "placeholder": "Demo animation to be recorded (E8)",
+    "before": "on paste",
+    "after": "~300 ms later",
+    "original": "DATABASE_URL=postgres://app:S3cr3t-Pa55@db.internal:5432/prod\nSLACK_TOKEN=xoxb-2847-9182\nCall me: 13800138000",
+    "redacted": "DATABASE_URL=postgres://app:<<DB_PASSWORD>>@db.internal:5432/prod\nSLACK_TOKEN=<<API_KEY>>\nCall me: <<PHONE>>",
+    "placeholderNote": "Placeholders stay semantic, so the redacted config is still understandable to the AI."
+  },
+  "how": {
+    "title": "How it works",
+    "lead": "Two detection tiers — one always on, one optional — sharing a single dedupe and arbitration pass.",
+    "steps": [
+      {
+        "title": "Regex tier (always on)",
+        "body": "Targets with a fixed shape — secrets, connection strings, phone numbers, national IDs, bank cards, email, IPs, plates — are matched by regex plus algorithmic validation: ISO 7064 for Chinese ID numbers, Luhn for bank cards, mod-97 for IBANs, area-segment rules for US SSNs. Zero latency, works offline."
+      },
+      {
+        "title": "AI tier (optional)",
+        "body": "Entities with no fixed shape — names, addresses — go to a local GLiNER model (WASM). It only sees the spans the regex tier did not already cover, and it must be explicitly enabled and downloaded by you (a quantised model, ~180 MB, once). If the model is unavailable the pipeline degrades to pure regex: no errors, no blocking."
+      },
+      {
+        "title": "Placeholder sharing",
+        "body": "A value appearing N times becomes the same placeholder everywhere; overlapping spans are merged by type priority (secrets > personal data > high entropy), so replacements never cut into each other. Placeholders stay semantic, so the redacted text remains readable and inferable for the AI."
+      }
+    ]
+  },
+  "privacy": {
+    "title": "Verifiable privacy claims",
+    "lead": "Every row below can be checked in this repository — you do not have to take our word for it.",
+    "items": [
+      {
+        "claim": "The extension never sends your text to a server",
+        "how": "There are exactly two fetch calls in the whole repository, both in modelDownload.ts, both injectable fetchImpls (defaulting to globalThis.fetch) used solely to download the model. No XMLHttpRequest, sendBeacon, WebSocket or EventSource anywhere."
+      },
+      {
+        "claim": "The only network activity is the model download, and only if you enable it",
+        "how": "The AI tier is off by default. Once enabled, model files are fetched from whitelisted sources (a ModelScope mirror, falling back to huggingface.co). Downloads only — nothing is uploaded."
+      },
+      {
+        "claim": "Zero contact with unauthorised sites",
+        "how": "The manifest declares no content_scripts and does not request <all_urls>; it asks only for optional_host_permissions. The paste listener is injected only after you authorise a site yourself."
+      },
+      {
+        "claim": "No telemetry, no analytics, no crash reporting",
+        "how": "There is no analytics or reporting SDK in the repository. Run npm run build yourself and inspect the bundle for suspicious requests."
+      },
+      {
+        "claim": "Password fields are never processed",
+        "how": "type=password inputs and hidden fields are skipped at isTextEditable, and that guard exists on both the paste-injection and side-panel paths."
+      },
+      {
+        "claim": "Releases are verifiable",
+        "how": "Each Release ships sha256 checksums; LICENSE and THIRD-PARTY-NOTICES.txt travel with the bundle."
+      }
+    ]
+  },
+  "decisions": {
+    "title": "A few trade-offs",
+    "lead": "Phenomenon → decision → cost. They are written down because none of them was the obvious choice, and most came out of getting something wrong first.",
+    "items": [
+      {
+        "title": "No patents — the design documents are published instead",
+        "body": "Publishing the full design makes it impossible for anyone else to patent it later. That is cheaper and broader than filing, and it matches the goal of \"I do not want someone else to grab this\". The cost: the author cannot patent it later either, which is exactly why it has to happen early. That is why the design docs (docs/design/) live in the repository alongside the code — prior art only counts if it is enabling."
+      },
+      {
+        "title": "Why the AI model is pinned to gliner_small-v2",
+        "body": "GLiNER v0 and v1 are cc-by-nc-4.0 (non-commercial); the licence only changed to Apache-2.0 at v2. Using v1 by mistake would have made it impossible to release this project under any licence permitting commercial use. Pinning v2 is not arbitrary — it is a compliance decision."
+      },
+      {
+        "title": "Why a 206 response's content-length cannot be treated as the file size",
+        "body": "ModelScope's CDN does not send Access-Control-Expose-Headers, so ETag and Content-Range are unreadable cross-origin. Probing with Range: 0-0 makes the 206's content-length merely the length of that one-byte body; treating it as the total yields \"183 MB is not 1 byte, the cache is stale\" and clears 183 MB to download it again. The fix is a three-level fallback: ETag, then Last-Modified (a CORS-safelisted header, always visible), then Content-Length. Note that node unit tests inject fetch and bypass CORS filtering, so only a browser-perspective test could have caught this."
+      },
+      {
+        "title": "Why the regional rule sets (US / EU) are off by default",
+        "body": "An SSN's shape can appear in text from anywhere. Folding it into the general rule set would make every non-US user pay for US false positives. So it is a separate category that stays out of scanning until you pick the matching profile or tick it in a custom profile. Each rule carries algorithmic validation, because bare regex is unusable on real text."
+      },
+      {
+        "title": "Why the interface copy uses a hand-written t() instead of vue-i18n",
+        "body": "Only three things are needed: a flat dictionary, {name} interpolation and a reactive ref — about 40 lines. More importantly, the same dictionary also feeds Chrome's _locales, whose messages.json only accepts alphanumerics and underscores in key names. The data models do not line up, so a large library would mostly need adapting."
+      },
+      {
+        "title": "Why Apache-2.0 rather than MIT or GPL",
+        "body": "Three requirements had to hold at once: free to copy and modify, attribution required when used directly, and closed-source commercial use allowed but the author's name protected. MIT has no patent or trademark clause; GPL forbids closed-source derivatives, which conflicts directly with permitting commercial use. Apache-2.0 §4 mandates attribution and marking changes, and §6 explicitly grants no trademark rights — a clause-by-clause match."
+      },
+      {
+        "title": "Why the detection engine depends on no host API",
+        "body": "The engine never statically imports chrome, node, vue or onnxruntime; host capabilities are injected through InferenceBackend. The same code can therefore run inside the extension and inside the planned local proxy service. A side effect is that every test runs directly on Node with no browser environment. Automated assertions protect this constraint, so breaking it turns red immediately."
+      }
+    ]
+  },
+  "evidence": {
+    "title": "Evidence",
+    "lead": "Not promises — the actual numbers in this repository today.",
+    "version": "Current version",
+    "tests": "Automated assertions",
+    "probes": "Layout probes",
+    "license": "Licence",
+    "supporters": "Supporters",
+    "supportersNone": "None yet (be the first)",
+    "measured": "measured {date}"
+  },
+  "thanks": {
+    "title": "Thank-you wall",
+    "lead": "Donations buy time, not features. Every feature is free.",
+    "total": "{count} people",
+    "recent": "Showing the most recent {shown}"
+  },
+  "faq": {
+    "title": "FAQ",
+    "items": [
+      {
+        "q": "Does it upload my text anywhere?",
+        "a": "No. Detection and replacement run entirely on your device (service worker or side-panel memory). The only network activity in the whole repository is downloading model files, and only after you enable the AI tier yourself."
+      },
+      {
+        "q": "Do I have to download the AI model?",
+        "a": "No. The regex tier is always on and covers secrets, connection strings, phone numbers, national IDs, bank cards, IBANs and other fixed-shape targets — zero latency, offline. The AI tier only adds shapeless entities like names and addresses. The quantised model is about 180 MB, downloaded once and then served from the browser cache; if it is unavailable the pipeline falls back to pure regex."
+      },
+      {
+        "q": "What if it flags something that is not sensitive?",
+        "a": "Switch that row from \"replace\" to \"keep\" and it stays as-is for this run. If the same type keeps false-positiving, create a custom profile to change that type's default action, or add the value to the whitelist. Issues are welcome too — false positives are the most important problem for a tool like this."
+      },
+      {
+        "q": "Which sites does it work on?",
+        "a": "The side panel does not depend on any site and always works. Paste interception requires per-site authorisation: you add a domain, the browser asks you to grant access, and only then is the listener injected. Unauthorised sites are completely untouched, and the manifest contains no content_scripts or all_urls."
+      },
+      {
+        "q": "Does it support rich-text editors in web pages?",
+        "a": "Currently input[type=text/search] and textarea. contenteditable rich-text areas are not handled — paste fragments are hard to locate reliably there, and it is better to skip them than to ship a version that occasionally rewrites the wrong part."
+      },
+      {
+        "q": "Which interface languages are available? Do placeholders follow?",
+        "a": "Chinese and English for now. The interface language also decides the placeholder wording: a Chinese UI produces <<手机号>>, an English UI produces <<PHONE>>. The parser accepts names from both languages, so mapping tables written before a language switch still restore correctly."
+      },
+      {
+        "q": "Can I use it commercially?",
+        "a": "Yes — Apache-2.0 permits closed-source commercial use. The conditions are that you keep the copyright and NOTICE notices, mark your changes, and use your own name and icons; the PasteGuard name and icon are the author's trademark and are not covered by the code licence."
+      },
+      {
+        "q": "Will there be paid features later?",
+        "a": "No. Every feature is fully enabled right now: no paid tier, no quota, no accounts. Donations cover maintenance time and unlock nothing — the extension's own capability panel says the same thing."
+      }
+    ]
+  },
+  "donate": {
+    "title": "Support the project",
+    "lead": "The project is free, serverless and account-free, so it earns nothing to cover the time it takes to maintain. If it ever saved you from one incident, you can buy me a coffee.",
+    "body": "Donating unlocks nothing — there is nothing locked. The supporter list and the payment code are maintained locally, with no third-party analytics involved.",
+    "qrPlaceholder": "Payment code to be added"
+  },
+  "footer": {
+    "repo": "Source repository",
+    "release": "Releases",
+    "license": "Apache-2.0 licence",
+    "trademark": "Attribution & trademark",
+    "patents": "Patent notice",
+    "designDocs": "Design docs",
+    "static": "This site is static: no client-side scripts (bar one copy button), no CDN, no third-party analytics, no web fonts."
+  }
+}

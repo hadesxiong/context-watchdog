@@ -1,0 +1,8 @@
+{
+  "siteUrl": "",
+  "repo": "https://github.com/hadesxiong/paste-guard",
+  "releases": "https://github.com/hadesxiong/paste-guard/releases",
+  "edge": { "url": "", "available": false },
+  "cws": { "url": "", "available": false },
+  "amo": { "url": "", "available": false }
+}

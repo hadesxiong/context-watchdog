@@ -1,0 +1,12 @@
+{
+  "name": "@pasteguard/site",
+  "version": "0.0.0",
+  "private": true,
+  "description": "PasteGuard 落地页（Astro 静态站点）",
+  "comment": "仓库未启用 npm workspaces（留到本地代理阶段），因此本目录不单独 install：Astro 装在仓库根 devDependencies，由根 package.json 的 site:* 脚本以 --root apps/site 调用。",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview"
+  }
+}

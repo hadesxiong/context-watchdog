@@ -1,0 +1,12 @@
+---
+// 英文首页（/en/）
+//
+// 结构与中文页共用 Landing.astro，只有 locale 不同——结构在两边各自
+// 复制一份的话，改一边忘一边只是时间问题。
+import Base from '@site/layouts/Base.astro'
+import Landing from '@site/components/Landing.astro'
+---
+
+<Base locale="en">
+  <Landing locale="en" />
+</Base>
