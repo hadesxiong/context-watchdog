@@ -6,10 +6,14 @@ import DetectionList from '../components/DetectionList.vue'
 import ActionBar from '../components/ActionBar.vue'
 import ProfileSelect from '../components/ProfileSelect.vue'
 import PasteInterceptionSettings from '../components/PasteInterceptionSettings.vue'
+import CapabilityDialog from '../components/CapabilityDialog.vue'
 import { Button, Switch, Logo, LoadingOverlay, Dialog } from '../ui'
 import { useI18n } from '../i18n'
 
 const { t, localePreference, setLocalePreference, availableLocales, localeNames } = useI18n()
+
+// 「能力与隐私」面板：三轴能力矩阵 + 数据去向/价格声明
+const showCapability = ref(false)
 
 // 界面语言：'auto' 跟随浏览器语言；改动立即生效（占位符语言一并切换）
 const localeChoice = computed({
@@ -188,6 +192,14 @@ const loadingCaption = computed(() => {
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                     d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                            </svg>
+                        </Button>
+                        <!-- 能力与隐私（关于）：三轴能力矩阵 + 数据去向/价格声明 -->
+                        <Button @click="showCapability = true" variant="secondary"
+                            btn-type="text" size="sm" :title="t('about_tooltip')">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                             </svg>
                         </Button>
                         <!-- 引擎状态按钮（齿轮入口） -->
@@ -433,6 +445,8 @@ const loadingCaption = computed(() => {
         <!-- 全局检测中遮罩 -->
         <LoadingOverlay v-if="showOverlay" />
         <!-- 首启引导弹窗：AI 增强为可选项，开启才下载模型（选择权交还用户） -->
+        <CapabilityDialog :open="showCapability" @update:open="showCapability = $event" />
+
         <Dialog :open="showOnboarding" :title="t('onboarding_title')"
             @update:open="(v: boolean) => { if (!v) onDismissOnboarding() }">
             <div class="px-4 py-4 space-y-3">

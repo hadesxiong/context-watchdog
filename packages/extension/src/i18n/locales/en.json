@@ -160,5 +160,21 @@
   "ps_err_save_failed": "Save failed",
 
   "settings_language": "Language",
-  "settings_language_auto": "Follow browser"
+  "settings_language_auto": "Follow browser",
+
+  "about_tooltip": "Capability & privacy",
+  "about_title": "Capability & privacy",
+  "about_subtitle": "How detection works, what it can and cannot do, and where your data goes.",
+  "about_axis_ui": "1 · Interface language",
+  "about_ui_value": "Real i18n — interface text and redaction placeholders both follow it.",
+  "about_axis_rules": "2 · Regional rules",
+  "about_rules_current": "Switch with the profile: {name}.",
+  "about_rules_regions_off": "Off (general rules only)",
+  "about_axis_model": "3 · Model language coverage",
+  "about_model_value": "Not promised. The local model is most reliable on Latin-script text. For Chinese, detection rests mainly on the regex engine — which is a first-class citizen for mainland-China number formats, but only those.",
+  "about_axes_note": "The three axes are independent: changing the interface language does not change what gets detected, and enabling regional rules does not change the model's coverage.",
+  "about_privacy_title": "Data",
+  "about_privacy_value": "— detection and redaction run entirely on this device. No server, no account, no upload.",
+  "about_price_title": "Price",
+  "about_price_value": "— free. Every feature works without paying: no paid tier, no quota, nothing to unlock."
 }

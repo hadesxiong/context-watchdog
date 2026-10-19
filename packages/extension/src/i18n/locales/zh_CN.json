@@ -160,5 +160,21 @@
   "ps_err_save_failed": "保存失败",
 
   "settings_language": "界面语言",
-  "settings_language_auto": "跟随浏览器"
+  "settings_language_auto": "跟随浏览器",
+
+  "about_tooltip": "能力与隐私",
+  "about_title": "能力与隐私",
+  "about_subtitle": "检测怎么工作、能做什么不能做什么、数据去了哪里。",
+  "about_axis_ui": "1 · 界面语言",
+  "about_ui_value": "真 i18n —— 界面文案与脱敏占位符都跟随。",
+  "about_axis_rules": "2 · 区域规则集",
+  "about_rules_current": "随档案切换，当前档案：{name}。",
+  "about_rules_regions_off": "未启用（仅通用规则）",
+  "about_axis_model": "3 · 模型语言能力",
+  "about_model_value": "不作承诺。本地模型对拉丁语系最稳；中文主要靠正则档——正则对中国大陆的号码体系是一等公民，但也仅限于此。",
+  "about_axes_note": "三轴彼此独立：换界面语言不改变检测能力，开区域规则也不改变模型能力。",
+  "about_privacy_title": "数据",
+  "about_privacy_value": "—— 检测与脱敏全部在本机完成。没有服务端、没有账号、不上传。",
+  "about_price_title": "价格",
+  "about_price_value": "—— 免费。所有功能都不付费即可用：没有付费档、没有额度、没有「打赏解锁」。"
 }
