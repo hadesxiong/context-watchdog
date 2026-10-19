@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import type { DetectionItem } from '@engine/types'
 import DetectionItemComponent from './DetectionItem.vue'
+import { useI18n } from '../i18n'
 import { AccordionRoot, AccordionItem, AccordionHeader, AccordionTrigger, AccordionContent } from 'reka-ui'
 
 const props = defineProps<{
@@ -21,14 +22,7 @@ const groupedDetections = computed(() => {
     return groups
 })
 
-const typeNames: Record<string, string> = {
-    ENV_PASSWORD: '环境变量密码',
-    API_KEY: 'API Key',
-    DB_PASSWORD: '数据库密码',
-    JWT: 'JWT Token',
-    PRIVATE_KEY: '私钥',
-    HIGH_ENTROPY: '高熵字符串'
-}
+const { t, typeLabel } = useI18n()
 
 const openTypes = ref<string[]>([])
 
@@ -43,7 +37,7 @@ watch(() => props.detections, () => {
         <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
                 <h2 class="text-base font-bold text-foreground">
-                    识别结果</h2>
+                    {{ t('results_title') }}</h2>
                 <span class="px-1.5 my-0.5 self-stretch text-xs leading-normal font-medium rounded-sm 
                         bg-primary/10 text-primary ">
                     {{ detections.length }}</span>
@@ -58,9 +52,9 @@ watch(() => props.detections, () => {
                 </svg>
             </div>
             <p class="text-foreground text-sm font-medium">
-                未检测到需要替换的内容</p>
+                {{ t('results_empty_title') }}</p>
             <p class="text-muted-foreground text-xs mt-1">
-                文本中未发现敏感信息，可放心发送</p>
+                {{ t('results_empty_desc') }}</p>
         </div>
 
         <AccordionRoot v-else v-model="openTypes" type="multiple" :collapsible="true" class="flex flex-col gap-3">
@@ -73,7 +67,7 @@ watch(() => props.detections, () => {
                         <div class="flex items-center gap-2">
                             <span class="w-2 h-2 rounded-full bg-primary"></span>
                             <span class="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-                                {{ typeNames[type as string] || type }}
+                                {{ typeLabel(type as string) }}
                             </span>
                             <span
                                 class="px-1.5 py-0.5 text-xs font-medium bg-muted text-muted-foreground rounded">

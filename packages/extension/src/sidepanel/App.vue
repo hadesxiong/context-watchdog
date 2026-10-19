@@ -7,6 +7,15 @@ import ActionBar from '../components/ActionBar.vue'
 import ProfileSelect from '../components/ProfileSelect.vue'
 import PasteInterceptionSettings from '../components/PasteInterceptionSettings.vue'
 import { Button, Switch, Logo, LoadingOverlay, Dialog } from '../ui'
+import { useI18n } from '../i18n'
+
+const { t, localePreference, setLocalePreference, availableLocales, localeNames } = useI18n()
+
+// 界面语言：'auto' 跟随浏览器语言；改动立即生效（占位符语言一并切换）
+const localeChoice = computed({
+    get: () => localePreference.value,
+    set: (value: 'auto' | 'en' | 'zh_CN') => setLocalePreference(value)
+})
 
 const store = useDetectionStore()
 const inputText = ref('')
@@ -121,16 +130,16 @@ const openInNewTab = () => {
 const engineStatusItems = computed(() => [
     {
         key: 'regex' as const,
-        name: '正则规则',
-        description: '密钥、连接串、PII（手机/身份证/银行卡）等模式匹配 · 基础引擎，始终启用',
+        nameKey: 'engine_regex_name',
+        descKey: 'engine_regex_desc',
         enabled: true,
         locked: true,
         toggle: (_v: boolean) => { /* 恒开，禁止修改 */ }
     },
     {
         key: 'ai' as const,
-        name: 'AI 模型',
-        description: '姓名、地址等无固定格式实体，自动叠加场景识别（需下载约 180MB 模型，仅此一次）',
+        nameKey: 'engine_ai_name',
+        descKey: 'engine_ai_desc',
         enabled: store.aiEnabled,
         locked: false,
         toggle: (v: boolean) => store.setAiEnabled(v)
@@ -150,8 +159,8 @@ const progressLabel = computed(() => {
 
 // 加载阶段文案（仅在确认网络下载后才展示，缓存命中全程静默）
 const loadingCaption = computed(() => {
-    if (store.nerWaitingOtherWindow) return '另一窗口下载中...'
-    return '下载模型中...'
+    if (store.nerWaitingOtherWindow) return t('engine_caption_waiting')
+    return t('engine_caption_downloading')
 })
 </script>
 
@@ -169,7 +178,7 @@ const loadingCaption = computed(() => {
                             <h1 class="text-lg font-semibold text-foreground">
                                 PasteGuard</h1>
                             <p class="text-sm text-muted-foreground">
-                                AI脱敏助手</p>
+                                {{ t('app_subtitle') }}</p>
                         </div>
                     </div>
                     <div class="flex items-center gap-2">
@@ -183,7 +192,7 @@ const loadingCaption = computed(() => {
                         </Button>
                         <!-- 引擎状态按钮（齿轮入口） -->
                         <Button @click="toggleEngineStatus" variant="secondary"
-                            btn-type="text" size="sm" title="检测引擎状态"
+                            btn-type="text" size="sm" :title="t('engine_tooltip')"
                             :class="{ 'text-success': store.isNERReady }">
                             <svg class="w-5 h-5" fill="none"
                                 stroke="currentColor" viewBox="0 0 24 24">
@@ -207,7 +216,7 @@ const loadingCaption = computed(() => {
             <!-- 标题行：px-4 pt-4 距上/左/右边框 16px，pb-4 与下方区块间隔 16px -->
             <div class="flex items-center justify-between px-4 pt-4 pb-4">
                 <h3 class="text-sm font-semibold text-foreground">
-                    检测引擎状态</h3>
+                    {{ t('engine_panel_title') }}</h3>
                 <button @click="showEngineStatus = false"
                     class="text-muted-foreground hover:text-foreground">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -223,18 +232,18 @@ const loadingCaption = computed(() => {
             <!-- 引擎开关：正则恒开（禁改）+ AI 开关（含场景识别，合并下载）；
                  区块全宽贴边（无内缩），区块间 gap-4（16px），无 margin -->
             <div class="flex flex-col">
-                <div v-for="item in engineStatusItems" :key="item.name"
+                <div v-for="item in engineStatusItems" :key="item.nameKey"
                     class="px-4 pt-4 bg-muted/50">
                     <!-- gap-3：文字块与 Switch 之间保留间距（行内自由空间为 0 时也不贴合） -->
                     <div class="flex items-center justify-between gap-3">
                         <div class="min-w-0 flex items-center gap-3">
                             <div>
                                 <p class="text-sm font-medium text-foreground">
-                                    {{ item.name }}
+                                    {{ t(item.nameKey) }}
                                 </p>
                                 <!-- 描述：最多 2 行，超出省略 -->
                                 <p class="text-xs text-muted-foreground line-clamp-2">
-                                    {{ item.description }}
+                                    {{ t(item.descKey) }}
                                 </p>
                             </div>
                         </div>
@@ -261,14 +270,25 @@ const loadingCaption = computed(() => {
                         <div v-if="store.nerStatus === 'error' || store.nerStatus === 'timeout'"
                             class="pt-2 flex items-center justify-between gap-2">
                             <p class="text-xs text-warning">
-                                {{ store.nerError || '模型加载失败；基础检测不受影响' }}</p>
+                                {{ store.nerError || t('engine_load_failed') }}</p>
                             <Button @click="store.retryLoadNER" variant="secondary"
                                 btnType="outline" size="sm" class="shrink-0">
-                                重试
+                                {{ t('common_retry') }}
                             </Button>
                         </div>
                     </template>
                 </div>
+            </div>
+            <!-- 界面语言：直接决定 UI 文案与「脱敏占位符」语言（见 i18n/index.ts） -->
+            <div class="px-4 py-4 bg-muted/50 flex items-center justify-between gap-3">
+                <p class="text-sm font-medium text-foreground">{{ t('settings_language') }}</p>
+                <select v-model="localeChoice"
+                    class="px-2 py-1.5 rounded-md border border-input bg-background text-sm text-foreground
+                        focus:outline-none focus:ring-2 focus:ring-ring">
+                    <option value="auto">{{ t('settings_language_auto') }}</option>
+                    <option v-for="code in availableLocales" :key="code" :value="code">
+                        {{ localeNames[code] }}</option>
+                </select>
             </div>
             <!-- 粘贴自动拦截：逐站授权，只有授权站点才注入粘贴监听 -->
             <PasteInterceptionSettings />
@@ -282,7 +302,7 @@ const loadingCaption = computed(() => {
                     border border-primary/30">
                 <div class="flex justify-between items-start w-full">
                     <p class="text-sm font-medium text-foreground">
-                        {{ store.nerWaitingOtherWindow ? '另一窗口下载中，等待同步...' : '正在下载NER模型...' }}</p>
+                        {{ store.nerWaitingOtherWindow ? t('ner_downloading_other') : t('ner_downloading') }}</p>
                     <div class="mt-1">
                         <svg class="w-4 h-4 text-primary animate-spin" fill="none" viewBox="0 0 24 24">
                             <circle class="opacity-25" cx="12" cy="12" r="10"
@@ -295,10 +315,10 @@ const loadingCaption = computed(() => {
                 <!-- 进度 0 → 首次下载提示；有进度 → 百分比/字节 -->
                 <p v-if="store.nerLoadProgress === 0 && !store.nerIndeterminate"
                     class="text-xs text-primary w-full mt-1">
-                    首次使用需要下载模型（约 180MB，量化版），请稍候</p>
+                    {{ t('ner_first_download') }}</p>
                 <div v-else class="w-full mt-1">
                     <div class="flex justify-between text-xs text-primary mb-1">
-                        <span>下载中...</span>
+                        <span>{{ t('ner_downloading_progress') }}</span>
                         <span>{{ progressLabel }}</span>
                     </div>
                     <!-- 定进度：按真实字节数填充；不定进度：循环滑动动画 -->
@@ -319,13 +339,13 @@ const loadingCaption = computed(() => {
                     border border-warning/40">
                 <div class="flex-1">
                     <p class="text-sm font-medium text-warning">
-                        {{ store.nerStatus === 'timeout' ? 'NER模型加载超时' : 'NER模型加载失败' }}</p>
+                        {{ store.nerStatus === 'timeout' ? t('ner_timeout') : t('ner_failed') }}</p>
                     <p class="text-xs text-warning mt-0.5">
-                        {{ store.nerError || '基础检测功能仍可正常使用' }}</p>
+                        {{ store.nerError || t('ner_base_still_ok') }}</p>
                 </div>
                 <Button @click="store.retryLoadNER"
                     variant="secondary" btnType="outline" size="sm">
-                    重试</Button>
+                    {{ t('common_retry') }}</Button>
                 <svg class="w-5 h-5 text-warning" fill="none"
                     stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -341,9 +361,9 @@ const loadingCaption = computed(() => {
                     border border-success/40">
                 <div class="flex-1">
                     <p class="text-sm font-medium text-success">
-                        NER模型已就绪</p>
+                        {{ t('ner_ready') }}</p>
                     <p class="text-xs text-success mt-0.5">
-                        增强检测已启用</p>
+                        {{ t('ner_ready_desc') }}</p>
                 </div>
                 <svg class="w-5 h-5 text-success" fill="none"
                     stroke="currentColor" viewBox="0 0 24 24">
@@ -413,21 +433,19 @@ const loadingCaption = computed(() => {
         <!-- 全局检测中遮罩 -->
         <LoadingOverlay v-if="showOverlay" />
         <!-- 首启引导弹窗：AI 增强为可选项，开启才下载模型（选择权交还用户） -->
-        <Dialog :open="showOnboarding" title="启用 AI 增强检测？"
+        <Dialog :open="showOnboarding" :title="t('onboarding_title')"
             @update:open="(v: boolean) => { if (!v) onDismissOnboarding() }">
             <div class="px-4 py-4 space-y-3">
                 <p class="text-xs text-muted-foreground leading-relaxed">
-                    AI 增强可识别姓名、地址等无固定格式内容，让检测更全面。
-                    开启后需下载约 180MB 量化模型（仅此一次，本地处理，不上传任何数据）。
-                    不开启也可正常使用正则基础检测（密钥、手机号、身份证等）。
+                    {{ t('onboarding_body') }}
                 </p>
                 <div class="flex justify-end gap-2">
                     <Button variant="secondary" btnType="outline" size="sm"
                         @click="onDismissOnboarding">
-                        暂不
+                        {{ t('onboarding_later') }}
                     </Button>
                     <Button size="sm" @click="onEnableAiFromDialog">
-                        开启 AI 增强
+                        {{ t('onboarding_enable') }}
                     </Button>
                 </div>
             </div>

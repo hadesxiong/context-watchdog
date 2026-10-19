@@ -1,3 +1,9 @@
+<script setup lang="ts">
+import { useI18n } from '../i18n'
+
+const { t } = useI18n()
+</script>
+
 <template>
   <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
     <div class="flex flex-col items-center gap-3">
@@ -21,7 +27,7 @@
           d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
         />
       </svg>
-      <span class="text-sm font-medium text-white">检测中...</span>
+      <span class="text-sm font-medium text-white">{{ t('common_detecting') }}</span>
     </div>
   </div>
 </template>

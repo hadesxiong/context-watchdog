@@ -1,11 +1,15 @@
 // 注入到页面的粘贴监听器
 //
-// chrome.scripting.executeScript({ func }) 会把函数序列化后在页面的扩展隔离世界里执行，
+// chrome.scripting.executeScript({ func, args }) 会把函数序列化后在页面的扩展隔离世界里执行，
 // 因此该函数必须自包含：不能引用任何模块作用域的标识符（import 的常量/函数都会 ReferenceError）。
+// 这也是界面文案**只能靠 args 传进来**的原因——函数里读不到 i18n 模块，
+// 由 service worker（chrome.i18n.getMessage）取好再作为参数递进来。
 //
 // 规则与守卫逻辑的可测版本见 src/content/pasteText.ts（有单测），改动需两边同步；
-// 消息类型常量见 src/core/messages.ts。
-export const pasteGuardEntryPoint = (): void => {
+// 消息类型常量见 @engine/messages。
+export const pasteGuardEntryPoint = (messages?: { toastRedacted?: string }): void => {
+  // 语言模板（含 {count} 占位），缺失时退化为「只显示数字」，不至于报错或空白
+  const toastTemplate = messages?.toastRedacted ?? '{count}'
   const globalRef = window as unknown as Record<string, unknown>
   if (globalRef.__pasteGuardInstalled) return
   globalRef.__pasteGuardInstalled = true
@@ -54,7 +58,7 @@ export const pasteGuardEntryPoint = (): void => {
     const toast = document.createElement('div')
     toast.id = 'paste-guard-toast'
     toast.setAttribute('role', 'status')
-    toast.textContent = `已脱敏 ${count} 处`
+    toast.textContent = toastTemplate.split('{count}').join(String(count))
     Object.assign(toast.style, {
       position: 'fixed',
       top: '16px',

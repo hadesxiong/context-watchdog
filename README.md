@@ -13,7 +13,7 @@ PasteGuard 是 Chrome / Firefox 浏览器扩展（Manifest V3），在用户将�
 npm install
 npm run build           # Chrome 包 → dist/，加载到 chrome://extensions
 npm run build:firefox   # Firefox 包 → dist-firefox/，about:debugging → 此 Firefox → 加载临时附加组件 → 选 dist-firefox/manifest.json
-npm run test            # 运行测试套件（190 项断言）
+npm run test            # 运行测试套件（263 项断言）
 ```
 
 ## 架构
@@ -150,6 +150,9 @@ packages/extension/                # 扩展（宿主层）
     ├── components/                # Vue 组件（ProfileTabs/DetectionItem/PasteInterceptionSettings...）
     ├── content/pasteText.ts       # 粘贴就地替换纯逻辑（区间推导与改写守卫）
     ├── stores/detection.ts        # Pinia（Profile 持久化 + 默认策略分层）
+    ├── i18n/                      # 界面文案：单一 catalog，UI 与 _locales 共用
+    │   ├── locales/{en,zh_CN}.json #   扁平词条（键名用 Chrome messages.json 的合法字符集）
+    │   └── index.ts               #   t() / useI18n / typeLabel / profileLabel
     ├── sidepanel/                 # Side Panel 主界面
     ├── background/                # Service Worker（侧栏入口跨浏览器 + 粘贴检测服务 + 站点注入）
     ├── shims/                     # 构建期打桩（ort GPU 子路径）
@@ -166,6 +169,18 @@ tests/  scripts/  docs/            # 测试 / 构建与探针脚本 / 设计文�
 **vite 的 root 指向 `packages/extension`**（而非仓库根），这样 manifest 里的入口路径保持包内相对形式（`src/sidepanel/index.html`），产物布局与重构前逐字节一致，运行时 `chrome.runtime.getURL` 无需改动。副作用是 Tailwind 的扫描范围恰好收敛到扩展包内——扫描仓库根会把 `package-lock.json` 里的英文单词也当成类名。`scripts/postbuild.mjs` 会抽查产物 CSS 里的 utility 与设计 token，两者缺失都会让构建**硬失败**。
 
 设计 token 通过别名 `@tokens/tokens.css` 被 `packages/extension/src/style.css` 引用，**且产物内会被完整内联**（同样有构建期校验）。
+
+### 界面语言（i18n）
+
+词条只有**一份**：`packages/extension/src/i18n/locales/{en,zh_CN}.json`。它同时供两个消费方使用——UI 走自带 `t()`（需要运行时切换语言，字典必须进包），manifest 的 `__MSG_*__` 与 service worker 的 `chrome.i18n.getMessage` 走 `_locales/*/messages.json`（Chrome 原生机制，且不必把字典打进 SW 包）。后者由 `scripts/generate-locales.mjs` 在构建时从前者生成，**不手抄**。
+
+键名一律 snake_case：Chrome 的 `messages.json` 只接受 `[a-zA-Z0-9_@]`，用点号分层就无法共用一份清单。
+
+语言来源：`pasteguard.locale`（localStorage，显式选择，同步可读）→ `chrome.i18n.getUILanguage()` → `navigator.language` → `en`。设置入口在侧栏的「检测引擎状态」面板里。
+
+**占位符也会跟着语言走**：替换后写进文本的是 `<<手机号>>` 还是 `<<PHONE>>`，取决于当前界面语言。引擎自己读不到浏览器 API，因此由宿主在启动时 `setPlaceholderLocale()` 注入；解析侧同时接受两种语言的名称，所以切换语言后旧映射表仍可还原。
+
+`tests/unit/i18n.test.ts` 兜住四类「构建全绿、界面才露馅」的漂移：新文案只写中文、词条加了一门语言、`t('xxx')` 拼错、manifest 的 `__MSG_*__` 没有对应词条。
 
 ## 测试
 

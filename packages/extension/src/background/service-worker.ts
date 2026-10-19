@@ -6,9 +6,15 @@
 // 3) 受保护站点的按需注入：只有用户授权过的站点才注入粘贴监听，未授权站点零接触
 import { detect } from '@engine/detector'
 import { sanitizeText } from '@engine/replacer'
+import { setPlaceholderLocale } from '@engine/replacer/placeholder'
 import { matchSite, readProtectedSites, PROTECTED_SITES_KEY } from '@engine/sites'
 import { PASTE_DETECT, type PasteDetectResponse } from '@engine/messages'
 import { pasteGuardEntryPoint } from './pasteEntryPoint'
+
+// 占位符语言：SW 里拿不到 localStorage（侧栏的界面语言偏好存在那儿），
+// 只能按浏览器语言定。用户显式改过界面语言时两者可能不同——
+// 影响仅限于「粘贴拦截走 SW 检测」这条路生成的占位符用词。
+setPlaceholderLocale(chrome.i18n.getUILanguage().toLowerCase().startsWith('zh') ? 'zh_CN' : 'en')
 
 chrome.runtime.onInstalled.addListener(() => {
   console.log('[PasteGuard] installed')
@@ -53,8 +59,16 @@ chrome.action.onClicked.addListener(async tab => {
 let protectedPatterns: string[] = []
 
 const injectPasteGuard = (tabId: number): void => {
+  // 文案在 SW 侧取好再传进去：注入函数在页面的隔离世界里执行，引用不到模块，
+  // 而 chrome.i18n 读的正是 postbuild 从同一份 catalog 生成的 _locales。
+  // 兜底用英文（default_locale），免得 _locales 缺失时只显示一个数字。
+  const toastRedacted = chrome.i18n.getMessage('paste_toast_redacted') || '{count} redacted'
   chrome.scripting
-    .executeScript({ target: { tabId, allFrames: true }, func: pasteGuardEntryPoint })
+    .executeScript({
+      target: { tabId, allFrames: true },
+      func: pasteGuardEntryPoint,
+      args: [{ toastRedacted }]
+    })
     .catch(error => console.warn('[PasteGuard] 注入粘贴监听失败:', error))
 }
 

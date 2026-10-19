@@ -2,6 +2,9 @@
 import { ref } from 'vue'
 import { useDetectionStore } from '../stores/detection'
 import { Button } from '../ui'
+import { useI18n } from '../i18n'
+
+const { t } = useI18n()
 
 const emit = defineEmits<{
     (e: 'copy'): void
@@ -46,12 +49,12 @@ const handleKeepAll = () => {
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                         d="M5 13l4 4L19 7"/>
                 </svg> -->
-                {{ copySuccess ? '已复制!' : '复制脱敏文本' }}
+                {{ copySuccess ? t('action_copied') : t('action_copy') }}
             </Button>
             <Button @click="handleReplaceAll" variant="secondary" btn-type="outline"
-                class="flex-1">全部替换</Button>
+                class="flex-1">{{ t('action_replace_all') }}</Button>
             <Button @click="handleKeepAll" variant="secondary" btn-type="outline"
-                class="flex-1">全部保留</Button>
+                class="flex-1">{{ t('action_keep_all') }}</Button>
         </div>
   </div>
 </template>

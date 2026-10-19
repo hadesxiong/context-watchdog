@@ -9,6 +9,9 @@ import {
     DialogTitle,
     DialogDescription
 } from 'reka-ui'
+import { useI18n } from '../i18n'
+
+const { t } = useI18n()
 
 interface Props {
     open: boolean
@@ -72,7 +75,7 @@ const onOpenChange = (open: boolean) => {
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M6 18L18 6M6 6l12 12" />
                         </svg>
-                        <span class="sr-only">关闭</span>
+                        <span class="sr-only">{{ t('common_close') }}</span>
                     </button>
                 </div>
                 <!-- 正文滚动区：仅内容滚动（含长表单），overscroll-contain 防滚动穿透到页面 -->

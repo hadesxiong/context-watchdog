@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { Button } from '../ui'
+import { useI18n } from '../i18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{
     modelValue: string
@@ -54,19 +57,19 @@ const handleClear = () => {
                     :disabled="!localText.trim() || isProcessing"
                     :loading="isProcessing"
                     class="w-fit button-fixed">
-                    {{ isProcessing ? '检测中...' : '检测' }}</Button>
+                    {{ isProcessing ? t('common_detecting') : t('input_detect') }}</Button>
                 <Button variant="danger" btnType="text"
                     @click="handleClear"
                     :disabled="!localText.trim() || isProcessing"
                     class="w-fit button-fixed">
-                    清空</Button>
+                    {{ t('input_clear') }}</Button>
             </div>
         </div>
 
         <div class="p-0 min-[720px]:flex-1 min-[720px]:flex min-[720px]:flex-col">
             <textarea
                 v-model="localText"
-                placeholder="粘贴或输入包含敏感信息的文本..."
+                :placeholder="t('input_placeholder')"
                 class="w-full min-h-40 h-full px-3 py-2 text-sm font-mono rounded-sm resize-none 
                 text-foreground bg-background 
                 border border-border 

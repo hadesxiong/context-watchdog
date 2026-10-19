@@ -2,8 +2,11 @@
 import { computed } from 'vue'
 import type { DetectionItem } from '@engine/types'
 import { useDetectionStore } from '../stores/detection'
-import { getPlaceholderDisplayText, getTypeDisplayName } from '@engine/replacer/placeholder'
+import { getPlaceholderDisplayText } from '@engine/replacer/placeholder'
 import { Badge, Card, Switch } from '../ui'
+import { useI18n } from '../i18n'
+
+const { t, typeLabel } = useI18n()
 
 const props = defineProps<{
     item: DetectionItem
@@ -26,19 +29,19 @@ const confidenceConfig = computed(() => {
     // 颜色语义 = 风险等级（红=高风险/黄=中/绿=低），与「高=分析认为是敏感信息」的直觉一致
     switch (props.item.confidence) {
         case 'high':
-            return { variant: 'danger' as const, label: '高' }
+            return { variant: 'danger' as const, label: t('confidence_high') }
         case 'medium':
-            return { variant: 'warning' as const, label: '中' }
+            return { variant: 'warning' as const, label: t('confidence_medium') }
         case 'low':
-            return { variant: 'success' as const, label: '低' }
+            return { variant: 'success' as const, label: t('confidence_low') }
         default:
-            return { variant: 'default' as const, label: '未知' }
+            return { variant: 'default' as const, label: t('confidence_unknown') }
     }
 })
 
 const detectionTypesDisplay = computed(() => {
     const types = props.item.detectionTypes || [props.item.type]
-    return types.map(t => getTypeDisplayName(t)).join(' + ')
+    return types.map(type => typeLabel(type)).join(' + ')
 })
 </script>
 
@@ -59,21 +62,21 @@ const detectionTypesDisplay = computed(() => {
                 <!-- 切换: 保留/替换 -->
                 <div class="flex items-center gap-2 shrink-0 pt-1">
                     <span class="text-xs font-medium text-foreground/80">
-                        {{ isReplace ? '替换' : '保留' }}
+                        {{ isReplace ? t('common_replace') : t('common_keep') }}
                     </span>
                     <Switch v-model="isReplace" type="square" />
                 </div>
             </div>
             <!-- 原文 -->
             <div class="flex flex-col gap-1.5">
-                <span class="text-xs text-muted-foreground">原文:</span>
+                <span class="text-xs text-muted-foreground">{{ t('item_original') }}</span>
                 <p class="text-sm font-mono text-foreground truncate bg-muted/50 rounded px-2 py-1">
                     {{ item.original }}
                 </p>
             </div>
             <!-- 替换 -->
             <div class="flex flex-col gap-1.5">
-                <span class="text-xs text-muted-foreground">替换为:</span>
+                <span class="text-xs text-muted-foreground">{{ t('item_replacement') }}</span>
                 <p class="text-sm font-mono text-primary bg-primary/10 rounded px-2 py-1 mt-1">
                     {{ getPlaceholderDisplayText(item.placeholder) }}
                 </p>

@@ -15,6 +15,7 @@ import { readFileSync, writeFileSync, copyFileSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
 import { renderThirdPartyNotices } from './third-party-notices.mjs'
+import { writeLocales } from './generate-locales.mjs'
 
 const target = process.argv[2] === 'firefox' ? 'firefox' : 'chrome'
 const here = dirname(fileURLToPath(import.meta.url))
@@ -29,6 +30,35 @@ copyFileSync(resolve(here, '../THIRD-PARTY-NOTICES.txt'), resolve(here, `../${ou
 // LICENSE 一并入包：商店与用户都能在产物内直接核验许可全文
 copyFileSync(resolve(here, '../LICENSE'), resolve(here, `../${outDir}/LICENSE`))
 console.log('[postbuild] 第三方许可与 LICENSE 已写入 →', outDir)
+
+// manifest 用的是 __MSG_ext_name__ / __MSG_ext_description__，需要 _locales 才能被
+// 浏览器替换掉；service worker 的 chrome.i18n.getMessage 也读这里。
+// 两者与本扩展的 UI 字典同源（见 scripts/generate-locales.mjs 的头注释）。
+console.log('[postbuild] _locales 已生成 →', writeLocales(resolve(here, `../${outDir}`)).join(', '))
+
+// manifest 里的 __MSG_xxx__ 由浏览器在加载时替换，产物里保留原样是对的。
+// 但这意味着**少一个 key 不会被构建报错**——浏览器会直接把 __MSG_ext_name__
+// 当成名字显示出来。所以这里反过来校验 _locales 里确实存在被引用的 key。
+const builtManifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+const referencedKeys = new Set()
+const collectMsgRefs = (value) => {
+  if (typeof value === 'string') {
+    for (const m of value.matchAll(/__MSG_([A-Za-z0-9_@]+)__/g)) referencedKeys.add(m[1])
+  } else if (Array.isArray(value)) {
+    value.forEach(collectMsgRefs)
+  } else if (value && typeof value === 'object') {
+    Object.values(value).forEach(collectMsgRefs)
+  }
+}
+collectMsgRefs(builtManifest)
+const defaultLocale = builtManifest.default_locale ?? 'en'
+const defaultMessages = JSON.parse(readFileSync(resolve(here, `../${outDir}/_locales/${defaultLocale}/messages.json`), 'utf8'))
+const missingMsgKeys = [...referencedKeys].filter((k) => !(k in defaultMessages))
+if (missingMsgKeys.length) {
+  console.error(`[postbuild] ✗ manifest 引用了 _locales 中不存在的键：${missingMsgKeys.join(', ')}`)
+  process.exit(1)
+}
+console.log(`[postbuild] manifest 本地化键可解析 ✓  (${[...referencedKeys].join(', ')} → ${defaultLocale})`)
 
 // 设计 token 内联护栏。
 // Tailwind 4 的 @import 解析器只内联同目录/别名可达的路径，会静默丢弃它不认识的

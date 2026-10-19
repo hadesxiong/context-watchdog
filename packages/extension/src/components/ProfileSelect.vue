@@ -15,12 +15,14 @@ import {
 } from 'reka-ui'
 import { useDetectionStore } from '../stores/detection'
 import { Dialog } from '../ui'
+import { useI18n } from '../i18n'
 import ProfileSettings from './ProfileSettings.vue'
 
 // 「新建」菜单项的哨兵值（不存在的档案 id，选中即触发创建流程）
 const CREATE_VALUE = '__create_profile__'
 
 const store = useDetectionStore()
+const { t, profileLabel } = useI18n()
 const showSettings = ref(false)
 // 菜单开合受控：编辑齿轮需在不触发 Item 选中的前提下显式关闭菜单
 // （SelectItem 的选中/关菜单挂在 pointerup 上，拦掉后菜单不会自行关闭）
@@ -56,7 +58,7 @@ const onEdit = (profileId: string, event: MouseEvent) => {
 }
 
 const onDelete = async () => {
-    if (confirm('确定删除该自定义档案？')) {
+    if (confirm(t('profile_delete_confirm'))) {
         showSettings.value = false
         await store.deleteUserProfile(store.activeProfileId)
     }
@@ -68,7 +70,7 @@ const onDelete = async () => {
         @update:open="menuOpen = $event"
         @update:model-value="onUpdate">
         <SelectTrigger
-            :title="'模式:' + store.activeProfile.description"
+            :title="t('profile_mode') + profileLabel(store.activeProfile).description"
             class="flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-input
                 bg-background text-sm font-medium text-foreground max-w-45
                 hover:bg-muted/60 transition-colors outline-none
@@ -76,8 +78,8 @@ const onDelete = async () => {
                 data-placeholder:text-muted-foreground">
             <!-- <SelectValue placeholder="选择档案" class="truncate" /> -->
             <span class="flex items-center min-w-0 gap-1">
-                <span class="shrink-0">模式:</span>
-                <SelectValue placeholder="选择档案" class="truncate" />
+                <span class="shrink-0">{{ t('profile_mode') }}</span>
+                <SelectValue :placeholder="t('profile_select_placeholder')" class="truncate" />
             </span>
             <svg class="w-3.5 h-3.5 shrink-0 text-muted-foreground" fill="none"
                 stroke="currentColor" viewBox="0 0 24 24">
@@ -99,11 +101,11 @@ const onDelete = async () => {
                     <div class="min-w-0 flex-1">
                         <SelectItemText>
                             <span :class="profile.id === store.activeProfileId && 'font-medium'">
-                                {{ profile.name }}</span>
+                                {{ profileLabel(profile).name }}</span>
                         </SelectItemText>
                         <!-- 档案说明：选项内第二行小字，超一行省略号截断（预设/自定义一致） -->
                         <p class="text-xs text-muted-foreground leading-snug truncate mt-0.5">
-                            {{ profile.description }}</p>
+                            {{ profileLabel(profile).description }}</p>
                     </div>
                     <!-- 编辑齿轮：仅自定义档案；pointerup/touchend 必须拦（SelectItem 在
                          pointerup 上选中并关菜单，菜单在 click 派发前就卸载 → 点击丢失；
@@ -113,7 +115,7 @@ const onDelete = async () => {
                         @click="onEdit(profile.id, $event)"
                         class="shrink-0 p-2 rounded-sm text-muted-foreground
                             hover:text-foreground hover:bg-accent transition-colors"
-                        :title="`编辑「${profile.name}」`">
+                        :title="t('profile_edit_title', { name: profileLabel(profile).name })">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -129,7 +131,7 @@ const onDelete = async () => {
                         cursor-pointer select-none outline-none transition-colors
                         text-muted-foreground
                         data-highlighted:bg-muted data-highlighted:text-primary">
-                    <SelectItemText>＋ 新建自定义档案</SelectItemText>
+                    <SelectItemText>{{ t('profile_create') }}</SelectItemText>
                 </SelectItem>
             </SelectViewport>
         </SelectContent>
@@ -137,8 +139,8 @@ const onDelete = async () => {
     <!-- 自定义档案设置弹窗 -->
     <Dialog
         v-model:open="showSettings"
-        title="自定义档案设置"
-        :description="store.activeProfile.description"
+        :title="t('profile_settings_title')"
+        :description="profileLabel(store.activeProfile).description"
         width="max-w-lg"
         @close="showSettings = false"
     >
