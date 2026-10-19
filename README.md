@@ -133,7 +133,10 @@ Every row below can be checked in this repository instead of taken on faith:
 | **Zero contact with unauthorised sites** | `rg -n 'content_scripts\|all_urls' packages/extension/src/manifest.json` → no match. The manifest declares no `content_scripts` and requests only `optional_host_permissions`, granted per site by the user |
 | **No telemetry of any kind** | No analytics SDK, no crash reporting, no behavioural tracking in the repository; inspect the bundle yourself after `npm run build` |
 | **Credential fields are never processed** | `password` inputs and hidden fields are skipped at `isTextEditable`, with a guard on both the paste-injection and side-panel paths |
-| **Releases are verifiable** | Each Release ships `sha256` sums; licences and third-party notices travel with the bundle (`LICENSE` / `THIRD-PARTY-NOTICES.txt`) |
+| **Releases are verifiable** | Each Release ships `sha256` sums; licences and third-party notices travel with the bundle (`LICENSE` / `NOTICE` / `THIRD-PARTY-NOTICES.txt`) |
+
+The same content, written as a store-submittable policy page, lives at `/privacy/` and
+`/en/privacy/` on the landing page. Keep the two in sync — reviewers do compare them.
 
 ## Project layout
 
@@ -215,6 +218,7 @@ npm test              # everything (golden + regression + unit + perf)
 npm run test:watch    # watch mode
 npm run site:check    # landing page: Astro/TS diagnostics
 npm run site:build    # landing page: static build → apps/site/dist
+npm run check:versions # version/licence/canonical consistency + store pre-flight
 ```
 
 | Directory | Contents |
@@ -232,6 +236,19 @@ Manual verification cases: `docs/test-cases.md`; implementation details: `docs/s
 - @crxjs/vite-plugin (Manifest V3 build)
 - gliner + @xenova/transformers + onnxruntime-web (GLiNER model, WASM, optional enhancement)
 - Remote model loading (primary source: ModelScope mirror; fallback: huggingface.co; Range-resumable download + exponential-backoff retries + a stall watchdog + Cache Storage persistence, so reopening the panel downloads nothing; on failure it silently degrades to pure regex and the UI shows the degraded state)
+
+## Release
+
+```bash
+npm run check:versions              # version consistency, licence files in the bundle, landing-page canonicals
+npm run check:versions -- --release # "can we tag yet?" — requires everything to be in place
+npm run release:pack                # two store-ready zips + SHA256SUMS → release/
+```
+
+The full runbook (tags, Release assets, the AMO reproducible-build source package, store
+submission steps, asset checklist) is in [`docs/releasing.md`](docs/releasing.md).
+`packages/extension/src/manifest.json` is the single source of truth for the version number;
+`check:versions` enforces that everywhere else agrees with it.
 
 ## Third-party components and model attribution
 

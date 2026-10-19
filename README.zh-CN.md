@@ -133,7 +133,10 @@ npm run build:firefox   # Firefox 121+ → dist-firefox/
 | **未授权站点零接触** | `rg -n 'content_scripts\|all_urls' packages/extension/src/manifest.json` → 无匹配。manifest 不声明 `content_scripts`，只申请 `optional_host_permissions`，由用户逐站授权 |
 | **不采集任何遥测数据** | 仓库内无统计 SDK、无崩溃上报、无行为追踪；构建产物可用 `npm run build` 后自行检查 |
 | **凭据类数据绝不处理** | `password` 类型与隐藏输入框在 `isTextEditable` 处一律跳过，且在粘贴注入与侧栏两条链路上都有护栏 |
-| **发布产物可校验** | 每个 Release 附 `sha256`；许可与第三方声明随产物分发（`LICENSE` / `THIRD-PARTY-NOTICES.txt`） |
+| **发布产物可校验** | 每个 Release 附 `sha256`；许可与第三方声明随产物分发（`LICENSE` / `NOTICE` / `THIRD-PARTY-NOTICES.txt`） |
+
+同一份内容另有一份「可提交给商店」的政策正文，在落地页的 `/privacy/` 与 `/en/privacy/`。
+改一处要一起改——审核是会拿两者对照的。
 
 ## 项目结构
 
@@ -215,6 +218,7 @@ npm test              # 全量（golden + 回归 + 单元 + 性能）
 npm run test:watch    # 监听模式
 npm run site:check    # 落地页：Astro/TS 诊断
 npm run site:build    # 落地页：静态构建 → apps/site/dist
+npm run check:versions # 版本/许可/canonical 一致性 + 商店提交预检
 ```
 
 | 目录 | 内容 |
@@ -232,6 +236,18 @@ npm run site:build    # 落地页：静态构建 → apps/site/dist
 - @crxjs/vite-plugin（Manifest V3 构建）
 - gliner + @xenova/transformers + onnxruntime-web（GLiNER 模型，WASM，可选增强）
 - 模型远程加载（主源 ModelScope 镜像，回退 huggingface.co；Range 断点续传 + 指数退避重试 + 停滞看门狗 + Cache Storage 落盘，重开侧栏零下载；失败时静默降级为纯正则，UI 显示降级状态）
+
+## 发布
+
+```bash
+npm run check:versions              # 版本一致性 + 产物随附许可文件 + 落地页 canonical
+npm run check:versions -- --release # 「现在能打 tag 了吗」：要求一切都已就位
+npm run release:pack                # 两个可直接上架的 zip + SHA256SUMS → release/
+```
+
+完整操作手册（tag、Release 附件、AMO 可复现构建源码包、三渠道提交、素材清单）见
+[`docs/releasing.md`](docs/releasing.md)。版本号的唯一真相源是
+`packages/extension/src/manifest.json`（商店读的就是它），`check:versions` 会强制其它地方与它一致。
 
 ## 第三方组件与模型归属
 

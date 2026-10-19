@@ -12,15 +12,26 @@ import { repoUrl, releasesUrl, siteUrl, hasCanonicalOrigin } from '@site/data/li
 
 interface Props {
   locale: SiteLocale
+  /** 当前页在该语言下的子路径（不含前导斜杠），如 'privacy'；首页留空 */
+  path?: string
 }
 
-const { locale } = Astro.props
+const { locale, path = '' } = Astro.props
 const d = dict(locale)
 const other = otherLocale(locale)
 
+// 每个语言下的页面路径。canonical 与 hreflang 必须指向**当前这一页**，
+// 而不是恒指向首页——隐私政策页若声明 canonical 为 /，等于告诉搜索引擎
+// 这一页是首页的副本，它会直接不收录。
+//
+// 子页面带尾斜杠：构建用 format: 'directory'，服务的真实地址就是 /privacy/，
+// canonical 写的必须是实际地址，否则又变成另一种形式的「指向别处」。
+const pagePath = (target: SiteLocale): string =>
+  path === '' ? localePath(target) : `${localePath(target)}${path}/`
+
 // 部署后 siteUrl 填好就自动生效；为空时输出相对链接（不做假的 canonical）
-const absolute = (path: string): string => (hasCanonicalOrigin ? new URL(path, siteUrl).href : path)
-const canonical = absolute(localePath(locale))
+const absolute = (p: string): string => (hasCanonicalOrigin ? new URL(p, siteUrl).href : p)
+const canonical = absolute(pagePath(locale))
 
 const pageTitle = d.meta.title
 ---
@@ -36,13 +47,13 @@ const pageTitle = d.meta.title
     <link rel="canonical" href={canonical} />
 
     <!-- 两门语言互为 alternate；x-default 指向中文版（默认语言在根路径） -->
-    <link rel="alternate" hreflang={d.meta.lang} href={absolute(localePath(locale))} />
+    <link rel="alternate" hreflang={d.meta.lang} href={absolute(pagePath(locale))} />
     <link
       rel="alternate"
       hreflang={dict(other).meta.lang}
-      href={absolute(localePath(other))}
+      href={absolute(pagePath(other))}
     />
-    <link rel="alternate" hreflang="x-default" href={absolute(localePath('zh'))} />
+    <link rel="alternate" hreflang="x-default" href={absolute(pagePath('zh'))} />
 
     <meta property="og:type" content="website" />
     <meta property="og:title" content={pageTitle} />
@@ -64,13 +75,13 @@ const pageTitle = d.meta.title
         </a>
 
         <nav class="pg-nav" aria-label="Sections">
-          <a href="#how">{d.nav.how}</a>
-          <a href="#privacy">{d.nav.privacy}</a>
-          <a href="#decisions">{d.nav.decisions}</a>
-          <a href="#faq">{d.nav.faq}</a>
+          <a href={`${localePath(locale)}#how`}>{d.nav.how}</a>
+          <a href={`${localePath(locale)}#privacy`}>{d.nav.privacy}</a>
+          <a href={`${localePath(locale)}#decisions`}>{d.nav.decisions}</a>
+          <a href={`${localePath(locale)}#faq`}>{d.nav.faq}</a>
         </nav>
 
-        <a class="pg-lang" href={localePath(other)} hreflang={dict(other).meta.lang} rel="alternate">
+        <a class="pg-lang" href={pagePath(other)} hreflang={dict(other).meta.lang} rel="alternate">
           {localeLabel(other)}
         </a>
       </div>
@@ -83,6 +94,7 @@ const pageTitle = d.meta.title
     <footer class="pg-footer">
       <div class="pg-shell">
         <div class="pg-footer-links">
+          <a href={`${localePath(locale)}privacy/`}>{d.footer.privacy}</a>
           <a href={repoUrl}>{d.footer.repo}</a>
           <a href={releasesUrl}>{d.footer.release}</a>
           <a href={`${repoUrl}/blob/main/LICENSE`}>{d.footer.license}</a>

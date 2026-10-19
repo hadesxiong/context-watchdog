@@ -34,10 +34,12 @@ apps/site/
     ├── i18n/{zh,en}.json     # 站点文案（两语言键集合一致由单测强制）
     ├── i18n/index.ts         # 类型层面的翻译完整性检查 + 插值 / 粗体解析
     ├── layouts/Base.astro    # <head>（hreflang / canonical / og）+ 页头 + 页脚
-    ├── components/           # Mark / Rich / Download / Thanks / Landing
+    ├── components/           # Mark / Rich / Download / Thanks / PrivacyBody / Landing
     └── pages/
-        ├── index.astro       # 中文（默认语言，根路径 /）
-        └── en/index.astro    # 英文（/en/）
+        ├── index.astro       # 中文首页（默认语言，根路径 /）
+        ├── en/index.astro    # 英文首页（/en/）
+        ├── privacy.astro     # 中文隐私权政策（/privacy/）
+        └── en/privacy.astro  # 英文隐私权政策（/en/privacy/）
 ```
 
 ## 三条不改的原则
@@ -66,9 +68,13 @@ apps/site/
      线上必须先填，否则搜索引擎拿到的是不可解析的 canonical。
    - 渠道上架后同步 `available: true` 并填 `url`（两者必须同时改，否则构建失败）。
 2. `npm run site:evidence` —— 刷新页面上的测试/探针数（并提交 evidence.json）。
-3. `npm run site:check && npm run site:build` —— 构建通过。
+3. `npm run site:check && npm run site:build && npm run check:versions` —— 全部通过。
+   `check-versions` 会逐个页面核对 canonical 是否指向**自己**（多语言站点最常见的错法
+   是 canonical 写死首页，后果是所有子页不被收录且毫无报错）。
 4. 生成 `supporters.json`（0 人时该区块自动隐藏）。录入任何姓名**必须事先取得本人同意**。
 5. 补两项待作者产出的资产：演示动图（E8）与打赏收款码（E10）。当前页面对两者都是明确的占位文案，
    不会显示成坏图。
+6. 隐私权政策页（`/privacy/`、`/en/privacy/`）的内容与 README 的「数据流与隐私声明」一节同源：
+   **改一处要一起改**，口径不一致在商店审核时会被追问。CWS 的表单里必填这个 URL。
 
 > 部署完把 `siteUrl` 的域名写进仓库的 `README`/Release 说明，并做一次互链检查（F7）。

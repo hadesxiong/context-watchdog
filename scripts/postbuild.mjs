@@ -29,7 +29,12 @@ writeFileSync(resolve(here, '../THIRD-PARTY-NOTICES.txt'), notices)
 copyFileSync(resolve(here, '../THIRD-PARTY-NOTICES.txt'), resolve(here, `../${outDir}/THIRD-PARTY-NOTICES.txt`))
 // LICENSE 一并入包：商店与用户都能在产物内直接核验许可全文
 copyFileSync(resolve(here, '../LICENSE'), resolve(here, `../${outDir}/LICENSE`))
-console.log('[postbuild] 第三方许可与 LICENSE 已写入 →', outDir)
+// NOTICE 必须一并入包。这不是「顺手多带一个文件」：Apache-2.0 §4(d) 明确要求
+// 分发衍生作品时随附 NOTICE 里的署名声明。本项目恰好有 NOTICE（作者署名 + 商标
+// 声明 + 专利声明），漏了它就是漏了一条许可义务 —— 而且漏得毫无症状：
+// 构建照样成功，只有真的去看产物才会发现。因此 check-versions 里有一条硬护栏。
+copyFileSync(resolve(here, '../NOTICE'), resolve(here, `../${outDir}/NOTICE`))
+console.log('[postbuild] 第三方许可、LICENSE 与 NOTICE 已写入 →', outDir)
 
 // manifest 用的是 __MSG_ext_name__ / __MSG_ext_description__，需要 _locales 才能被
 // 浏览器替换掉；service worker 的 chrome.i18n.getMessage 也读这里。

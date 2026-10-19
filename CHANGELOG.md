@@ -7,7 +7,7 @@
 
 ## 2026-10-19
 
-### 1.0.0 发布准备 A–D · 关键节点结案
+### 1.0.0 发布准备 A–F · 关键节点结案
 
 路线图见 `docs/design/roadmap.md`（A–F 六个关键节点）。本轮完成 A–D：
 
@@ -35,8 +35,15 @@
   视觉 `@import` 自 `packages/design-tokens/tokens.css`（与扩展同源）；版本号构建期
   从扩展 manifest 注入；测试/探针数由 `scripts/site-evidence.mjs` 实测写入；
   未上架渠道渲染为「即将上架」而非死链（`links.json` 状态与链接不一致会让构建失败）。
+- **F 发布就绪**：`scripts/check-versions.mjs`（版本一致性 + 许可文件随附 + 落地页 canonical +
+  产物 `eval` 预检 + tag 占用；`--release` 模式回答「现在能打 tag 了吗」）、
+  `scripts/pack-release.mjs`（打包 zip + `SHA256SUMS`，回读校验根目录有 manifest）；
+  操作手册见 `docs/releasing.md`。**顺带修掉一处合规缺口**：产物此前只带了 LICENSE 与
+  第三方声明，**漏了 NOTICE**（Apache-2.0 §4(d) 要求随附），构建不会因此报错，
+  已补入包并加了硬护栏。另新增隐私权政策页（`/privacy/`、`/en/privacy/`，CWS 表单必填）。
 
-待做：F 发布 1.0.0（含 E8 演示 GIF 与 E10 收款码两项待作者产出的资产）。
+待做：F7 互链（等 `siteUrl`）与 F8 打 tag（**由作者确认后执行**）；
+另有三项待作者产出的资产：演示 GIF、打赏收款码、商店截图/promo。
 
 ## 2026-10-18
 

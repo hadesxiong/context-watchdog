@@ -10,6 +10,9 @@ build/
 out/
 *.tsbuildinfo
 
+# 发布包（scripts/pack-release.mjs 的产物，不入库）
+release/
+
 # Vite
 .vite/
 *.local

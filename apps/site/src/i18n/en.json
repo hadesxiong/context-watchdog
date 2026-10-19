@@ -189,6 +189,26 @@
     "trademark": "Attribution & trademark",
     "patents": "Patent notice",
     "designDocs": "Design docs",
+    "privacy": "Privacy policy",
     "static": "This site is static: no client-side scripts (bar one copy button), no CDN, no third-party analytics, no web fonts."
+  },
+  "privacyPage": {
+    "title": "Privacy policy",
+    "lead": "In one sentence: we do not collect any of your data. The verifiable details are below.",
+    "noCollect": "PasteGuard does not collect, upload or store any of your text or personal information. No account, no telemetry, no third-party analytics SDK.",
+    "flowTitle": "Data flow",
+    "flowRows": [
+      { "stage": "Text detection and replacement", "where": "on-device (service worker or side-panel memory); never leaves your machine" },
+      { "stage": "AI model inference", "where": "on-device (WASM / ONNX Runtime); never leaves your machine" },
+      { "stage": "Model download", "where": "whitelisted model sources (a ModelScope mirror, falling back to huggingface.co); model files only — user data is never uploaded" },
+      { "stage": "Site authorisation", "where": "per-site, stored in chrome.storage.local; unauthorised sites are never touched" },
+      { "stage": "Telemetry / analytics / crash reporting", "where": "none" }
+    ],
+    "verifyTitle": "Verify it yourself",
+    "thirdPartyTitle": "Third-party components",
+    "thirdParty": "The third-party components in use and their licences are listed in THIRD-PARTY-NOTICES.txt (both inside the bundle and in the repository). The model downloaded at runtime is onnx-community/gliner_small-v2 (Apache-2.0).",
+    "contactTitle": "Contact",
+    "contact": "Open an issue for anything privacy-related.",
+    "updated": "Last updated: 2026-10-19"
   }
 }

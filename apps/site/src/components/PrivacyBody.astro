@@ -1,0 +1,62 @@
+---
+// 隐私权政策正文
+//
+// 为什么单独成页：三个商店都要一个**可指向的**隐私声明 URL（CWS 的表单里是必填项）。
+// 落地页的「可核验的隐私承诺」区块是宣传口径，不适合当政策正文——政策要的是
+// 数据流表、第三方组件、联系方式、更新日期这些能对着表格读的东西。
+//
+// 内容与 README 的「数据流与隐私声明」一节同源，改一处要一起改（口径不一致
+// 在审核时是会被追问的）。
+import { dict, type SiteLocale } from '@site/i18n'
+
+interface Props {
+  locale: SiteLocale
+}
+const { locale } = Astro.props
+const d = dict(locale)
+---
+
+<section class="pg-section">
+  <div class="pg-shell">
+    <h1 class="pg-section-title">{d.privacyPage.title}</h1>
+    <p class="pg-lead">{d.privacyPage.lead}</p>
+    <p class="pg-note">{d.privacyPage.updated}</p>
+
+    <div class="pg-card" style="margin-top: 1.75rem;">
+      <p style="font-size: 1rem; color: var(--foreground);">{d.privacyPage.noCollect}</p>
+    </div>
+
+    <h2 class="pg-section-title" style="margin-top: 2.5rem;">{d.privacyPage.flowTitle}</h2>
+    <div class="pg-faq">
+      {
+        d.privacyPage.flowRows.map((row) => (
+          <details open>
+            <summary>{row.stage}</summary>
+            <p>{row.where}</p>
+          </details>
+        ))
+      }
+    </div>
+
+    <h2 class="pg-section-title" style="margin-top: 2.5rem;">{d.privacyPage.verifyTitle}</h2>
+    <div class="pg-grid pg-grid-2">
+      {
+        d.privacy.items.map((item) => (
+          <div class="pg-card">
+            <div class="pg-claim">{item.claim}</div>
+            <p class="pg-how">{item.how}</p>
+          </div>
+        ))
+      }
+    </div>
+
+    <h2 class="pg-section-title" style="margin-top: 2.5rem;">{d.privacyPage.thirdPartyTitle}</h2>
+    <p class="pg-lead">{d.privacyPage.thirdParty}</p>
+
+    <h2 class="pg-section-title" style="margin-top: 2.5rem;">{d.privacyPage.contactTitle}</h2>
+    <p class="pg-lead">
+      {d.privacyPage.contact}
+      <a href="https://github.com/hadesxiong/paste-guard/issues" rel="noopener">GitHub Issues</a>
+    </p>
+  </div>
+</section>

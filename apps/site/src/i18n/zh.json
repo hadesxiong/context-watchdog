@@ -189,6 +189,26 @@
     "trademark": "署名与商标",
     "patents": "专利声明",
     "designDocs": "设计文档",
+    "privacy": "隐私权政策",
     "static": "本站是静态页面：无客户端脚本（仅一个复制按钮）、无 CDN、无第三方统计、无 web font。"
+  },
+  "privacyPage": {
+    "title": "隐私权政策",
+    "lead": "一句话：我们不收集你的任何数据。下面是可核验的细节。",
+    "noCollect": "PasteGuard 不收集、不上传、不存储你的任何文本或个人信息。没有账号，没有遥测，没有第三方统计 SDK。",
+    "flowTitle": "数据流",
+    "flowRows": [
+      { "stage": "文本检测与替换", "where": "本机（service worker 或侧栏内存），从不离开设备" },
+      { "stage": "AI 模型推理", "where": "本机（WASM / ONNX Runtime），从不离开设备" },
+      { "stage": "模型下载", "where": "白名单模型源（ModelScope 镜像，失败回退 huggingface.co）；只下载模型文件，从不上传用户数据" },
+      { "stage": "站点授权", "where": "逐站授权，存于 chrome.storage.local；未授权站点零接触" },
+      { "stage": "遥测 / 统计 / 崩溃上报", "where": "无" }
+    ],
+    "verifyTitle": "你可以自己核验",
+    "thirdPartyTitle": "第三方组件",
+    "thirdParty": "所用第三方组件及其许可见 THIRD-PARTY-NOTICES.txt（产物内与仓库各一份）。运行时下载的模型为 onnx-community/gliner_small-v2（Apache-2.0）。",
+    "contactTitle": "联系方式",
+    "contact": "任何与隐私相关的问题，欢迎开 Issue。",
+    "updated": "最后更新：2026-10-19"
   }
 }
