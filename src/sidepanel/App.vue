@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onUnmounted } from 'vue'
+import { ref, computed, watch, onUnmounted, nextTick } from 'vue'
 import { useDetectionStore } from '../stores/detection'
 import InputArea from '../components/InputArea.vue'
 import DetectionList from '../components/DetectionList.vue'
@@ -66,13 +66,33 @@ onUnmounted(() => {
     if (dismissTimer.value) clearTimeout(dismissTimer.value)
 })
 
+// 等到一次真实渲染：nextTick 只保证 DOM 更新，rAF 才意味着浏览器真的画过一帧。
+// rAF 在面板未激活/不可见时可能不触发（检测会被卡住），故用 100ms 超时兜底。
+const waitForPaint = () => new Promise<void>(resolve => {
+    if (document.visibilityState === 'hidden') { resolve(); return }
+    let settled = false
+    const finish = () => { if (!settled) { settled = true; resolve() } }
+    requestAnimationFrame(finish)
+    setTimeout(finish, 100)
+})
+
 const handleDetect = async (text: string) => {
     showOverlay.value = true
     document.body.style.overflow = 'hidden'
-    const minDelay = new Promise(resolve => setTimeout(resolve, 1000))
-    await Promise.all([store.detect(text), minDelay])
-    showOverlay.value = false
-    document.body.style.overflow = ''
+    try {
+        // 遮罩必须先上屏再开跑：长文本检测是同步重活（实测 516KB 触发 1.6s 长任务），
+        // 若与检测同任务，遮罩的 DOM 更新会被压到长任务结束才渲染；又因 1s 最小延时
+        // 在阻塞前就起了表，届时早已过期 → 表现为「遮罩一闪而过/根本没出现」。
+        await nextTick()
+        await waitForPaint()
+        // 最小展示时长从「已上屏」起算，保证短文本也不会一闪而过
+        const minDelay = new Promise<void>(resolve => setTimeout(resolve, 1000))
+        await Promise.all([store.detect(text), minDelay])
+    } finally {
+        // 异常路径也要收尾，否则遮罩常驻且 body 滚动被永久锁死
+        showOverlay.value = false
+        document.body.style.overflow = ''
+    }
 }
 
 const handleCopy = async () => {
@@ -335,11 +355,13 @@ const loadingCaption = computed(() => {
         <!-- 主内容 -->
         <main :class="[
             'flex flex-col relative',
-            hasResults && `min-h-[calc(100vh-58px)] min-[820px]:flex-row min-[820px]:h-[calc(100vh-64px)]`
+            // 列宽/行向以「是否检测过」为准（与左右栏显示条件一致）；ActionBar 仍按是否有检出项显示
+            hasDetected && `min-h-[calc(100vh-58px)] min-[820px]:flex-row min-[820px]:h-[calc(100vh-64px)]`
             ]">
             <!-- 左侧列 -->
             <div :class="[
-                'flex flex-col min-w-100',
+                // 基础态随容器收缩：面板窄于 400px 时不再由 min-w 强撑出整页横向滚动
+                'flex flex-col w-full min-w-0',
                 hasDetected && `
                     min-[820px]:w-auto 
                     min-[820px]:min-w-100
@@ -351,8 +373,10 @@ const loadingCaption = computed(() => {
                     min-[820px]:border-border 
                      `
                 ]">
-                <!-- 输入项（档案下拉挂在标题旁） -->
-                <div :class="['px-3 pt-3',
+                <!-- 输入项（档案下拉挂在标题旁）
+                     宽屏断点下四边等距：上/左/右 12px 已有，底部同样补 12px——
+                     有按钮栏时作为输入框与按钮栏的间距，无按钮栏时作为输入框到列底的间距 -->
+                <div :class="['px-3 pt-3 min-[820px]:pb-3',
                     hasDetected && `min-[820px]:pt-3
                         min-[820px]:flex 
                         min-[820px]:flex-col 

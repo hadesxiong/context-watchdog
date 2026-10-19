@@ -43,7 +43,8 @@ const detectionTypesDisplay = computed(() => {
 </script>
 
 <template>
-    <Card hover class="transition-all duration-200 min-w-[320px]">
+    <!-- 宽度交给网格轨道分配：minmax(0,1fr) 不会撑破；min-w 会在窄面板/多列时溢出并被 Accordion 裁切 -->
+    <Card hover class="transition-all duration-200">
         <div class="flex flex-col gap-3">
             <!-- 头部: 标题 + 功能 -->
             <div class="flex items-center justify-between gap-4">

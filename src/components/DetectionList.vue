@@ -38,7 +38,8 @@ watch(() => props.detections, () => {
 </script>
 
 <template>
-    <div class="space-y-4">
+    <!-- 容器查询锚点：结果列表自身的宽度（= 右栏内宽），网格列数随它而非视口切换 -->
+    <div class="@container space-y-4">
         <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
                 <h2 class="text-base font-bold text-foreground">
@@ -86,9 +87,10 @@ watch(() => props.detections, () => {
                     </AccordionTrigger>
                 </AccordionHeader>
                 <AccordionContent class="p-0">
+                    <!-- 列数按容器宽度判定：卡片宽 320 + gap-3(12) → 2 列需 ≥652、3 列需 ≥984，留余量取 660/1000 -->
                     <div class="grid grid-cols-1 gap-3 
-                        min-[1080px]:grid-cols-2 
-                        min-[1200px]:grid-cols-3">
+                        @[660px]:grid-cols-2 
+                        @[1000px]:grid-cols-3">
                         <DetectionItemComponent v-for="item in items" :key="item.id" :item="item" />
                     </div>
                 </AccordionContent>
