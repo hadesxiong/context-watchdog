@@ -272,8 +272,10 @@ pre {
 
 /* VS Code / GitHub 式下载按钮：动作区（↓ + 分组名）与 caret 区（▾）以细线分隔——
    分体按钮的视觉语言；但整枚 summary 都是开合热区（details/summary，零 JS，
-   与 FAQ 同一套开合语言）。面板内联展开而非绝对定位浮层：无 JS 时「点外面关闭」
-   做不到，内联没有这个硬伤，窄屏也不必处理浮层溢出。 */
+   与 FAQ 同一套开合语言）。两枚按钮等宽长条（flex-basis 22rem，宽屏等分一行），
+   面板与按钮同宽同弧度：开合只增高不改列宽，相邻按钮不会被挤压变形。
+   面板内联展开而非绝对定位浮层：无 JS 时「点外面关闭」做不到，内联没有这个
+   硬伤，窄屏也不必处理浮层溢出。 */
 .pg-install {
   display: flex;
   flex-wrap: wrap;
@@ -282,8 +284,14 @@ pre {
   align-items: flex-start;
 }
 
+.pg-dl {
+  flex: 1 1 22rem;
+  min-width: 0;
+}
+
 .pg-dl-btn {
-  display: inline-flex;
+  display: flex;
+  width: 100%;
   align-items: stretch;
   cursor: pointer;
   list-style: none;
@@ -303,8 +311,10 @@ pre {
   background: var(--muted);
 }
 
+/* 动作区吃掉整枚长按钮的余宽，caret 区钉在右缘——长条仍保持分体比例 */
 .pg-dl-main {
   display: inline-flex;
+  flex: 1;
   align-items: center;
   gap: 0.5rem;
   padding: 0.55rem 1rem;
@@ -325,12 +335,13 @@ pre {
   transform: rotate(180deg);
 }
 
-/* 面板：GitHub 下拉的形——描边卡片，内联在按钮下方；行是 ghost（不带第二圈描边） */
+/* 面板：GitHub 下拉的形——描边卡片，内联在按钮下方；与按钮同宽同弧度
+   （开合不改列宽、四角弧线一致），行是 ghost（不带第二圈描边） */
 .pg-dl-panel {
   margin-top: 0.5rem;
-  min-width: min(17rem, 100%);
+  width: 100%;
   border: 1px solid var(--border);
-  border-radius: calc(var(--radius) + 4px);
+  border-radius: calc(var(--radius) + 2px);
   background: var(--card);
   padding: 0.4rem;
 }
