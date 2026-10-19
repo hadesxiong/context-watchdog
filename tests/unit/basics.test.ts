@@ -1,8 +1,8 @@
 // 单元用例 - 场景启发式 / 占位符 / PII 校验算法
 import { describe, it, expect } from 'vitest'
-import { detectScene } from '../../src/core/detector/sceneDetector'
-import { generatePlaceholder, parsePlaceholder, isValidPlaceholder } from '../../src/core/replacer/placeholder'
-import { isValidCNIdCard, isValidLuhn } from '../../src/core/detector/rules/piiRules'
+import { detectScene } from '@engine/detector/sceneDetector'
+import { generatePlaceholder, parsePlaceholder, isValidPlaceholder } from '@engine/replacer/placeholder'
+import { isValidCNIdCard, isValidLuhn } from '@engine/detector/rules/piiRules'
 
 describe('场景启发式', () => {
   it('env 场景', async () => {

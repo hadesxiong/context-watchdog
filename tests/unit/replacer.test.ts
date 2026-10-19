@@ -1,7 +1,7 @@
 // 替换引擎单元测试 - apply 纯函数契约
 import { describe, it, expect } from 'vitest'
-import { Replacer } from '../../src/core/replacer'
-import type { DetectionItem, ReplaceConfig } from '../../src/core/types'
+import { Replacer } from '@engine/replacer'
+import type { DetectionItem, ReplaceConfig } from '@engine/types'
 
 const makeItem = (over: Partial<DetectionItem>): DetectionItem => ({
   id: 'id-1',

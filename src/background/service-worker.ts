@@ -4,10 +4,10 @@
 // 2) 粘贴自动拦截的检测服务：content script 把粘贴文本发到这里跑检测管线并回传脱敏结果
 //    （GLiNER 模型不会在 SW 中加载——isContentModelReady() 按上下文判定，自动走正则档）
 // 3) 受保护站点的按需注入：只有用户授权过的站点才注入粘贴监听，未授权站点零接触
-import { detect } from '../core/detector'
-import { sanitizeText } from '../core/replacer'
-import { matchSite, readProtectedSites, PROTECTED_SITES_KEY } from '../core/sites'
-import { PASTE_DETECT, type PasteDetectResponse } from '../core/messages'
+import { detect } from '@engine/detector'
+import { sanitizeText } from '@engine/replacer'
+import { matchSite, readProtectedSites, PROTECTED_SITES_KEY } from '@engine/sites'
+import { PASTE_DETECT, type PasteDetectResponse } from '@engine/messages'
 import { pasteGuardEntryPoint } from './pasteEntryPoint'
 
 chrome.runtime.onInstalled.addListener(() => {

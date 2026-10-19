@@ -2,8 +2,8 @@
 // 正则为基础引擎无关闭入口（SW 粘贴拦截仅依赖此档）；场景识别只喂给 GLiNER 提示词，
 // 已并入 AI 分支（pipeline 内部处理，不再暴露 config 键）
 import { describe, it, expect } from 'vitest'
-import { detect } from '../../src/core/detector/pipeline'
-import { getProfileById } from '../../src/core/detector/profiles'
+import { detect } from '@engine/detector/pipeline'
+import { getProfileById } from '@engine/detector/profiles'
 
 describe('pipeline 引擎配置', () => {
   const profile = getProfileById('universal')

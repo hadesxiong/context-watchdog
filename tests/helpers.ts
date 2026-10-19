@@ -1,7 +1,7 @@
 // 测试辅助工具
-import { detect } from '../src/core/detector/pipeline'
-import { getProfileById } from '../src/core/detector/profiles'
-import type { DetectionItem, DetectionResult, ProfileConfig } from '../src/core/types'
+import { detect } from '@engine/detector/pipeline'
+import { getProfileById } from '@engine/detector/profiles'
+import type { DetectionItem, DetectionResult, ProfileConfig } from '@engine/types'
 
 // 以指定 profile 运行检测（缺省 universal）
 export const runDetect = async (

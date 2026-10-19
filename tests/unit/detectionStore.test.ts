@@ -4,11 +4,11 @@
 // 需要 fake timers：initNER 的 60 秒停滞超时是真实 setTimeout
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
-import type { ModelProgress } from '../../src/core/detector/modelDownload'
-import { detect, preloadModels, isContentModelReady } from '../../src/core/detector'
+import type { ModelProgress } from '@engine/detector/modelDownload'
+import { detect, preloadModels, isContentModelReady } from '@engine/detector'
 import { useDetectionStore } from '../../src/stores/detection'
 
-vi.mock('../../src/core/detector', () => ({
+vi.mock('@engine/detector', () => ({
   detect: vi.fn(),
   preloadModels: vi.fn(),
   isContentModelReady: vi.fn()

@@ -28,6 +28,9 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         '@': resolve(__dirname, 'src'),
+        // 检测引擎（纯逻辑，宿主无关）。硬约束见 packages/engine/README.md
+        '@engine': resolve(__dirname, 'packages/engine/src'),
+        '@tokens': resolve(__dirname, 'packages/design-tokens'),
         // 打桩 gliner 静态引用的 ort GPU 子路径：剔除 21.3MB jsep.wasm 产物
         // （executionProvider 固定 'wasm'，运行时永远不拉 jsep；详见 shim 头注释）
         'onnxruntime-web/webgpu': resolve(__dirname, 'src/shims/ort-ep-stub.ts'),

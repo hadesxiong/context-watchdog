@@ -116,32 +116,44 @@ npm run build:firefox   # Firefox 121+ → dist-firefox/
 ## 项目结构
 
 ```
-src/
-├── core/
-│   ├── detector/
-│   │   ├── pipeline.ts        # 主管线（级联调度 + 仲裁 + 值传播）
-│   │   ├── profiles.ts        # Profile 注册表（场景配置）
-│   │   ├── sceneDetector.ts   # 场景启发式（纯规则，无模型）
-│   │   ├── contentDetector.ts # GLiNER 级联检测（可选增强）
-│   │   └── rules/             # 规则模块（按类别分组）
-│   │       ├── envPasswordRules / kvRules / dbPasswordRules
-│   │       ├── apiKeyRules / privateKeyRules / emailRules
-│   │       ├── piiRules       # 手机号/身份证/银行卡/IP/车牌
-│   │       ├── highEntropyRules / valueFilters / constants
-│   │       └── scanner        # 扫描器（类别开关 + 类型合并）
-│   ├── replacer/              # 替换引擎（纯函数 apply）
-│   │   ├── placeholder.ts     # 语义化中文占位符（生成/反解析）
-│   │   └── mapping.ts         # 映射表（同值共享）
-│   ├── sites.ts               # 受保护站点规范化/匹配（粘贴拦截）
-│   ├── messages.ts            # content ↔ SW 消息契约
-│   ├── types/                 # 类型定义（DetectionType/ProfileConfig）
-│   └── utils/id.ts            # 统一 ID 生成
-├── components/                # Vue 组件（ProfileTabs/DetectionItem/PasteInterceptionSettings...）
-├── content/pasteText.ts       # 粘贴就地替换纯逻辑（区间推导与改写守卫）
-├── stores/detection.ts        # Pinia（Profile 持久化 + 默认策略分层）
-├── sidepanel/                 # Side Panel 主界面
-└── background/                # Service Worker（侧栏入口跨浏览器 + 粘贴检测服务 + 站点注入）
+packages/
+├── engine/                  # 检测与替换引擎（纯逻辑，宿主无关）
+│   └── src/
+│       ├── detector/
+│       │   ├── pipeline.ts        # 主管线（级联调度 + 仲裁 + 值传播）
+│       │   ├── backend.ts         # InferenceBackend 抽象 + 单例注入
+│       │   ├── profiles.ts        # Profile 注册表（场景配置）
+│       │   ├── sceneDetector.ts   # 场景启发式（纯规则，无模型）
+│       │   ├── entityShape.ts     # 实体形状门禁（拦截模型幻觉）
+│       │   ├── contentDetector.ts # GLiNER 级联检测（可选增强）
+│       │   ├── modelDownload.ts   # 模型下载器（断点续传 / 多源回退 / 多窗口锁）
+│       │   └── rules/             # 规则模块（按类别分组）
+│       │       ├── envPasswordRules / kvRules / dbPasswordRules
+│       │       ├── apiKeyRules / privateKeyRules / emailRules
+│       │       ├── piiRules       # 手机号/身份证/银行卡/IP/车牌
+│       │       ├── highEntropyRules / valueFilters / constants
+│       │       └── scanner        # 扫描器（类别开关 + 类型合并）
+│       ├── replacer/              # 替换引擎（纯函数 apply）
+│       │   ├── placeholder.ts     # 语义化中文占位符（生成/反解析）
+│       │   └── mapping.ts         # 映射表（同值共享）
+│       ├── sites.ts               # 受保护站点规范化/匹配（粘贴拦截）
+│       ├── messages.ts            # content ↔ SW 消息契约
+│       ├── types/                 # 类型定义（DetectionType/ProfileConfig）
+│       └── utils/id.ts            # 统一 ID 生成
+└── design-tokens/                 # 设计 token 唯一来源（扩展与落地页共用）
+
+src/                               # 扩展（宿主层）
+├── components/                    # Vue 组件（ProfileTabs/DetectionItem/PasteInterceptionSettings...）
+├── content/pasteText.ts           # 粘贴就地替换纯逻辑（区间推导与改写守卫）
+├── stores/detection.ts            # Pinia（Profile 持久化 + 默认策略分层）
+├── sidepanel/                     # Side Panel 主界面
+├── background/                    # Service Worker（侧栏入口跨浏览器 + 粘贴检测服务 + 站点注入）
+└── shims/                         # 构建期打桩（ort GPU 子路径）
 ```
+
+引擎通过别名 `@engine/*` 被扩展引用（`tsconfig.json` 与 `vite.config.ts` 各自声明）。**引擎不依赖任何宿主 API**：不静态 import `chrome` / `node:*` / `vue` / `gliner` / `onnxruntime-web` / `@xenova/transformers`，宿主能力一律通过适配器注入。这条约束有自动化断言保护——它是同一份代码能同时服务浏览器扩展与后续 Node 代理服务的前提。
+
+设计 token 通过别名 `@tokens/tokens.css` 被 `src/style.css` 引用，**且产物内会被完整内联**（`scripts/postbuild.mjs` 会校验这一点，防止被 Tailwind 静默丢弃）。
 
 ## 测试
 

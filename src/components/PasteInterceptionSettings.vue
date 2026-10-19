@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { Button, Input } from '../ui'
-import { PROTECTED_SITES_KEY, normalizeSiteInput } from '../core/sites'
+import { PROTECTED_SITES_KEY, normalizeSiteInput } from '@engine/sites'
 
 // 粘贴自动拦截设置：逐站授权（optional_host_permissions），
 // 只有授权站点才由 service worker 注入粘贴监听

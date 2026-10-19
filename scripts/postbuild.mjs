@@ -11,7 +11,7 @@
 //   - side_panel → sidebar_action（Firefox 不识别 side_panel）
 //   - 移除 sidePanel 权限（Firefox 未知权限，审核会标）
 //   - 补 browser_specific_settings.gecko id（本地加载与签名需要稳定 id）
-import { readFileSync, writeFileSync, copyFileSync } from 'node:fs'
+import { readFileSync, writeFileSync, copyFileSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
 import { renderThirdPartyNotices } from './third-party-notices.mjs'
@@ -30,11 +30,25 @@ copyFileSync(resolve(here, '../THIRD-PARTY-NOTICES.txt'), resolve(here, `../${ou
 copyFileSync(resolve(here, '../LICENSE'), resolve(here, `../${outDir}/LICENSE`))
 console.log('[postbuild] 第三方许可与 LICENSE 已写入 →', outDir)
 
+// 设计 token 内联护栏。
+// Tailwind 4 的 @import 解析器只内联同目录/别名可达的路径，会静默丢弃它不认识的
+// @import —— 结果是产物 CSS 里完全没有 :root 变量，所有颜色失效，而构建**零警告**。
+// 这里把该回归变成硬失败。token 唯一来源：packages/design-tokens/tokens.css。
+const cssFiles = readdirSync(resolve(here, `../${outDir}/assets`)).filter((f) => f.endsWith('.css'))
+const cssBundle = cssFiles.map((f) => readFileSync(resolve(here, `../${outDir}/assets/${f}`), 'utf8')).join('\n')
+for (const token of ['--background:', '--foreground:', '--primary:', '--radius:']) {
+  if (!cssBundle.includes(token)) {
+    console.error(`[postbuild] ✗ 产物 CSS 缺少设计 token ${token}`)
+    console.error('[postbuild]   检查 src/style.css 的 @import "@tokens/tokens.css" 是否被 Tailwind 静默丢弃')
+    process.exit(1)
+  }
+}
+console.log('[postbuild] 设计 token 已内联（亮色 + 暗色）✓')
+
 if (target !== 'firefox') {
   console.log('[postbuild] Chrome 目标：manifest 无需处理 →', outDir)
   process.exit(0)
 }
-
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
 
 // 后台：service_worker → scripts（CRXJS 已输出 service-worker-loader.js）

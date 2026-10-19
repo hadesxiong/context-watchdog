@@ -16,7 +16,8 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@engine/*": ["./packages/engine/src/*"]
     },
     "types": ["chrome"]
   },
@@ -24,7 +25,8 @@
     "src/**/*.ts",
     "src/**/*.tsx",
     "src/**/*.vue",
-    "src/manifest.json"
+    "src/manifest.json",
+    "packages/engine/src/**/*.ts"
   ],
   "exclude": ["node_modules", "dist"]
 }

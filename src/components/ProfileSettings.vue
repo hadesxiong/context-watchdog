@@ -4,8 +4,8 @@
 import { ref, reactive, watch } from 'vue'
 import { useDetectionStore } from '../stores/detection'
 import { Button, Input, Textarea, Switch } from '../ui'
-import { validateCustomRule, CUSTOM_PATTERN_MAX_LENGTH } from '../core/detector/rules/customRules'
-import type { ProfileConfig, RuleCategory, Sensitivity, DetectionType, CustomRule } from '../core/types'
+import { validateCustomRule, CUSTOM_PATTERN_MAX_LENGTH } from '@engine/detector/rules/customRules'
+import type { ProfileConfig, RuleCategory, Sensitivity, DetectionType, CustomRule } from '@engine/types'
 
 const emit = defineEmits<{
     (e: 'close'): void

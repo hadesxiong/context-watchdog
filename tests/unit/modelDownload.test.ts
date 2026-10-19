@@ -26,7 +26,7 @@ import {
   type PartialModelMeta,
   type ProbeStateStore,
   type RemoteVersion
-} from '../../src/core/detector/modelDownload'
+} from '@engine/detector/modelDownload'
 
 const encoder = new TextEncoder()
 const decoder = new TextDecoder()

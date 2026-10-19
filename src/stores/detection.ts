@@ -1,10 +1,10 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { DetectionItem, ReplaceConfig, MappingTable, ProfileConfig } from '../core/types'
-import { detect, preloadModels, isContentModelReady } from '../core/detector'
-import { getProfileById, DEFAULT_PROFILE_ID } from '../core/detector/profiles'
-import { UserProfileManager, createChromeStorage } from '../core/detector/userProfiles'
-import { getReplacer } from '../core/replacer'
+import type { DetectionItem, ReplaceConfig, MappingTable, ProfileConfig } from '@engine/types'
+import { detect, preloadModels, isContentModelReady } from '@engine/detector'
+import { getProfileById, DEFAULT_PROFILE_ID } from '@engine/detector/profiles'
+import { UserProfileManager, createChromeStorage } from '@engine/detector/userProfiles'
+import { getReplacer } from '@engine/replacer'
 
 // 模型状态类型
 type ModelStatus = 'idle' | 'loading' | 'success' | 'error' | 'timeout' | 'disabled'

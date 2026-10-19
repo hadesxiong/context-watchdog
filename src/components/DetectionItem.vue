@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { DetectionItem } from '../core/types'
+import type { DetectionItem } from '@engine/types'
 import { useDetectionStore } from '../stores/detection'
-import { getPlaceholderDisplayText, getTypeDisplayName } from '../core/replacer/placeholder'
+import { getPlaceholderDisplayText, getTypeDisplayName } from '@engine/replacer/placeholder'
 import { Badge, Card, Switch } from '../ui'
 
 const props = defineProps<{

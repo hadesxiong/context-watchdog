@@ -1,6 +1,6 @@
 // 单元用例 - API 密钥规则（重点覆盖短密钥族的命中与误报防线）
 import { describe, it, expect } from 'vitest'
-import { apiKeyRules } from '../../src/core/detector/rules/apiKeyRules'
+import { apiKeyRules } from '@engine/detector/rules/apiKeyRules'
 
 // 全部用拼接构造而非字面量：真实格式的密钥字面量会被 GitHub Push Protection
 // 逐条拦截推送（2026-10-18 实测教训），构造串免疫且测试强度不减

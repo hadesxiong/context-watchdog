@@ -7,8 +7,8 @@ import {
   validateProfileName,
   USER_PROFILES_KEY,
   type KeyValueStorage
-} from '../../src/core/detector/userProfiles'
-import { BUILTIN_PROFILES, getProfileById } from '../../src/core/detector/profiles'
+} from '@engine/detector/userProfiles'
+import { BUILTIN_PROFILES, getProfileById } from '@engine/detector/profiles'
 
 // 内存 mock 存储
 const createMockStorage = () => {

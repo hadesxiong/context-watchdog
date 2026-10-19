@@ -1,6 +1,6 @@
 import { computed } from 'vue'
 import { useDetectionStore } from '../stores/detection'
-import type { MappingTable } from '../core/types'
+import type { MappingTable } from '@engine/types'
 
 export function useMapping() {
   const store = useDetectionStore()

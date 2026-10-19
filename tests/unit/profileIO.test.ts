@@ -5,9 +5,9 @@ import {
   exportProfiles,
   importProfiles,
   type KeyValueStorage
-} from '../../src/core/detector/userProfiles'
-import { getProfileById } from '../../src/core/detector/profiles'
-import type { ProfileConfig, CustomRule } from '../../src/core/types'
+} from '@engine/detector/userProfiles'
+import { getProfileById } from '@engine/detector/profiles'
+import type { ProfileConfig, CustomRule } from '@engine/types'
 
 const createMockStorage = () => {
   const data: Record<string, unknown> = {}

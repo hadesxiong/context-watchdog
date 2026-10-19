@@ -6,10 +6,10 @@ import {
   scanCustomRules,
   compileCustomRule,
   CUSTOM_PATTERN_MAX_LENGTH
-} from '../../src/core/detector/rules/customRules'
-import { detect } from '../../src/core/detector/pipeline'
-import { getProfileById } from '../../src/core/detector/profiles'
-import type { ProfileConfig, CustomRule } from '../../src/core/types'
+} from '@engine/detector/rules/customRules'
+import { detect } from '@engine/detector/pipeline'
+import { getProfileById } from '@engine/detector/profiles'
+import type { ProfileConfig, CustomRule } from '@engine/types'
 
 const makeRule = (over: Partial<CustomRule>): CustomRule => ({
   id: `rule-${Math.random()}`,

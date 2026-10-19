@@ -1,6 +1,6 @@
 // 单元用例 - 受保护站点的规范化与匹配（粘贴自动拦截）
 import { describe, it, expect } from 'vitest'
-import { normalizeSiteInput, matchSite } from '../../src/core/sites'
+import { normalizeSiteInput, matchSite } from '@engine/sites'
 
 describe('normalizeSiteInput', () => {
   it('裸域名默认按 https 处理', () => {

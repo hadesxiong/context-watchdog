@@ -1,6 +1,6 @@
 // 单元用例 - 模型检出形状门禁（GLiNER 幻觉拦截，2026-10-18 实机反馈轮引入）
 import { describe, it, expect } from 'vitest'
-import { isPlausibleEntity } from '../../src/core/detector/entityShape'
+import { isPlausibleEntity } from '@engine/detector/entityShape'
 
 describe('模型检出形状门禁', () => {
   it('拦截 2026-10-18 实机幻觉（户/订/注/放/前台）', () => {

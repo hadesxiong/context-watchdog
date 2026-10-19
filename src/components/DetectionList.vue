@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import type { DetectionItem } from '../core/types'
+import type { DetectionItem } from '@engine/types'
 import DetectionItemComponent from './DetectionItem.vue'
 import { AccordionRoot, AccordionItem, AccordionHeader, AccordionTrigger, AccordionContent } from 'reka-ui'
 

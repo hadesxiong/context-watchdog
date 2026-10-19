@@ -1,9 +1,9 @@
 // 用例 - 值白名单过滤（Phase 4 自定义档案）
 import { describe, it, expect } from 'vitest'
 import { runDetect, applyReplace, assertNoOverlap, assertSpansConsistent } from '../helpers'
-import { detect } from '../../src/core/detector/pipeline'
-import { getProfileById } from '../../src/core/detector/profiles'
-import type { ProfileConfig } from '../../src/core/types'
+import { detect } from '@engine/detector/pipeline'
+import { getProfileById } from '@engine/detector/profiles'
+import type { ProfileConfig } from '@engine/types'
 
 // 基于 universal 克隆一个带白名单的自定义档案
 const withWhitelist = (whitelist: string[]): ProfileConfig => ({
