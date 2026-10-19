@@ -1,8 +1,19 @@
 // 内容检测器 - 使用 GLiNER 检测密钥和敏感信息
 
-import type { SceneType } from './sceneDetector'
-import { downloadModel, createSingleFlight, type ModelProgress } from './modelDownload'
-import { isPlausibleEntity } from './entityShape'
+import type { SceneType } from '@engine/detector/sceneDetector'
+import { isPlausibleEntity } from '@engine/detector/entityShape'
+import { type ContentEntity, type ModelProgress } from '@engine/detector/backend'
+import { downloadModel, createSingleFlight } from './modelDownload'
+
+// 置信度阈值、ContentEntity、EntityCategory、categorizeEntity 已上移到引擎的
+// backend.ts（它们是 AI 后端契约的一部分，检测管线直接消费）。此处保留再导出，
+// 避免既有调用点与测试断链。
+export {
+  CONFIDENCE_THRESHOLDS,
+  categorizeEntity,
+  type ContentEntity,
+  type EntityCategory
+} from '@engine/detector/backend'
 
 // 密钥相关实体类型（GLiNER 零样本标签）
 const SECRET_LABELS = [
@@ -17,26 +28,6 @@ const SECRET_LABELS = [
   'credential',
   'token'
 ]
-
-// 置信度分类阈值（Phase 2 下调：GLiNER-small 在密钥/PII 场景超 0.8 的比例很低）
-export const CONFIDENCE_THRESHOLDS = {
-  SENSITIVE: 0.65,     // > 0.65 → 显然敏感
-  UNCERTAIN: 0.35,     // < 0.35 → 显然不敏感
-  // 0.35 - 0.65 → 不确定（回流正则复检）
-}
-
-// 内容实体接口
-export interface ContentEntity {
-  text: string
-  startIndex: number
-  endIndex: number
-  entityType: string
-  confidence: number
-  scene: SceneType
-}
-
-// 实体分类
-export type EntityCategory = 'sensitive' | 'not_sensitive' | 'uncertain'
 
 // GLiNER 模型单例
 let glinerInstance: any = null
@@ -209,16 +200,7 @@ export const detectContent = async (
   }
 }
 
-// 分类实体
-export const categorizeEntity = (entity: ContentEntity): EntityCategory => {
-  if (entity.confidence > CONFIDENCE_THRESHOLDS.SENSITIVE) {
-    return 'sensitive'
-  }
-  if (entity.confidence < CONFIDENCE_THRESHOLDS.UNCERTAIN) {
-    return 'not_sensitive'
-  }
-  return 'uncertain'
-}
+// 分类实体 → 已上移到 @engine/detector/backend（见文件顶部再导出）
 
 // 检查模型是否就绪
 export const isContentModelReady = (): boolean => ready

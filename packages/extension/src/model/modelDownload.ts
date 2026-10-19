@@ -5,8 +5,11 @@
 // 独立成模块的原因：fetch / cache / partial / lock / sleep 全部可注入，便于在 node 环境下单测
 // （见 tests/unit/modelDownload.test.ts）
 
-// 进度回调：percent < 0 表示未知总长（UI 走不定进度动画）；received/total 供 UI 展示 MB
-export type ModelProgress = (percent: number, received?: number, total?: number) => void
+import type { ModelProgress } from '@engine/detector/backend'
+
+// 下载进度回调：percent < 0 表示未知总长（UI 走不定进度动画）；received/total 供 UI 展示 MB
+// 契约定义在引擎的 backend.ts（检测管线的 preload 也用同一个类型），此处再导出供调用点直接取用
+export type { ModelProgress } from '@engine/detector/backend'
 
 // 注意：模型文件在 onnx/ 子目录下（仓库根目录没有 model.onnx，直接请求会 404）。
 // 选 model_quantized.onnx（int8 量化，约 183MB / 183,403,734 字节）：全量 model.onnx 达 611MB，不适合浏览器扩展

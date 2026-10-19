@@ -45,6 +45,34 @@ for (const token of ['--background:', '--foreground:', '--primary:', '--radius:'
 }
 console.log('[postbuild] 设计 token 已内联（亮色 + 暗色）✓')
 
+// Tailwind 内容扫描范围护栏。
+// Tailwind 4 按 vite root 决定要扫哪些文件；root 一旦指向错的地方（或扩展目录被
+// 排除），产物里就一个 utility 都不剩——UI 全文失去样式，而构建**零警告**。
+// 这里抽查几个模板里确实用到的 utility，把「扫描失效」变成硬失败。
+// （反过来，扫描范围过宽也会把 package-lock.json 里的英文单词当成类名，多出
+//  .container / .static 这类无用规则；那属于体积问题，不在这里拦截。）
+const requiredUtilities = ['.gap-2', '.text-xs', '.w-full', '.mb-1']
+const missingUtilities = requiredUtilities.filter((u) => !cssBundle.includes(u))
+if (missingUtilities.length) {
+  console.error(`[postbuild] ✗ 产物 CSS 缺少 Tailwind utility：${missingUtilities.join(', ')}`)
+  console.error('[postbuild]   说明内容扫描范围失效，检查 vite.config.ts 的 root 与 @source')
+  process.exit(1)
+}
+console.log('[postbuild] Tailwind 扫描范围正常 ✓  (' + requiredUtilities.join(' ') + ')')
+
+// ONNX Runtime 单例护栏。
+// ORT 的 wasm 后端依赖共享内存信号（SharedArrayBuffer）做多线程；产物里出现多份
+// ort-wasm-*.wasm 通常意味着依赖树里存在两个不同版本的 onnxruntime-web，会让两个
+// 实例各自建内存、丢掉共享信号。这里把它变成构建期硬失败，而不是运行时怪报错。
+const ortWasm = readdirSync(resolve(here, `../${outDir}/assets`)).filter((f) => f.endsWith('.wasm'))
+if (ortWasm.length !== 1) {
+  console.error(`[postbuild] ✗ 产物中 ort-wasm 文件数 = ${ortWasm.length}，应恰好为 1`)
+  console.error('[postbuild]   检查依赖树是否出现多版本 onnxruntime-web（npm ls onnxruntime-web）')
+  console.error(`[postbuild]   实际文件：${ortWasm.join(', ') || '(无)'}`)
+  process.exit(1)
+}
+console.log('[postbuild] ort-wasm 单例 ✓  (' + ortWasm[0] + ')')
+
 if (target !== 'firefox') {
   console.log('[postbuild] Chrome 目标：manifest 无需处理 →', outDir)
   process.exit(0)

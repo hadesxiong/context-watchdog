@@ -1,6 +1,6 @@
 // 单元用例 - 粘贴「先插入后就地替换」的纯逻辑
 import { describe, it, expect } from 'vitest'
-import { computeInsertionRange, applySanitized, normalizeNewlines, exceedsPasteLimit, MAX_PASTE_CHARS } from '../../src/content/pasteText'
+import { computeInsertionRange, applySanitized, normalizeNewlines, exceedsPasteLimit, MAX_PASTE_CHARS } from '@/content/pasteText'
 
 describe('normalizeNewlines', () => {
   it('CRLF → LF（Windows 剪贴板多行文本的常见形态）', () => {

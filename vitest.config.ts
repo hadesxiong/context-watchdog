@@ -5,7 +5,7 @@ import { resolve } from 'node:path'
 export default defineConfig({
   resolve: {
     alias: {
-      '@': resolve(import.meta.dirname, 'src'),
+      '@': resolve(import.meta.dirname, 'packages/extension/src'),
       '@engine': resolve(import.meta.dirname, 'packages/engine/src')
     }
   },

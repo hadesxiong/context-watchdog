@@ -44,4 +44,12 @@ src/
 └── utils/id.ts              # 统一 ID 生成
 ```
 
+**不在引擎里**：模型的加载、下载、缓存与 GLiNER 调用全部在扩展侧的
+`packages/extension/src/model/`。引擎只在检测时问一句 `getInferenceBackend()?.isReady()`
+——后端没注册就走纯正则。
+
+**有自动化断言**：`tests/unit/engineBoundaries.test.ts` 会逐个文件扫描 import，
+出现 `chrome` / `node:*` / `vue` / `gliner` / `onnxruntime-web` / `@xenova/transformers`
+等裸标识符，或相对引用跑出 `packages/engine`，测试直接红。
+
 许可：Apache-2.0，见仓库根 `LICENSE`。

@@ -4,10 +4,17 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
 import { crx } from '@crxjs/vite-plugin'
-import manifest from './src/manifest.json' with { type: 'json' }
+import manifest from './packages/extension/src/manifest.json' with { type: 'json' }
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
+
+// 仓库根（本配置文件所在目录）
+const REPO_ROOT = __dirname
+// 扩展包根：vite root 指向它，这样 manifest 里的入口路径保持
+// `src/sidepanel/index.html` 这种"包内相对路径"，产物布局也就与重构前完全一致
+// （dist/src/sidepanel/index.html），避免把 packages/extension/... 写进运行时 URL。
+const EXT_ROOT = resolve(REPO_ROOT, 'packages/extension')
 
 // 双目标构建：
 //   npm run build          → dist/（Chrome，manifest 原样输出，零警告）
@@ -20,6 +27,10 @@ export default defineConfig(({ mode }) => {
   const isFirefox = mode === 'firefox'
 
   return {
+    root: EXT_ROOT,
+    // public/ 与产物目录都留在仓库根：public 是仓库级共享资源（含 _locales），
+    // 产物则是发布物（与 packages/ 同级更符合直觉）
+    publicDir: resolve(REPO_ROOT, 'public'),
     plugins: [
       vue(),
       tailwindcss(),
@@ -27,23 +38,26 @@ export default defineConfig(({ mode }) => {
     ],
     resolve: {
       alias: {
-        '@': resolve(__dirname, 'src'),
+        // 扩展自身（宿主层）
+        '@': resolve(EXT_ROOT, 'src'),
         // 检测引擎（纯逻辑，宿主无关）。硬约束见 packages/engine/README.md
-        '@engine': resolve(__dirname, 'packages/engine/src'),
-        '@tokens': resolve(__dirname, 'packages/design-tokens'),
+        '@engine': resolve(REPO_ROOT, 'packages/engine/src'),
+        // 设计 token 唯一来源（扩展与落地页共用）
+        '@tokens': resolve(REPO_ROOT, 'packages/design-tokens'),
         // 打桩 gliner 静态引用的 ort GPU 子路径：剔除 21.3MB jsep.wasm 产物
         // （executionProvider 固定 'wasm'，运行时永远不拉 jsep；详见 shim 头注释）
-        'onnxruntime-web/webgpu': resolve(__dirname, 'src/shims/ort-ep-stub.ts'),
-        'onnxruntime-web/webgl': resolve(__dirname, 'src/shims/ort-ep-stub.ts')
+        'onnxruntime-web/webgpu': resolve(EXT_ROOT, 'src/shims/ort-ep-stub.ts'),
+        'onnxruntime-web/webgl': resolve(EXT_ROOT, 'src/shims/ort-ep-stub.ts')
       }
     },
     build: {
-      outDir: isFirefox ? 'dist-firefox' : 'dist',
+      outDir: resolve(REPO_ROOT, isFirefox ? 'dist-firefox' : 'dist'),
+      emptyOutDir: true,
       // transformers.js / onnxruntime-web 的实际体积（第三方模型运行时，无法再拆）
       chunkSizeWarningLimit: 2500,
       rollupOptions: {
         input: {
-          sidepanel: resolve(__dirname, 'src/sidepanel/index.html'),
+          sidepanel: resolve(EXT_ROOT, 'src/sidepanel/index.html')
         }
       },
       // rolldown 专用配置（vite 8 底层）：

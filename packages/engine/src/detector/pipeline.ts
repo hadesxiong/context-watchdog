@@ -2,8 +2,11 @@
 
 import type { DetectionItem, DetectionResult, DetectionType, Confidence, ProfileConfig } from '../types'
 import { detectScene, type SceneResult } from './sceneDetector'
-import { detectContent, categorizeEntity, preloadContentModel, type ContentEntity, isContentModelReady } from './contentDetector'
-import type { ModelProgress } from './modelDownload'
+import {
+  categorizeEntity,
+  getInferenceBackend,
+  type ContentEntity
+} from './backend'
 import { scanRegexRules, rulesByCategory } from './regexRules'
 import { scanCustomRules } from './rules/customRules'
 import { getProfileById, DEFAULT_PROFILE_ID, getSensitivity, ENTROPY_THRESHOLDS } from './profiles'
@@ -409,7 +412,9 @@ export const detect = async (
   // Step 3-4: GLiNER 级联触发（仅处理正则未覆盖片段，如果模型可用）。
   // 场景识别为 AI 分支内部细节（仅喂给 GLiNER 提示词，不影响正则检出），
   // 随 AI 开关走：AI 关闭/模型未就绪时一并省去这步启发式（约 10ms）
-  if (mergedConfig.enableContentDetection && isContentModelReady()) {
+  // 引擎不持有模型运行时：后端由宿主注册（getInferenceBackend），未注册即纯正则
+  const backend = getInferenceBackend()
+  if (mergedConfig.enableContentDetection && backend?.isReady()) {
     try {
       let scene: SceneResult = { type: 'plain', confidence: 0, scores: {} as any }
       try {
@@ -424,14 +429,15 @@ export const detect = async (
 
       const entities: ContentEntity[] = []
       for (const segment of segments) {
-        const segmentEntities = await detectContent(segment.text, scene.type, profile.glinerLabels)
+        const segmentEntities = await backend.detectSegment(segment.text, scene.type, profile.glinerLabels)
         // 映射回全文偏移
         for (const e of segmentEntities) {
           entities.push({
             ...e,
             startIndex: e.startIndex + segment.offset,
             endIndex: e.endIndex + segment.offset,
-            text: text.substring(e.startIndex + segment.offset, e.endIndex + segment.offset)
+            text: text.substring(e.startIndex + segment.offset, e.endIndex + segment.offset),
+            scene: scene.type
           })
         }
       }
@@ -498,11 +504,5 @@ export const detect = async (
   return { items, text }
 }
 
-// 预加载所有模型（仅在用户显式启用 AI 增强后由 store 调用）
-export const preloadModels = async (
-  onProgress?: ModelProgress,
-  onWaiting?: (waiting: boolean) => void,
-  onDownloadStart?: () => void
-): Promise<void> => {
-  await preloadContentModel(onProgress, onWaiting, onDownloadStart)
-}
+// 预加载不属于引擎：宿主注册 InferenceBackend 后自行调用 backend.preload()
+// （见 src/model/index.ts）

@@ -121,12 +121,10 @@ packages/
 │   └── src/
 │       ├── detector/
 │       │   ├── pipeline.ts        # 主管线（级联调度 + 仲裁 + 值传播）
-│       │   ├── backend.ts         # InferenceBackend 抽象 + 单例注入
+│       │   ├── backend.ts         # InferenceBackend 抽象 + 单例注入 + 置信度分档
 │       │   ├── profiles.ts        # Profile 注册表（场景配置）
 │       │   ├── sceneDetector.ts   # 场景启发式（纯规则，无模型）
 │       │   ├── entityShape.ts     # 实体形状门禁（拦截模型幻觉）
-│       │   ├── contentDetector.ts # GLiNER 级联检测（可选增强）
-│       │   ├── modelDownload.ts   # 模型下载器（断点续传 / 多源回退 / 多窗口锁）
 │       │   └── rules/             # 规则模块（按类别分组）
 │       │       ├── envPasswordRules / kvRules / dbPasswordRules
 │       │       ├── apiKeyRules / privateKeyRules / emailRules
@@ -142,18 +140,32 @@ packages/
 │       └── utils/id.ts            # 统一 ID 生成
 └── design-tokens/                 # 设计 token 唯一来源（扩展与落地页共用）
 
-src/                               # 扩展（宿主层）
-├── components/                    # Vue 组件（ProfileTabs/DetectionItem/PasteInterceptionSettings...）
-├── content/pasteText.ts           # 粘贴就地替换纯逻辑（区间推导与改写守卫）
-├── stores/detection.ts            # Pinia（Profile 持久化 + 默认策略分层）
-├── sidepanel/                     # Side Panel 主界面
-├── background/                    # Service Worker（侧栏入口跨浏览器 + 粘贴检测服务 + 站点注入）
-└── shims/                         # 构建期打桩（ort GPU 子路径）
+packages/extension/                # 扩展（宿主层）
+└── src/
+    ├── model/                     # 模型宿主：GLiNER + onnxruntime-web + 下载器
+    │   ├── contentDetector.ts     #   GLiNER 调用与就绪状态
+    │   ├── modelDownload.ts       #   断点续传 / 多源回退 / 多窗口锁 / Cache Storage
+    │   ├── localBackend.ts        #   把 GLiNER 适配成引擎的 InferenceBackend
+    │   └── index.ts               #   宿主入口（installModelBackend / preloadModels）
+    ├── components/                # Vue 组件（ProfileTabs/DetectionItem/PasteInterceptionSettings...）
+    ├── content/pasteText.ts       # 粘贴就地替换纯逻辑（区间推导与改写守卫）
+    ├── stores/detection.ts        # Pinia（Profile 持久化 + 默认策略分层）
+    ├── sidepanel/                 # Side Panel 主界面
+    ├── background/                # Service Worker（侧栏入口跨浏览器 + 粘贴检测服务 + 站点注入）
+    ├── shims/                     # 构建期打桩（ort GPU 子路径）
+    └── style.css                  # 引入 @tokens/tokens.css + Tailwind theme 映射
+
+public/                            # 仓库级共享静态资源（icons、_locales）
+tests/  scripts/  docs/            # 测试 / 构建与探针脚本 / 设计文档
 ```
 
-引擎通过别名 `@engine/*` 被扩展引用（`tsconfig.json` 与 `vite.config.ts` 各自声明）。**引擎不依赖任何宿主 API**：不静态 import `chrome` / `node:*` / `vue` / `gliner` / `onnxruntime-web` / `@xenova/transformers`，宿主能力一律通过适配器注入。这条约束有自动化断言保护——它是同一份代码能同时服务浏览器扩展与后续 Node 代理服务的前提。
+引擎通过别名 `@engine/*` 被扩展引用（`tsconfig.json` 与 `vite.config.ts` 各自声明）。**引擎不依赖任何宿主 API**：不静态 import `chrome` / `node:*` / `vue` / `gliner` / `onnxruntime-web` / `@xenova/transformers`，宿主能力一律通过适配器注入。这条约束有自动化断言保护（`tests/unit/engineBoundaries.test.ts`）——它是同一份代码能同时服务浏览器扩展与后续 Node 代理服务的前提。
 
-设计 token 通过别名 `@tokens/tokens.css` 被 `src/style.css` 引用，**且产物内会被完整内联**（`scripts/postbuild.mjs` 会校验这一点，防止被 Tailwind 静默丢弃）。
+模型运行时（`packages/extension/src/model/`）与检测管线（`packages/engine/`）之间只有一道接口：`InferenceBackend`。宿主在启动时 `installModelBackend()` 注册自己的实现；未注册时 `getInferenceBackend()` 返回 `null`，管线自动退化为纯正则。这也是 `tests/` 里全部用例能在 Node 下直接跑起来的原因。
+
+**vite 的 root 指向 `packages/extension`**（而非仓库根），这样 manifest 里的入口路径保持包内相对形式（`src/sidepanel/index.html`），产物布局与重构前逐字节一致，运行时 `chrome.runtime.getURL` 无需改动。副作用是 Tailwind 的扫描范围恰好收敛到扩展包内——扫描仓库根会把 `package-lock.json` 里的英文单词也当成类名。`scripts/postbuild.mjs` 会抽查产物 CSS 里的 utility 与设计 token，两者缺失都会让构建**硬失败**。
+
+设计 token 通过别名 `@tokens/tokens.css` 被 `packages/extension/src/style.css` 引用，**且产物内会被完整内联**（同样有构建期校验）。
 
 ## 测试
 
