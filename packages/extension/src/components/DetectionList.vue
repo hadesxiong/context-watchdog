@@ -26,13 +26,12 @@ const { t, typeLabel } = useI18n()
 
 const openTypes = ref<string[]>([])
 
-// 分类默认收起：检测完先给「分类 + 数量」的总览，按需逐个展开看卡片。
-// 重检时只剪掉已不存在的分类（防旧键复活时意外自动展开），用户手动展开/
-// 收起的选择跨重检保留——不再强制全开。
+// 默认全部展开：检测完即见所有分类的卡片。三角图标直接由 openTypes 驱动
+// （不再用 data-[state=open] 变体——实测折叠/展开时它不随状态切换朝向，
+// 显式状态绑定保证收起▼/展开▲ 必然变化）。
 watch(() => props.detections, () => {
-    const present = new Set(Object.keys(groupedDetections.value))
-    openTypes.value = openTypes.value.filter((type) => present.has(type))
-})
+    openTypes.value = Object.keys(groupedDetections.value)
+}, { immediate: true })
 </script>
 
 <template>
@@ -78,7 +77,8 @@ watch(() => props.detections, () => {
                                 {{ items.length }}
                             </span>
                         </div>
-                        <svg class="w-4 h-4 text-muted-foreground transition-transform duration-200 shrink-0 data-[state=open]:rotate-180"
+                        <svg :class="['w-4 h-4 text-muted-foreground transition-transform duration-200 shrink-0',
+                                openTypes.includes(type as string) ? 'rotate-180' : '']"
                             fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                         </svg>
