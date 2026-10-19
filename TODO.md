@@ -33,5 +33,10 @@ npm run site:check && npm run site:build && npm run check:versions
 
 - [ ] **H-1 输入区去自动检测**（`f81ced0`）：粘贴与手动输入均不再自动检测，仅「检测」按钮
   触发；检测后继续编辑旧结果保留（「清空」一并清）。→ **TC-02-1**（含负向判据）
+- [ ] **H-2 落地页安装区改版 + 分割线评估**（`f9b5133` + `86c9dd1`）：四并列渠道卡片 →
+  VS Code/GitHub 式下载按钮 + details 下拉面板（零 JS）——插件组含 Chrome/Edge/Firefox
+  与 GitHub 源码（Release 页实链），应用组 Windows/macOS 未上架占位「即将上架」（无死链）；
+  组内渠道行改 ghost 式；分割线评估结论=保留每节 1px 单色细线，删 `:first-of-type` 死规则。
+  → 双语目视验收（`/` 与 `/en/`：按钮开合、caret 旋转、面板行 hover、窄屏无横向溢出）
 - 暂无其他。新候选在此登记（挂 `docs/test-cases.md` TC 编号）；实现 + 实机验收闭环后
   移入 `CHANGELOG.md` 对应轮次并清空本清单。
