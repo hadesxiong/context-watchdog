@@ -4,5 +4,7 @@
   "releases": "https://github.com/hadesxiong/paste-guard/releases",
   "edge": { "url": "", "available": false },
   "cws": { "url": "", "available": false },
-  "amo": { "url": "", "available": false }
+  "amo": { "url": "", "available": false },
+  "win": { "url": "", "available": false },
+  "mac": { "url": "", "available": false }
 }

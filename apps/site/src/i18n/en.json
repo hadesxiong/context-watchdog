@@ -18,10 +18,14 @@
   },
   "download": {
     "title": "Install",
-    "edge": "Edge Add-ons",
+    "plugin": "Extension download",
+    "app": "App download",
     "cws": "Chrome Web Store",
+    "edge": "Edge Add-ons",
     "amo": "Firefox Add-ons (AMO)",
-    "manual": "Manual install (GitHub)",
+    "manual": "GitHub source (manual install)",
+    "win": "Windows",
+    "mac": "macOS",
     "pending": "Coming soon"
   },
   "demo": {

@@ -269,43 +269,104 @@ pre {
   margin-bottom: 0.6rem;
 }
 
-/* ---------- 安装渠道 ---------- */
+/* ---------- 安装：下载按钮 + 下拉面板 ---------- */
 
-/* 四渠道一行（宽屏四并排，窄屏 auto-fit 折行）。
-   14rem 是「一行刚好放得下四个」与「文字不被挤成碎行」的折中。 */
-.pg-channels {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+/* VS Code / GitHub 式下载按钮：动作区（↓ + 分组名）与 caret 区（▾）以细线分隔——
+   分体按钮的视觉语言；但整枚 summary 都是开合热区（details/summary，零 JS，
+   与 FAQ 同一套开合语言）。面板内联展开而非绝对定位浮层：无 JS 时「点外面关闭」
+   做不到，内联没有这个硬伤，窄屏也不必处理浮层溢出。 */
+.pg-install {
+  display: flex;
+  flex-wrap: wrap;
   gap: 0.75rem;
   margin-top: 1.75rem;
+  align-items: flex-start;
 }
 
-.pg-channel {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  padding: 1rem 1.1rem;
+.pg-dl-btn {
+  display: inline-flex;
+  align-items: stretch;
+  cursor: pointer;
+  list-style: none;
+  background: var(--card);
   border: 1px solid var(--border);
   border-radius: calc(var(--radius) + 2px);
+  font-size: 0.9375rem;
+  font-weight: 550;
+  transition: background-color 0.15s ease;
+}
+
+.pg-dl-btn::-webkit-details-marker {
+  display: none;
+}
+
+.pg-dl-btn:hover {
+  background: var(--muted);
+}
+
+.pg-dl-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 1rem;
+}
+
+/* caret 区：以左细线与动作区分隔（VS Code 分体按钮的签名细节）；开合时转 180° */
+.pg-dl-caret {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 0.6rem;
+  border-left: 1px solid var(--border);
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  transition: transform 0.15s ease;
+}
+
+.pg-dl[open] .pg-dl-caret {
+  transform: rotate(180deg);
+}
+
+/* 面板：GitHub 下拉的形——描边卡片，内联在按钮下方；行是 ghost（不带第二圈描边） */
+.pg-dl-panel {
+  margin-top: 0.5rem;
+  min-width: min(17rem, 100%);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) + 4px);
   background: var(--card);
-  text-decoration: none;
+  padding: 0.4rem;
 }
 
-a.pg-channel:hover {
-  border-color: color-mix(in oklab, var(--primary) 45%, var(--border));
-  background: color-mix(in oklab, var(--primary) 5%, var(--card));
+.pg-install-items {
+  display: grid;
+  gap: 0.15rem;
 }
 
-/* 卡片第一行：名称贴左、状态标签贴右 */
-.pg-channel-top {
+/* 渠道行（ghost）：名称贴左、状态标签贴右，hover 整行给底色 */
+.pg-channel {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: var(--radius);
+  text-decoration: none;
+}
+
+a.pg-channel:hover {
+  background: var(--muted);
+}
+
+.pg-channel[aria-disabled='true'] {
+  cursor: default;
+}
+
+.pg-channel[aria-disabled='true'] .pg-channel-name {
+  color: var(--muted-foreground);
 }
 
 .pg-channel-name {
   font-weight: 550;
+  font-size: 0.9375rem;
 }
 
 .pg-tag {

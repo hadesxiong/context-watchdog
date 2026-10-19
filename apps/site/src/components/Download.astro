@@ -1,20 +1,21 @@
 ---
 // 安装渠道区块
 //
-// 关键取舍：商店没上架的时候，**不要渲染一个能点但打不开的链接**。
-// 死链比一句「即将上架」更伤信任，所以未上架的渠道渲染成 aria-disabled 的
-// 非链接元素 + 一个「即将上架」标签，而不是猜一个 URL 填进去。
+// 形态：VS Code / GitHub 式下载按钮 + 下拉面板（零 JS，details/summary，
+// 与 FAQ 同一套开合语言）。按钮面分「动作区（↓ + 分组名）」与「caret 区（▾）」，
+// 两区以细线分隔——分体按钮的视觉语言，但整枚 summary 都是开合热区：
+// 无 JS 时「点外面关闭浮层」做不到，所以面板内联展开而不是绝对定位浮层。
 //
+// 关键取舍不变：商店没上架时**不渲染一个能点但打不开的链接**——未上架渠道
+// 渲染成 aria-disabled 行 +「即将上架」标签，而不是猜一个 URL 填进去。
 // 状态本身不写在这里，全部来自 src/data/links.json（构建期校验，见 links.ts）。
 //
-// 布局：四个渠道排成一行矩形卡片（auto-fit，窄屏自动折行）。原来用无列定义的
-// pg-grid 会退化成单列长条，四个渠道占满四屏高度。
+// 面板内的渠道行不带边框（ghost 行）：外层面板的描边已是唯一一圈——卡中套卡
+// （shadcn 也避免）在 GitHub 式下拉里同样不成立。
 //
-// 卡片内不放说明文字：手动安装的步骤在 GitHub Release 页上有，页面上再抄一遍
-// 既长又不保证同步（旧版的 edgeHint / manualHint 已删）。卡片只留
-// 「名称 + 状态/跳转标记」，保持 flex-col（见 global.css 的 .pg-channel）。
+// GitHub 源码行指 Release 页：手动安装的 zip 与步骤都在那（页面上不再抄步骤）。
 import { dict, type SiteLocale } from '@site/i18n'
-import { channels, manualZip } from '@site/data/links'
+import { channels, appChannels, manualZip } from '@site/data/links'
 
 interface Props {
   locale: SiteLocale
@@ -23,41 +24,57 @@ interface Props {
 const { locale } = Astro.props
 const d = dict(locale)
 
-const labelOf = (key: string): string =>
-  key === 'edge' ? d.download.edge : key === 'cws' ? d.download.cws : d.download.amo
+const labels: Record<string, string> = {
+  cws: d.download.cws,
+  edge: d.download.edge,
+  amo: d.download.amo,
+  win: d.download.win,
+  mac: d.download.mac,
+  manual: d.download.manual
+}
+
+// 两个下载按钮 = 插件（三家商店 + GitHub 源码兜底）与桌面应用（Windows / macOS）
+const groups = [
+  {
+    label: d.download.plugin,
+    items: [...channels, { key: 'manual' as const, ...manualZip }]
+  },
+  { label: d.download.app, items: appChannels }
+]
 ---
 
 <section class="pg-section" id="download">
   <div class="pg-shell">
     <h2 class="pg-section-title">{d.download.title}</h2>
 
-    <div class="pg-channels">
+    <div class="pg-install">
       {
-        channels.map((channel) =>
-          channel.available ? (
-            <a class="pg-channel" href={channel.url} rel="noopener">
-              <span class="pg-channel-top">
-                <span class="pg-channel-name">{labelOf(channel.key)}</span>
-                <span class="pg-tag pg-tag-ok" aria-hidden="true">↗</span>
-              </span>
-            </a>
-          ) : (
-            <span class="pg-channel" aria-disabled="true">
-              <span class="pg-channel-top">
-                <span class="pg-channel-name">{labelOf(channel.key)}</span>
-                <span class="pg-tag">{d.download.pending}</span>
-              </span>
-            </span>
-          )
-        )
+        groups.map((group) => (
+          <details class="pg-dl">
+            <summary class="pg-dl-btn">
+              <span class="pg-dl-main"><span aria-hidden="true">↓</span> {group.label}</span>
+              <span class="pg-dl-caret" aria-hidden="true">▾</span>
+            </summary>
+            <div class="pg-dl-panel">
+              <div class="pg-install-items">
+                {group.items.map((item) =>
+                  item.available ? (
+                    <a class="pg-channel" href={item.url} rel="noopener">
+                      <span class="pg-channel-name">{labels[item.key] ?? item.key}</span>
+                      <span class="pg-tag pg-tag-ok" aria-hidden="true">↗</span>
+                    </a>
+                  ) : (
+                    <span class="pg-channel" aria-disabled="true">
+                      <span class="pg-channel-name">{labels[item.key] ?? item.key}</span>
+                      <span class="pg-tag">{d.download.pending}</span>
+                    </span>
+                  )
+                )}
+              </div>
+            </div>
+          </details>
+        ))
       }
-
-      <a class="pg-channel" href={manualZip.url} rel="noopener">
-        <span class="pg-channel-top">
-          <span class="pg-channel-name">{d.download.manual}</span>
-          <span class="pg-tag pg-tag-ok" aria-hidden="true">↗</span>
-        </span>
-      </a>
     </div>
   </div>
 </section>

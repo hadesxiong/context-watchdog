@@ -18,10 +18,14 @@
   },
   "download": {
     "title": "安装",
-    "edge": "Edge 加载项",
+    "plugin": "插件下载",
+    "app": "应用下载",
     "cws": "Chrome 应用商店",
+    "edge": "Edge 加载项",
     "amo": "Firefox 附加组件",
-    "manual": "手动安装（GitHub）",
+    "manual": "GitHub 源码（手动安装）",
+    "win": "Windows",
+    "mac": "macOS",
     "pending": "即将上架"
   },
   "demo": {
