@@ -224,7 +224,7 @@ const loadingCaption = computed(() => {
                  区块全宽贴边（无内缩），区块间 gap-4（16px），无 margin -->
             <div class="flex flex-col">
                 <div v-for="item in engineStatusItems" :key="item.name"
-                    class="p-4 bg-muted/50">
+                    class="px-4 pt-4 bg-muted/50">
                     <!-- gap-3：文字块与 Switch 之间保留间距（行内自由空间为 0 时也不贴合） -->
                     <div class="flex items-center justify-between gap-3">
                         <div class="min-w-0 flex items-center gap-3">
