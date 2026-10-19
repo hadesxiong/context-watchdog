@@ -53,7 +53,8 @@ const zh = readCatalog('zh_CN')
 /** DetectionType 的权威列表：直接从类型定义解析，新增类型会被下面的护栏自动覆盖 */
 const DETECTION_TYPES = (() => {
   const typesSource = readFileSync(resolve(ROOT, 'packages/engine/src/types/index.ts'), 'utf8')
-  const union = typesSource.match(/export type DetectionType =([\s\S]*?)\n\n/)
+  // 空行分隔按 CRLF 容错（仓库工作区为 CRLF 行尾，裸 \n\n 在 CRLF 文件上永不命中）
+  const union = typesSource.match(/export type DetectionType =([\s\S]*?)\r?\n\r?\n/)
   if (!union) throw new Error('未能从 types/index.ts 解析出 DetectionType')
   return [...union[1].matchAll(/'([A-Z_]+)'/g)].map((m) => m[1])
 })()
