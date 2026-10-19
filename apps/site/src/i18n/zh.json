@@ -8,7 +8,6 @@
   "nav": {
     "how": "工作原理",
     "privacy": "隐私",
-    "decisions": "设计取舍",
     "faq": "常见问题"
   },
   "hero": {
@@ -18,17 +17,15 @@
     "secondary": "阅读源码"
   },
   "download": {
-    "title": "下载",
+    "title": "安装",
     "lead": "三个商店渠道之外，始终保留手动安装这条路——不依赖任何商店审核。",
     "edge": "Edge 加载项",
     "edgeHint": "国内可直连的官方商店，推荐",
     "cws": "Chrome 应用商店",
     "amo": "Firefox 附加组件",
-    "manual": "手动安装（GitHub Release）",
-    "manualHint": "下载 ZIP 后，在 chrome://extensions 打开「开发者模式」并「加载已解压的扩展程序」",
-    "pending": "即将上架",
-    "pendingNote": "渠道仍在审核中。上架前请先走手动安装，三个渠道的包由同一次构建产出。",
-    "integrity": "同一份源码构建出的包，逐渠道内容一致；每个 Release 附 sha256 校验值。"
+    "manual": "手动安装（GitHub）",
+    "manualHint": "下载 ZIP → chrome://extensions → 加载已解压的扩展程序",
+    "pending": "即将上架"
   },
   "demo": {
     "title": "30 秒看懂",
@@ -85,40 +82,6 @@
       {
         "claim": "发布产物可校验",
         "how": "每个 Release 附 sha256 校验值；LICENSE 与 THIRD-PARTY-NOTICES.txt 随产物一同分发。"
-      }
-    ]
-  },
-  "decisions": {
-    "title": "几处设计取舍",
-    "lead": "现象 → 决策 → 代价。写下来是因为它们都不是显然的选择，而且多数是踩过坑才定下来的。",
-    "items": [
-      {
-        "title": "为什么不申请专利，反而把设计文档一并公开",
-        "body": "把方案完整公开，别人就无法再拿它申请专利。这比申请专利更便宜、覆盖更彻底，也正好对上「不希望被别人抢注」的诉求。代价是自己日后同样不能再申请——所以要趁早公开。因此设计文档（docs/design/）与代码一起进仓库，而不是只公开想法：现有技术必须可实施才算数。"
-      },
-      {
-        "title": "为什么把 AI 模型锁定在 gliner_small-v2",
-        "body": "GLiNER v0 与 v1 是 cc-by-nc-4.0（禁止商用），从 v2 起才改为 Apache-2.0。误用 v1 会让整个项目无法以任何允许商业化的许可发布。锁定 v2 不是随手选的版本号，而是一次许可合规决策。"
-      },
-      {
-        "title": "为什么不能把 206 响应的 content-length 当文件总长",
-        "body": "ModelScope 的 CDN 不发 Access-Control-Expose-Headers，跨源读不到 ETag 与 Content-Range。用 Range: 0-0 探测时，206 的 content-length 只是那 1 字节响应体的长度，当成总长就会得出「183MB 不等于 1 字节，缓存过期」并清缓存重下。修法是三级回退：ETag 到 Last-Modified（CORS 安全列表头，恒可见）再到 Content-Length；而 node 单测注入 fetch 不经 CORS 过滤，因此这个缺陷只能靠浏览器视角的用例兜住。"
-      },
-      {
-        "title": "为什么区域规则集（美国 / 欧盟）默认全关",
-        "body": "社保号的形状在任意地区的文本里都可能出现。把它塞进通用规则，等于让所有非美区用户替美区承担误报。因此独立成类别，默认不参与扫描，只有选了对应档案或在自定义档案里勾上才生效。每条规则都配了算法校验——裸正则在真实文本里不可用。"
-      },
-      {
-        "title": "为什么界面文案自己写 t() 而不引 vue-i18n",
-        "body": "需要的只有三件事：扁平字典、{name} 占位符插值、一个响应式 ref，大约 40 行。更要紧的是同一份字典还要供 Chrome 的 _locales 使用，而 messages.json 的键名只接受字母数字与下划线，两者的数据模型并不重合——引一个大库反而要为它做适配。"
-      },
-      {
-        "title": "为什么许可选 Apache-2.0，而不是 MIT 或 GPL",
-        "body": "三个诉求要同时满足：可自由复制改动、直接使用需保留署名、允许闭源商用但不许冒用作者名字。MIT 不含专利与商标条款；GPL 禁止闭源衍生，与「允许闭源商用」直接冲突。Apache-2.0 第 4 条强制署名与标注改动，第 6 条明确不授予商标权——逐条对上。"
-      },
-      {
-        "title": "为什么要让检测引擎完全不依赖宿主 API",
-        "body": "引擎不静态 import chrome、node、vue 或 onnxruntime，宿主能力一律通过 InferenceBackend 注入。这样同一份代码既能跑在扩展里，也能跑在规划中的本地代理服务里；副作用是全部用例都能在 Node 下直接跑，不需要浏览器环境。这条约束有自动化断言保护，改坏会立刻变红。"
       }
     ]
   },

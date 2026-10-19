@@ -8,7 +8,6 @@
   "nav": {
     "how": "How it works",
     "privacy": "Privacy",
-    "decisions": "Trade-offs",
     "faq": "FAQ"
   },
   "hero": {
@@ -18,17 +17,15 @@
     "secondary": "Read the source"
   },
   "download": {
-    "title": "Get it",
+    "title": "Install",
     "lead": "Beyond the three store channels, manual installation stays available — it does not depend on any store's review queue.",
     "edge": "Edge Add-ons",
-    "edgeHint": "The official store reachable without a proxy in mainland China — recommended",
+    "edgeHint": "Official store reachable without a proxy in mainland China — recommended",
     "cws": "Chrome Web Store",
     "amo": "Firefox Add-ons (AMO)",
-    "manual": "Manual install (GitHub Release)",
-    "manualHint": "Download the ZIP, then enable Developer mode at chrome://extensions and use \"Load unpacked\"",
-    "pending": "Coming soon",
-    "pendingNote": "Store review is still in progress. Until then, use the manual install — all three channels are built from the same source.",
-    "integrity": "Every channel is built from one source tree with identical contents; each Release ships sha256 checksums."
+    "manual": "Manual install (GitHub)",
+    "manualHint": "Download the ZIP → chrome://extensions → Load unpacked",
+    "pending": "Coming soon"
   },
   "demo": {
     "title": "30 seconds",
@@ -85,40 +82,6 @@
       {
         "claim": "Releases are verifiable",
         "how": "Each Release ships sha256 checksums; LICENSE and THIRD-PARTY-NOTICES.txt travel with the bundle."
-      }
-    ]
-  },
-  "decisions": {
-    "title": "A few trade-offs",
-    "lead": "Phenomenon → decision → cost. They are written down because none of them was the obvious choice, and most came out of getting something wrong first.",
-    "items": [
-      {
-        "title": "No patents — the design documents are published instead",
-        "body": "Publishing the full design makes it impossible for anyone else to patent it later. That is cheaper and broader than filing, and it matches the goal of \"I do not want someone else to grab this\". The cost: the author cannot patent it later either, which is exactly why it has to happen early. That is why the design docs (docs/design/) live in the repository alongside the code — prior art only counts if it is enabling."
-      },
-      {
-        "title": "Why the AI model is pinned to gliner_small-v2",
-        "body": "GLiNER v0 and v1 are cc-by-nc-4.0 (non-commercial); the licence only changed to Apache-2.0 at v2. Using v1 by mistake would have made it impossible to release this project under any licence permitting commercial use. Pinning v2 is not arbitrary — it is a compliance decision."
-      },
-      {
-        "title": "Why a 206 response's content-length cannot be treated as the file size",
-        "body": "ModelScope's CDN does not send Access-Control-Expose-Headers, so ETag and Content-Range are unreadable cross-origin. Probing with Range: 0-0 makes the 206's content-length merely the length of that one-byte body; treating it as the total yields \"183 MB is not 1 byte, the cache is stale\" and clears 183 MB to download it again. The fix is a three-level fallback: ETag, then Last-Modified (a CORS-safelisted header, always visible), then Content-Length. Note that node unit tests inject fetch and bypass CORS filtering, so only a browser-perspective test could have caught this."
-      },
-      {
-        "title": "Why the regional rule sets (US / EU) are off by default",
-        "body": "An SSN's shape can appear in text from anywhere. Folding it into the general rule set would make every non-US user pay for US false positives. So it is a separate category that stays out of scanning until you pick the matching profile or tick it in a custom profile. Each rule carries algorithmic validation, because bare regex is unusable on real text."
-      },
-      {
-        "title": "Why the interface copy uses a hand-written t() instead of vue-i18n",
-        "body": "Only three things are needed: a flat dictionary, {name} interpolation and a reactive ref — about 40 lines. More importantly, the same dictionary also feeds Chrome's _locales, whose messages.json only accepts alphanumerics and underscores in key names. The data models do not line up, so a large library would mostly need adapting."
-      },
-      {
-        "title": "Why Apache-2.0 rather than MIT or GPL",
-        "body": "Three requirements had to hold at once: free to copy and modify, attribution required when used directly, and closed-source commercial use allowed but the author's name protected. MIT has no patent or trademark clause; GPL forbids closed-source derivatives, which conflicts directly with permitting commercial use. Apache-2.0 §4 mandates attribution and marking changes, and §6 explicitly grants no trademark rights — a clause-by-clause match."
-      },
-      {
-        "title": "Why the detection engine depends on no host API",
-        "body": "The engine never statically imports chrome, node, vue or onnxruntime; host capabilities are injected through InferenceBackend. The same code can therefore run inside the extension and inside the planned local proxy service. A side effect is that every test runs directly on Node with no browser environment. Automated assertions protect this constraint, so breaking it turns red immediately."
       }
     ]
   },

@@ -269,26 +269,43 @@ pre {
   margin-bottom: 0.6rem;
 }
 
-/* ---------- 下载渠道 ---------- */
+/* ---------- 安装渠道 ---------- */
+
+/* 四渠道一行（宽屏四并排，窄屏 auto-fit 折行）。
+   14rem 是「一行刚好放得下四个」与「文字不被挤成碎行」的折中。 */
+.pg-channels {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 0.75rem;
+  margin-top: 1.75rem;
+}
 
 .pg-channel {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  flex-wrap: wrap;
-  padding: 0.9rem 1.1rem;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 1rem 1.1rem;
   border: 1px solid var(--border);
   border-radius: calc(var(--radius) + 2px);
   background: var(--card);
   text-decoration: none;
 }
 
-.pg-channel-name {
-  font-weight: 550;
+a.pg-channel:hover {
+  border-color: color-mix(in oklab, var(--primary) 45%, var(--border));
+  background: color-mix(in oklab, var(--primary) 5%, var(--card));
+}
+
+/* 卡片第一行：名称贴左、状态标签贴右 */
+.pg-channel-top {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 0.5rem;
+}
+
+.pg-channel-name {
+  font-weight: 550;
 }
 
 .pg-channel-hint {

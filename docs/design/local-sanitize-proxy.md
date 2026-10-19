@@ -245,7 +245,7 @@ pasteguard run -- codex
 **验证命令**
 
 ```
-npm run typecheck && npx vitest run          # 扩展侧基线不回归（190 项）
+npm run typecheck && npx vitest run          # 扩展侧基线不回归（311 项）
 npm run build && npm run probe:layout        # 扩展侧不受影响（本设计不改扩展）
 ```
 

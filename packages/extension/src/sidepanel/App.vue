@@ -9,6 +9,7 @@ import PasteInterceptionSettings from '../components/PasteInterceptionSettings.v
 import CapabilityDialog from '../components/CapabilityDialog.vue'
 import { Button, Switch, Logo, LoadingOverlay, Dialog } from '../ui'
 import { useI18n } from '../i18n'
+import { waitForPaint } from '../lib/paintBarrier'
 
 const { t, localePreference, setLocalePreference, availableLocales, localeNames } = useI18n()
 
@@ -79,16 +80,9 @@ onUnmounted(() => {
     if (dismissTimer.value) clearTimeout(dismissTimer.value)
 })
 
-// 等到一次真实渲染：nextTick 只保证 DOM 更新，rAF 才意味着浏览器真的画过一帧。
-// rAF 在面板未激活/不可见时可能不触发（检测会被卡住），故用 100ms 超时兜底。
-const waitForPaint = () => new Promise<void>(resolve => {
-    if (document.visibilityState === 'hidden') { resolve(); return }
-    let settled = false
-    const finish = () => { if (!settled) { settled = true; resolve() } }
-    requestAnimationFrame(finish)
-    setTimeout(finish, 100)
-})
-
+// 等到一次真实渲染：nextTick 只保证 DOM 已更新，rAF 回调发生在**绘制之前**，
+// 两者都不等于「已经上屏」。屏障实现与理由见 lib/paintBarrier.ts（含顺序单测）。
+// 遮罩必须先上屏再开跑同步长任务，否则长文本检测会把这一帧的绘制整段跳过。
 const handleDetect = async (text: string) => {
     showOverlay.value = true
     document.body.style.overflow = 'hidden'
@@ -241,6 +235,19 @@ const loadingCaption = computed(() => {
                 </svg>
                 </button>
             </div>
+            <!-- 界面语言：直接决定 UI 文案与「脱敏占位符」语言（见 i18n/index.ts）。
+                 放在面板最前——它是「你在用哪个语言」的前置设定，先于任何引擎开关。
+                 边距与下方区块同构：px-4 pt-4（pb=0），与下一块的 pt-4 合成 16px 间距 -->
+            <div class="px-4 pt-4 bg-muted/50 flex items-center justify-between gap-3">
+                <p class="text-sm font-medium text-foreground">{{ t('settings_language') }}</p>
+                <select v-model="localeChoice"
+                    class="px-2 py-1.5 rounded-md border border-input bg-background text-sm text-foreground
+                        focus:outline-none focus:ring-2 focus:ring-ring">
+                    <option value="auto">{{ t('settings_language_auto') }}</option>
+                    <option v-for="code in availableLocales" :key="code" :value="code">
+                        {{ localeNames[code] }}</option>
+                </select>
+            </div>
             <!-- 引擎开关：正则恒开（禁改）+ AI 开关（含场景识别，合并下载）；
                  区块全宽贴边（无内缩），区块间 gap-4（16px），无 margin -->
             <div class="flex flex-col">
@@ -290,17 +297,6 @@ const loadingCaption = computed(() => {
                         </div>
                     </template>
                 </div>
-            </div>
-            <!-- 界面语言：直接决定 UI 文案与「脱敏占位符」语言（见 i18n/index.ts） -->
-            <div class="px-4 py-4 bg-muted/50 flex items-center justify-between gap-3">
-                <p class="text-sm font-medium text-foreground">{{ t('settings_language') }}</p>
-                <select v-model="localeChoice"
-                    class="px-2 py-1.5 rounded-md border border-input bg-background text-sm text-foreground
-                        focus:outline-none focus:ring-2 focus:ring-ring">
-                    <option value="auto">{{ t('settings_language_auto') }}</option>
-                    <option v-for="code in availableLocales" :key="code" :value="code">
-                        {{ localeNames[code] }}</option>
-                </select>
             </div>
             <!-- 粘贴自动拦截：逐站授权，只有授权站点才注入粘贴监听 -->
             <PasteInterceptionSettings />

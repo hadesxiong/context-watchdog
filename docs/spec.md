@@ -167,7 +167,8 @@ vite 别名把 gliner 静态引用的 `onnxruntime-web/webgpu|webgl` 打桩（EP
 
 ## 8. 粘贴自动拦截
 
-- **授权模型**：`optional_host_permissions`（https/http 通配）+ 运行时
+- **授权模型**：`optional_host_permissions`（`https://*/*` + `http://localhost/*` +
+  `http://127.0.0.1/*`，不含宽泛的 `http://*/*`）+ 运行时
   `chrome.permissions.request`（必须用户手势）——**不申请 `<all_urls>`**，
   未授权站点零接触；
 - **注入时机**：`tabs.onUpdated`（loading 且 URL 匹配）+ 站点列表变化时对已开页面即时注入；
@@ -199,7 +200,7 @@ vite 别名把 gliner 静态引用的 `onnxruntime-web/webgpu|webgl` 打桩（EP
 | `clipboardWrite` | 脱敏结果与档案 JSON 复制 |
 | `unlimitedStorage` | 183MB 模型缓存配额 |
 | `scripting` | 仅向已授权站点注入粘贴监听 |
-| `optional_host_permissions` | 粘贴拦截逐站授权（运行时按需申请） |
+| `optional_host_permissions` | 粘贴拦截逐站授权（https + 本地 http，运行时按需申请） |
 
 **CSP**（extension_pages）：`script-src 'self' 'wasm-unsafe-eval'; object-src 'self';
 connect-src 'self' https:`——无 `http:`/`ws:`；`wasm-unsafe-eval` 为 ORT WASM 必需
@@ -239,7 +240,7 @@ CSP 收紧后扩展页无任何外部脚本/连接可能。
 
 ## 12. 测试体系
 
-`npm test`：**190 tests / 19 文件**（`npm run typecheck` 0 错误为另一道闸）：
+`npm test`：**311 tests / 25 文件**（`npm run typecheck` 0 错误为另一道闸）：
 
 - `tests/golden/`（4）：内置三档 + 白名单端到端金样例；
 - `tests/unit/`（12）：规则与值过滤、短密钥族、自定义规则 ReDoS、管线配置、store 状态机、

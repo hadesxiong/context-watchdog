@@ -15,8 +15,8 @@
 
   "app_subtitle": "AI脱敏助手",
 
-  "engine_tooltip": "检测引擎状态",
-  "engine_panel_title": "检测引擎状态",
+  "engine_tooltip": "设置",
+  "engine_panel_title": "设置",
   "engine_regex_name": "正则规则",
   "engine_regex_desc": "密钥、连接串、PII（手机/身份证/银行卡）等模式匹配 · 基础引擎，始终启用",
   "engine_ai_name": "AI 模型",

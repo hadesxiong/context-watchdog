@@ -1,7 +1,7 @@
 ---
 // 单页 9 区块（E3）
 //
-// 顺序即叙事：是什么 → 看一眼 → 怎么做到的 → 凭什么信 → 为什么这么做 →
+// 顺序即叙事：是什么 → 看一眼 → 怎么做到的 → 凭什么信 →
 // 现在什么样 → 谁在支持 → 还有疑问 → 怎么支持。
 //
 // 两个语言页面共用这一个组件，避免 / 与 /en/ 两处各写一遍结构（结构一旦
@@ -114,26 +114,7 @@ const supporterLabel = supporters.length === 0 ? d.evidence.supportersNone : d.e
   </div>
 </section>
 
-<!-- 6. 设计取舍 -->
-<section class="pg-section" id="decisions">
-  <div class="pg-shell">
-    <h2 class="pg-section-title">{d.decisions.title}</h2>
-    <p class="pg-lead">{d.decisions.lead}</p>
-
-    <div class="pg-grid pg-grid-2">
-      {
-        d.decisions.items.map((item) => (
-          <div class="pg-card">
-            <h3>{item.title}</h3>
-            <p>{item.body}</p>
-          </div>
-        ))
-      }
-    </div>
-  </div>
-</section>
-
-<!-- 7. 证据 -->
+<!-- 6. 证据 -->
 <section class="pg-section" id="evidence">
   <div class="pg-shell">
     <h2 class="pg-section-title">{d.evidence.title}</h2>

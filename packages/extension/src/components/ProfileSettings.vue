@@ -254,14 +254,15 @@ const onSave = async () => {
             </div>
         </div>
 
-        <!-- 规则类别开关 -->
+        <!-- 规则类别开关：流式换行（不压缩子项）。词条长度差异很大（「个人信息」vs
+             「美国区域规则（社保号 / 税号 / 电话）」），单行 flex 会把它们挤成多行窄块 -->
         <div class="space-y-1.5">
             <label class="block text-sm font-medium text-foreground">{{ t('ps_categories') }}</label>
-            <div class="flex gap-4">
+            <div class="flex flex-wrap gap-x-4 gap-y-2">
                 <label v-for="cat in CATEGORY_LABELS" :key="cat.key"
                     class="flex items-center gap-1.5 cursor-pointer text-sm text-foreground">
                     <input type="checkbox" :checked="draft.enabledCategories.includes(cat.key)"
-                        @change="toggleCategory(cat.key)" class="accent-primary h-3.5 w-3.5" />
+                        @change="toggleCategory(cat.key)" class="accent-primary h-3.5 w-3.5 shrink-0" />
                     {{ t(cat.labelKey) }}
                 </label>
             </div>

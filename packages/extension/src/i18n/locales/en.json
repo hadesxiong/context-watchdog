@@ -15,8 +15,8 @@
 
   "app_subtitle": "AI Redaction",
 
-  "engine_tooltip": "Detection engines",
-  "engine_panel_title": "Detection engines",
+  "engine_tooltip": "Settings",
+  "engine_panel_title": "Settings",
   "engine_regex_name": "Pattern rules",
   "engine_regex_desc": "Pattern matching for credentials, connection strings and PII (phone / ID / bank card) · base engine, always on",
   "engine_ai_name": "AI model",
@@ -45,7 +45,7 @@
   "input_clear": "Clear",
 
   "action_copied": "Copied!",
-  "action_copy": "Copy redacted text",
+  "action_copy": "Copy redacted",
   "action_replace_all": "Replace all",
   "action_keep_all": "Keep all",
 
@@ -117,8 +117,8 @@
   "ps_category_secret": "Credentials",
   "ps_category_pii": "Personal data",
   "ps_category_entropy": "High-entropy strings",
-  "ps_category_us": "US regional rules (SSN / EIN / phone)",
-  "ps_category_eu": "EU regional rules (IBAN / VAT)",
+  "ps_category_us": "US rules (SSN / EIN / phone)",
+  "ps_category_eu": "EU rules (IBAN / VAT)",
   "ps_entropy_sensitivity": "High-entropy sensitivity",
   "ps_sensitivity_loose": "Loose",
   "ps_sensitivity_standard": "Standard",

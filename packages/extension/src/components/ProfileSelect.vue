@@ -79,7 +79,12 @@ const onDelete = async () => {
             <!-- <SelectValue placeholder="选择档案" class="truncate" /> -->
             <span class="flex items-center min-w-0 gap-1">
                 <span class="shrink-0">{{ t('profile_mode') }}</span>
-                <SelectValue :placeholder="t('profile_select_placeholder')" class="truncate" />
+                <!-- 自己渲染文本，不用 SelectValue 的默认内容：reka-ui 的 SelectValue 显示的是
+                     候选项在**挂载时**抓取的 textContent 快照（SelectItemText.vue），不随语言变化，
+                     只有重挂载（开关一次菜单）才刷新 → 表现为切语言后档案名不更新。
+                     这里直接读响应式的 profileLabel()，切语言当帧就跟上。 -->
+                <SelectValue :placeholder="t('profile_select_placeholder')" class="truncate">
+                    {{ profileLabel(store.activeProfile).name }}</SelectValue>
             </span>
             <svg class="w-3.5 h-3.5 shrink-0 text-muted-foreground" fill="none"
                 stroke="currentColor" viewBox="0 0 24 24">
