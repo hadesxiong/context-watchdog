@@ -26,9 +26,13 @@ const { t, typeLabel } = useI18n()
 
 const openTypes = ref<string[]>([])
 
+// 分类默认收起：检测完先给「分类 + 数量」的总览，按需逐个展开看卡片。
+// 重检时只剪掉已不存在的分类（防旧键复活时意外自动展开），用户手动展开/
+// 收起的选择跨重检保留——不再强制全开。
 watch(() => props.detections, () => {
-    openTypes.value = Object.keys(groupedDetections.value)
-}, { immediate: true })
+    const present = new Set(Object.keys(groupedDetections.value))
+    openTypes.value = openTypes.value.filter((type) => present.has(type))
+})
 </script>
 
 <template>
