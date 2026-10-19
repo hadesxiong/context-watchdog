@@ -11,14 +11,24 @@
 //   - side_panel → sidebar_action（Firefox 不识别 side_panel）
 //   - 移除 sidePanel 权限（Firefox 未知权限，审核会标）
 //   - 补 browser_specific_settings.gecko id（本地加载与签名需要稳定 id）
-import { readFileSync, writeFileSync } from 'node:fs'
+import { readFileSync, writeFileSync, copyFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
+import { renderThirdPartyNotices } from './third-party-notices.mjs'
 
 const target = process.argv[2] === 'firefox' ? 'firefox' : 'chrome'
 const here = dirname(fileURLToPath(import.meta.url))
 const outDir = target === 'firefox' ? 'dist-firefox' : 'dist'
 const manifestPath = resolve(here, `../${outDir}/manifest.json`)
+
+// 两个目标都必须随附第三方许可声明（Apache-2.0 §4(c)、MIT 的版权与许可通知要求）。
+// 运行时下载的模型不在包内，不计入分发组件，但在清单末尾单独列出以供透明度审查。
+const notices = renderThirdPartyNotices()
+writeFileSync(resolve(here, '../THIRD-PARTY-NOTICES.txt'), notices)
+copyFileSync(resolve(here, '../THIRD-PARTY-NOTICES.txt'), resolve(here, `../${outDir}/THIRD-PARTY-NOTICES.txt`))
+// LICENSE 一并入包：商店与用户都能在产物内直接核验许可全文
+copyFileSync(resolve(here, '../LICENSE'), resolve(here, `../${outDir}/LICENSE`))
+console.log('[postbuild] 第三方许可与 LICENSE 已写入 →', outDir)
 
 if (target !== 'firefox') {
   console.log('[postbuild] Chrome 目标：manifest 无需处理 →', outDir)

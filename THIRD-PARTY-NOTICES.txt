@@ -1,0 +1,434 @@
+PasteGuard — 第三方组件许可与署名声明
+==============================================================================
+本文件由 scripts/third-party-notices.mjs 在构建时生成（2026-10-19），请勿手工编辑。
+组件名、版本与许可标识取自构建时 node_modules 中实际安装的 package.json。
+本产品以 Apache License, Version 2.0 发布，完整许可文本见随附的 LICENSE 文件。
+------------------------------------------------------------------------------
+一、随本产品一同分发的组件
+------------------------------------------------------------------------------
+  vue
+    版本:       3.5.42
+    许可:       MIT
+    版权:       Copyright (c) 2018-present, Yuxi (Evan) You
+    主页:       https://vuejs.org
+  pinia
+    版本:       4.0.3
+    许可:       MIT
+    版权:       Copyright (c) 2019-present Eduardo San Martin Morote
+    主页:       https://pinia.vuejs.org
+  reka-ui
+    版本:       2.10.4
+    许可:       MIT
+    版权:       Copyright (c) 2023 UnoVue <https://github.com/unovue>
+    主页:       https://reka-ui.com
+  gliner
+    版本:       0.0.19
+    许可:       MIT
+    版权:       Copyright (c) Urchade
+    主页:       https://github.com/urchade/gliner
+    说明:       包内 LICENSE 文件为 Apache-2.0 全文，而 package.json 的 license 字段声明为 MIT。以 LICENSE 文件为准，按 Apache-2.0 处理。
+  @xenova/transformers
+    版本:       2.17.2
+    许可:       Apache-2.0
+    版权:       Copyright (c) 2023 Xenova
+    主页:       https://github.com/huggingface/transformers.js
+  onnxruntime-web
+    版本:       1.14.0 / 1.19.2
+    许可:       MIT
+    版权:       Copyright (c) Microsoft Corporation
+    主页:       https://onnxruntime.ai
+    说明:       包内未附 LICENSE 文件；package.json 声明 MIT，上游 Microsoft/onnxruntime 为 MIT。按 MIT 处理。
+  onnxruntime-common
+    版本:       1.14.0 / 1.19.2
+    许可:       MIT
+    版权:       Copyright (c) Microsoft Corporation
+    主页:       https://onnxruntime.ai
+    说明:       包内未附 LICENSE 文件；package.json 声明 MIT，上游 Microsoft/onnxruntime 为 MIT。按 MIT 处理。
+  @huggingface/jinja
+    版本:       0.2.2
+    许可:       MIT
+    版权:       Copyright (c) 2023 Hugging Face
+    主页:       https://huggingface.co/docs/huggingface_hub
+------------------------------------------------------------------------------
+二、MIT 许可全文（适用于上述所有许可标识为 MIT 的组件）
+------------------------------------------------------------------------------
+MIT License
+  Copyright (c) 2018-present, Yuxi (Evan) You
+  Copyright (c) 2019-present Eduardo San Martin Morote
+  Copyright (c) 2023 UnoVue <https://github.com/unovue>
+  Copyright (c) Urchade
+  Copyright (c) Microsoft Corporation
+  Copyright (c) Microsoft Corporation
+  Copyright (c) 2023 Hugging Face
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+------------------------------------------------------------------------------
+三、Apache License 2.0 组件
+------------------------------------------------------------------------------
+下列组件以 Apache License, Version 2.0 发布。该许可的完整文本与本产品所用的
+许可文本相同，见随附的 LICENSE 文件。按该许可第 4 条，此处保留上述组件的版权
+与署名信息（见"一、随本产品一同分发的组件"中的版权行）。
+  @xenova/transformers
+    版本:       2.17.2
+    许可:       Apache-2.0
+    版权:       Copyright (c) 2023 Xenova
+    主页:       https://github.com/huggingface/transformers.js
+------------------------------------------------------------------------------
+五、运行时下载的模型（不随本产品分发）
+------------------------------------------------------------------------------
+本产品在用户主动开启 AI 检测后，从白名单模型源下载下列模型文件。
+模型文件**不包含在扩展包内**，因此不属于"随本产品一同分发"的组件，
+但出于透明度考虑一并列出：
+ 
+ 
+o
+n
+n
+x
+-
+c
+o
+m
+m
+u
+n
+i
+t
+y
+/
+g
+l
+i
+n
+e
+r
+_
+s
+m
+a
+l
+l
+-
+v
+2
+
+
+ 
+ 
+ 
+ 
+版
+本
+:
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+(
+运
+行
+时
+下
+载
+，
+不
+固
+定
+于
+本
+文
+件
+)
+
+
+ 
+ 
+ 
+ 
+许
+可
+:
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+A
+p
+a
+c
+h
+e
+-
+2
+.
+0
+
+
+ 
+ 
+ 
+ 
+版
+权
+:
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+C
+o
+p
+y
+r
+i
+g
+h
+t
+ 
+(
+c
+)
+ 
+U
+r
+c
+h
+a
+d
+e
+（
+基
+础
+模
+型
+ 
+u
+r
+c
+h
+a
+d
+e
+/
+g
+l
+i
+n
+e
+r
+_
+s
+m
+a
+l
+l
+-
+v
+2
+）
+
+
+ 
+ 
+ 
+ 
+主
+页
+:
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+h
+t
+t
+p
+s
+:
+/
+/
+h
+u
+g
+g
+i
+n
+g
+f
+a
+c
+e
+.
+c
+o
+/
+o
+n
+n
+x
+-
+c
+o
+m
+m
+u
+n
+i
+t
+y
+/
+g
+l
+i
+n
+e
+r
+_
+s
+m
+a
+l
+l
+-
+v
+2
+
+
+ 
+ 
+ 
+ 
+说
+明
+:
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+基
+础
+模
+型
+ 
+u
+r
+c
+h
+a
+d
+e
+/
+g
+l
+i
+n
+e
+r
+_
+s
+m
+a
+l
+l
+-
+v
+2
+ 
+在
+ 
+v
+0
+/
+v
+1
+ 
+为
+ 
+C
+C
+-
+B
+Y
+-
+N
+C
+-
+4
+.
+0
+（
+禁
+止
+商
+用
+）
+，
+自
+ 
+v
+2
+ 
+起
+改
+为
+ 
+A
+p
+a
+c
+h
+e
+-
+2
+.
+0
+。
+本
+产
+品
+锁
+定
+ 
+v
+2
+，
+属
+合
+规
+性
+决
+策
+。
+模型下载源：ModelScope（主源）/ Hugging Face（回退）。模型仅在本地推理，
+不上传任何用户数据。
+------------------------------------------------------------------------------

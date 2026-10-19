@@ -3,6 +3,7 @@
   "name": "PasteGuard - AI脱敏助手",
   "version": "1.0.0",
   "description": "AI对话前的本地数据脱敏浏览器插件，保护您的敏感信息",
+  "homepage_url": "https://github.com/hadesxiong/paste-guard",
   "icons": {
     "16": "icons/icon-16.png",
     "32": "icons/icon-32.png",

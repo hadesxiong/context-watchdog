@@ -13,7 +13,7 @@ PasteGuard 是 Chrome / Firefox 浏览器扩展（Manifest V3），在用户将�
 npm install
 npm run build           # Chrome 包 → dist/，加载到 chrome://extensions
 npm run build:firefox   # Firefox 包 → dist-firefox/，about:debugging → 此 Firefox → 加载临时附加组件 → 选 dist-firefox/manifest.json
-npm run test            # 运行测试套件（141 项断言）
+npm run test            # 运行测试套件（190 项断言）
 ```
 
 ## 架构
@@ -100,6 +100,19 @@ npm run build:firefox   # Firefox 121+ → dist-firefox/
 - **区间不重叠**：重叠检测项经仲裁归并（类型优先级：凭据 > PII > 高熵），替换输出永不互切
 - **校验防误报**：身份证过 ISO 7064 校验位，银行卡过 Luhn，弱口令字典（含数字后缀变体）过滤
 
+### 可核验的隐私承诺
+
+以下每一条都可以直接在本仓库核验，而不是相信一句话：
+
+| 承诺 | 核验方式 |
+|------|----------|
+| **扩展不会把你的文本发送到任何服务器** | `rg -n '\bfetch\s*\(' src` → 只有 `modelDownload.ts` 两处（且都是可注入的 `fetchImpl`，默认取 `globalThis.fetch`，仅用于下载模型）。全仓库无 `XMLHttpRequest` / `sendBeacon` / `WebSocket` / `EventSource` / `navigator.sendBeacon` |
+| **唯一的出网行为是模型下载** | 同上。只有在用户主动开启 AI 档后才会发生，且只访问白名单模型源 |
+| **未授权站点零接触** | `rg -n 'content_scripts\|all_urls' src/manifest.json` → 无匹配。manifest 不声明 `content_scripts`，只申请 `optional_host_permissions`，由用户逐站授权 |
+| **不采集任何遥测数据** | 仓库内无统计 SDK、无崩溃上报、无行为追踪；构建产物可用 `npm run build` 后自行检查 |
+| **凭据类数据绝不处理** | `password` 类型与隐藏输入框在 `isTextEditable` 处一律跳过，且在粘贴注入与侧栏两条链路上都有护栏 |
+| **发布产物可校验** | 每个 Release 附 `sha256`；许可与第三方声明随产物分发（`LICENSE` / `THIRD-PARTY-NOTICES.txt`） |
+
 ## 项目结构
 
 ```
@@ -152,3 +165,67 @@ npm run test:watch    # 监听模式
 - @crxjs/vite-plugin（Manifest V3 构建）
 - gliner + @xenova/transformers + onnxruntime-web（GLiNER 模型，WASM，可选增强）
 - 模型远程加载（主源 ModelScope 镜像，回退 huggingface.co；Range 断点续传 + 指数退避重试 + 停滞看门狗 + Cache Storage 落盘，重开侧栏零下载；失败时静默降级为纯正则，UI 显示降级状态）
+
+## 第三方组件与模型归属
+
+构建时会生成 `THIRD-PARTY-NOTICES.txt` 并随产物一同分发（Apache-2.0 第 4 条、MIT 的版权与许可通知均有此要求）。下面是人可读版本：
+
+| 组件 | 用途 | 许可 |
+|-------|------|------|
+| vue / pinia / reka-ui | UI 框架与组件 | MIT |
+| @crxjs/vite-plugin / vite / tailwindcss / typescript | 构建链 | MIT |
+| gliner | 零样本文本实体识别 | Apache-2.0 ※ |
+| @xenova/transformers | 模型运行时（transformers.js） | Apache-2.0 |
+| onnxruntime-web / onnxruntime-common | ONNX Runtime（WASM 后端） | MIT |
+| @huggingface/jinja | 模板引擎（transformers 依赖） | MIT |
+| 模型 `onnx-community/gliner_small-v2`（运行时下载，不随包分发） | AI 检测 | Apache-2.0 |
+
+> ※ `gliner` 的 `package.json` 声明为 MIT，但其包内 `LICENSE` 文件是 Apache-2.0 全文。**以 `LICENSE` 文件为准**，按 Apache-2.0 处理。这个差异已记录在 `THIRD-PARTY-NOTICES.txt` 中。
+
+**一处值得注意的合规决策**：GLiNER 的 **v0 / v1 是 `cc-by-nc-4.0`（禁止商用）**，自 **v2 起改为 Apache-2.0**。本项目**锁定 v2**，这本身就是一次许可合规决策——如果误用 v1，本项目将无法以任何允许商业化的许可发布。
+
+## 数据流与隐私声明
+
+| 环节 | 数据去向 |
+|------|----------|
+| 文本检测与替换 | **本地**（service worker / 侧栏内存），不离开设备 |
+| AI 模型推理 | **本地**（WASM / ONNX Runtime），不离开设备 |
+| 模型下载 | 白名单模型源（ModelScope → huggingface.co 回退）；**仅下载模型文件，不上传任何用户数据** |
+| 站点授权 | 逐站授权，存于 `chrome.storage.local`；未授权站点零接触 |
+| 遥测 / 统计 / 崩溃上报 | **无** |
+| 第三方分析 SDK | **无** |
+
+**没有云、没有后端、没有账号体系。** 这是一个完全离线可用的本地工具——除了首次下载 AI 模型之外，断网状态下功能完整。
+
+## 贡献方式
+
+本项目由作者**单人维护**，**不接收代码合并请求**——这是有意的维护策略，不是对社区的拒绝（详见 [CONTRIBUTING.md](CONTRIBUTING.md)）。
+
+欢迎：
+
+- ✅ 提 Issue 报告误报 / 漏报 / 崩溃
+- ✅ 分享使用场景与设计讨论
+- ✅ Fork 后按自己的需求改造（须使用你自己的名称与图标）
+
+## 署名与商标
+
+- 本项目由 **hadesxiong** 开发并维护。
+- **`PasteGuard` 名称与图标是作者的商标**，不在 Apache-2.0 的授权范围内（该许可第 6 条明确排除商标授权，只保留"描述来源"的合理使用）。
+- 允许：事实性引用，例如 `Based on PasteGuard (https://github.com/hadesxiong/paste-guard)`。
+- 不允许：把 `PasteGuard` 用作你的衍生作品名称、图标或包名；暗示你的作品是官方版本或获得原作者背书。
+
+详见 [NOTICE](NOTICE) 与 [CONTRIBUTING.md](CONTRIBUTING.md)。
+
+## 专利声明
+
+本项目**不申请任何专利**（含后续全部迭代内容），全部设计文档与实现细节均以公开形式发布，构成可实施的现有技术。详见 [PATENTS.md](PATENTS.md)。
+
+## License
+
+本项目以 [Apache License, Version 2.0](LICENSE) 发布。
+
+```
+Copyright 2026 hadesxiong
+```
+
+你可以自由使用、修改、分发本项目，包括用于闭源商业目的——但须保留版权与 `NOTICE` 声明、标注改动，并使用你自己的名称与图标。
