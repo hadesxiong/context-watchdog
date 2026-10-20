@@ -16,7 +16,8 @@
     "storage",
     "clipboardWrite",
     "unlimitedStorage",
-    "scripting"
+    "scripting",
+    "offscreen"
   ],
   "optional_host_permissions": [
     "https://*/*",

@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PasteGuard model host</title>
+  </head>
+  <body>
+    <!--
+      offscreen 模型宿主：不可见，不渲染任何 UI。
+      不要给它加样式或内容——它的唯一职责是持有 GLiNER / ORT 那一份运行时。
+      入口与 URL 的对应关系见 src/modelHost/protocol.ts（MODEL_HOST_URL）。
+    -->
+    <script type="module" src="./host.ts"></script>
+  </body>
+</html>

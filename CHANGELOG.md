@@ -7,6 +7,31 @@
 
 ## 2026-10-20
 
+### ① S1：offscreen 模型宿主骨架
+
+Chrome/Edge 下模型运行时移出任何 UI 上下文，放进唯一的 offscreen 文档：
+
+- 新增 `src/offscreen/{index.html,host.ts}`（ENSURE / DETECT / PING）与
+  `src/modelHost/{protocol,state,client}.ts`（协议、状态归并纯函数、SW 侧客户端）。
+- SW 经 Port `pg-model-host` 路由请求，并用 `chrome.offscreen.hasDocument()` 幂等创建文档；
+  `createDocument` 并发冲突时复查后再继续。SW 回收重启后由宿主自动重连。
+- `manifest.json` 加 `offscreen` 权限；`vite.config.ts` 加 offscreen HTML 入口
+  （**必须在 `rolldownOptions.input`**：Vite 8 下写 `rollupOptions.input` 会被静默丢弃）；
+  Firefox 目标不产出该入口，`postbuild.mjs` 同时过滤 `offscreen` 权限。
+- 新增 `tests/unit/modelHost.test.ts`（10 例）：状态迁移与端口消息守卫。
+
+两个实测发现（已写进代码注释与设计文档）：
+
+1. **offscreen 文档只暴露 `chrome.runtime`** —— `chrome.storage` / `chrome.i18n` 均为
+   `undefined`。所以状态由宿主经 Port 上报、SW 代写 `storage.session`；占位符语言改用
+   `navigator.language`。原设计里「宿主自己写 session」是错的。
+2. **构建体积没有翻倍**：offscreen 入口 chunk 2.2KB，ORT / transformers / gliner 与侧栏
+   共用同一批 chunk，`dist` 仍为 12MB。原计划的 `manualChunks` 不需要。
+
+验收（Chrome for Testing 151 + `--load-extension dist`；品牌版 Chrome 137+ 已忽略该参数）：
+文档创建 → 模型加载（进度经 SW 写入 session）→ DETECT 回包含正则与模型双来源 items
+→ `closeDocument` 后 `hasDocument()` 为 false。Firefox 构建无 offscreen 入口与权限。
+
 ### 站点部署身份改走 `.env`（域名 / 商店链接 / 备案 / 收款码）
 
 源码是公开的，而上面这些值描述的是**这一份部署**。放在仓库里，别人 fork 之后会

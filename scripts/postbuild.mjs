@@ -132,9 +132,11 @@ if (manifest.side_panel?.default_path) {
   delete manifest.side_panel
 }
 
-// 权限：移除 Firefox 未知的 sidePanel
+// 权限：移除 Firefox 未知的 sidePanel 与 offscreen
+// （Firefox 没有 offscreen API，未知权限会被 AMO 审核标出来；S1 的宿主在 Firefox 上
+//  不生效，回退到侧栏内加载）
 if (Array.isArray(manifest.permissions)) {
-  manifest.permissions = manifest.permissions.filter((p) => p !== 'sidePanel')
+  manifest.permissions = manifest.permissions.filter((p) => p !== 'sidePanel' && p !== 'offscreen')
 }
 
 // gecko id

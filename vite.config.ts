@@ -55,16 +55,19 @@ export default defineConfig(({ mode }) => {
       emptyOutDir: true,
       // transformers.js / onnxruntime-web 的实际体积（第三方模型运行时，无法再拆）
       chunkSizeWarningLimit: 2500,
-      rollupOptions: {
-        input: {
-          sidepanel: resolve(EXT_ROOT, 'src/sidepanel/index.html')
-        }
-      },
       // rolldown 专用配置（vite 8 底层）：
-      // 屏蔽 node_modules 内 onnxruntime 的 DIRECT_EVAL 告警（第三方产物，不可控）
-      // 其他位置（含我们自己的代码）出现 eval 告警仍然会正常报出
+      // Vite 8 起 `build.rollupOptions` 不再是唯一入口，额外的 HTML 入口要写在
+      // rolldownOptions.input 里（写在 rollupOptions.input 会被静默丢弃 —— 实测过）。
       rolldownOptions: {
+        input: {
+          // offscreen 模型宿主不由 manifest 声明（Chrome 在运行时 createDocument），
+          // CRXJS 发现不了它，必须显式加进 input，否则产物里没有这个页面。
+          // Firefox 没有 chrome.offscreen，不产出该入口（也少一份 ORT/transformers chunk）。
+          ...(isFirefox ? {} : { offscreen: resolve(EXT_ROOT, 'src/offscreen/index.html') })
+        },
         onwarn(warning: { code?: string; id?: string }, warn: (w: unknown) => void) {
+          // 屏蔽 node_modules 内 onnxruntime 的 DIRECT_EVAL 告警（第三方产物，不可控）；
+          // 我们自己代码里出现 eval 仍然会正常报出
           // rolldown 的直接 eval 告警 code 为 EVAL
           if (
             (warning.code === 'EVAL' || warning.code === 'DIRECT_EVAL') &&

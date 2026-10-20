@@ -3,7 +3,7 @@
 > 当前架构：`README.md`（快速开始）+ `docs/spec.md`（技术说明）。
 > 手动验收判据：`docs/test-cases.md`；实现轮次与结案沿革：`CHANGELOG.md`。
 
-## 当前状态（2026-10-19）
+## 当前状态（2026-10-20）
 
 - **1.0.0 发布准备：代码侧已完成**（A–F 关键节点，见 `docs/design/roadmap.md`）：
   A 许可与文档、B/C 目录重排与 `InferenceBackend` 抽象、D i18n + 区域规则集 + 能力矩阵、
@@ -12,21 +12,27 @@
   1. **F8 打 tag**（`1.0.0-ext` / `1.0.0-site`）——`npm run check:versions -- --release` 会先列出还差什么
   2. **F7 互链**：把落地页域名填进 `apps/site/.env` 的 `SITE_URL`，渠道上架后填对应的 `*_URL`（模板见 `apps/site/.env.example`）
   3. **素材**：演示 GIF、打赏收款码、商店截图与 promo tile（清单见 `docs/releasing.md` §6）
+- **1.0.0 之后第①条线（授权站点 AI 增强）：S1 宿主骨架已完成**
+  （`docs/design/site-ai-offscreen-host.md` §9）：
+  offscreen 文档持有唯一一份模型运行时，SW 经 Port 路由 ENSURE / DETECT；
+  Chrome/Edge 有宿主，Firefox 构建不产出该入口也不带 `offscreen` 权限。
+  已实测：文档创建 → 模型加载 → DETECT 回包（正则 + 模型双来源 items）→ 销毁。
+  **S2（侧栏改客户端）尚未开始**，因此侧栏目前仍自己加载模型。
 - **功能全部实现、验收全绿**：侧栏手动脱敏（正则恒开 + AI 级联可选）、
   自定义档案/正则/白名单与 JSON 导入导出、粘贴自动拦截（逐站授权，含 contenteditable
   富文本与「已脱敏 N 处」轻提示）、GLiNER 推理链路（wasm/模型全本地、断网可用、
   形状门禁拦截幻觉）、Chrome/Firefox 双目标构建、明暗主题、中英双语界面、双语落地页与隐私权政策页。
-- **校验基线**：`npm run typecheck` 0 错误 / `npm test` **311 passed（25 文件）** /
+- **校验基线**：`npm run typecheck` 0 错误 / `npm test` **332 passed（27 文件）** /
   `npm run build` + `npm run build:firefox` 通过 / `npm run probe:layout` 全通过 /
-  `npm run site:check` 0 诊断 / `npm run site:build` 通过 / `npm run check:versions` 通过（1 项预期警告：渠道未上架）。
+  `npm run site:check` 0 诊断 / `npm run site:build` 通过 / `npm run check:versions` 通过（2 项预期警告：SITE_URL 与渠道未配置）。
 
 ## 回归命令
 
 ```bash
 npm run typecheck && npm test && npm run build && npm run build:firefox && npm run probe:layout
 npm run site:check && npm run site:build && npm run check:versions
-# 期望：0 error / 311 passed / 双目标构建通过 / 布局探针全通过 / 站点 0 诊断且构建通过 /
-#       check:versions 通过（渠道未上架时为 1 项警告）
+# 期望：0 error / 332 passed / 双目标构建通过 / 布局探针全通过 / 站点 0 诊断且构建通过 /
+#       check:versions 通过（SITE_URL 与渠道未配置时为 2 项警告）
 ```
 
 ## 待办

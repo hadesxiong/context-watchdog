@@ -1,6 +1,6 @@
 # ① 授权站点 AI 增强（页面挂件控制面 + 单一模型宿主）
 
-> 状态：设计稿（**未实现**）。这是 1.0.0 之后的第一条线。
+> 状态：**S1 已实现**（offscreen 宿主骨架），S2–S5 未开始。这是 1.0.0 之后的第一条线。
 > 关联现状：`packages/extension/src/background/{service-worker,pasteEntryPoint}.ts`、
 > `packages/engine/src/detector/{pipeline}.ts`、
 > `packages/extension/src/model/{contentDetector,modelDownload}.ts`、
@@ -87,13 +87,21 @@
 
 ```
 onConnect('pg-model-host')
-  ├─ ENSURE      → preloadModels(onProgress,onWaiting,onDownloadStart) 幂等；状态写 storage.session
+  ├─ ENSURE      → preloadModels(onProgress,onWaiting,onDownloadStart) 幂等
+  │                进度经 Port 上报给 SW（宿主自己写不了 storage.session）
   ├─ DETECT      → detect(text, profile, { enableContentDetection: true }) → sanitizeText() → 回包
-  ├─ UNLOAD      → 释放引用 + 通知 SW closeDocument（全局 AI 关闭时）
-  └─ PING        → 返回 ready 状态（SW 冷启动后探测宿主是否还在）
+  ├─ PING        → 返回 ready 状态（SW 冷启动后探测宿主是否还在）
+  └─ UNLOAD      → 不做（见下）
 ```
 
+> **实测约束**：offscreen 文档只暴露 `chrome.runtime`（`chrome.storage` / `chrome.i18n`
+> 都是 `undefined`）。因此 ① 状态必须由宿主发给 SW、SW 写 `storage.session`；
+> ② 占位符语言只能用 `navigator.language`。这两点已写进 `src/offscreen/host.ts` 的注释。
+
 生命周期：SW 在需要时 `chrome.offscreen.createDocument({ url, reasons: ['WORKERS'], justification })`（`reasons` 取最贴近的合法值，`WORKERS` 允许在宿主内起 Worker 以便后续切 `proxy=true`），并**用 `chrome.offscreen.hasDocument()` 幂等化**；`creating` 变量必须放在 SW 内存里做并发去重（SW 重启会丢，需先 `hasDocument()` 复查）。
+
+**UNLOAD 为什么不存在**：文档内部的"释放引用"到不了进程消失的程度，真正有效的释放
+就是 `closeDocument()` 销毁整个文档。所以 S2 的"关闭全局 AI"直接销毁文档即可。
 
 > 注意：`chrome.offscreen.createDocument` 只允许**一个** offscreen 文档；与其他潜在用途（未来若要做系统通知等）互斥，需在代码注释中标注占用。
 
@@ -206,7 +214,7 @@ P6 content script 守卫（全部通过才替换）：
 | `pasteguard.aiEnabled` | local | boolean | 既有全局开关，语义变为"允许使用 AI" |
 | `pasteguard.siteAiEnabled` | local | `Record<pattern, boolean>` | 新增，逐站开关 |
 | `pasteguard.siteWidgetHidden` | local | `Record<pattern, boolean>` | 新增，逐站隐藏挂件 |
-| `pasteguard.modelHost` | **session** | `{ state, percent, received, total, waiting, downloadStarted, error, updatedAt }` | 新增，宿主持有；面板订阅 `storage.onChanged` 渲染 |
+| `pasteguard.modelHost` | **session** | `{ state, percent, received, total, waiting, downloadStarted, error, updatedAt }` | 新增，宿主经 Port 上报、**SW 代写**（宿主只有 `chrome.runtime`）；面板订阅 `storage.onChanged` 渲染 |
 | `pasteguard.modelLock` / `lastModelProbe` | local | — | 既有，宿主复用 |
 
 有效 AI 判定：`effectiveAI(site) = aiEnabled && siteAiEnabled[site] && hostReady`。
@@ -243,15 +251,19 @@ P6 content script 守卫（全部通过才替换）：
 
 ## 7. 构建与打包改动
 
-1. `vite.config.ts`：`build.rollupOptions.input` 增加
-   `offscreen: resolve(__dirname, 'src/offscreen/index.html')`
-   （CRXJS 只按 manifest 发现入口，offscreen 页面不由 manifest 声明，必须显式加入 input；产物路径 `dist/src/offscreen/index.html`。）
+1. `vite.config.ts`：给 `build.rolldownOptions.input` 增加
+   `offscreen: resolve(EXT_ROOT, 'src/offscreen/index.html')`
+   （CRXJS 只按 manifest 发现入口，offscreen 页面不由 manifest 声明，必须显式加入 input；
+   **Vite 8 下写 `rollupOptions.input` 会被静默丢弃**——实测产物里根本没有这个页面，
+   没有任何警告。产物路径 `dist/src/offscreen/index.html`。）
 2. `src/manifest.json`：`permissions` 增加 `"offscreen"`。
 3. `scripts/postbuild.mjs`（Firefox）：
    - 移除 `offscreen` 权限（Firefox 无此权限，审核会标）。
-   - **保留** `dist-firefox` 中的 offscreen 产物（无害）或从 input 排除 Firefox 目标；二选一，倾向"Firefox 目标不产出 offscreen 入口"。
+   - Firefox 目标不产出 offscreen 入口（`vite.config.ts` 按 mode 排除），因此不会多一份运行时。
 4. CSP 无需改动：`extension_pages` 已含 `wasm-unsafe-eval` 与 `connect-src https:`（`manifest.json:39`），offscreen 页面继承同一策略。
-5. 构建体积：offscreen 入口会**再打包一份** ORT + transformers.js（与侧栏各自成 chunk）。缓解：把模型运行时抽成共享 chunk（vite 自动去重同一模块的重复 chunk，但两个 HTML 入口会产生各自的入口 chunk；需在验收时对比 `dist` 体积增量，必要时用 `manualChunks`）。
+5. 构建体积（**实测**）：入口 chunk 2.2KB；ORT / transformers / gliner 与侧栏共用同一批
+   chunk（不重复打包），`dist` 总体积仍为 12MB。原先担心的"双份模型运行时"不成立，
+   无需 `manualChunks`。
 
 ---
 
@@ -295,7 +307,7 @@ P6 content script 守卫（全部通过才替换）：
 
 | 阶段 | 内容 | 检查点（全部通过才进下一步） |
 |---|---|---|
-| **S1 宿主骨架** | offscreen 入口 + `MODEL_HOST_PORT` + ENSURE/DETECT/UNLOAD；manifest/vite 改动 | Chrome 下文档可创建、模型可加载、DETECT 回包正确；Firefox 构建不受影响 |
+| **S1 宿主骨架** ✅ | offscreen 入口 + `MODEL_HOST_PORT` + ENSURE/DETECT/PING；manifest/vite 改动 | 已实测（Chrome for Testing + `--load-extension dist`）：文档可创建、模型可加载（183MB，进度上报）、DETECT 回包含正则 + 模型双来源 items、`closeDocument` 后文档消失；Firefox 构建不含 offscreen 入口与权限 |
 | **S2 侧栏改客户端** | store 订阅 `storage.session`；`runDetection()` 抽象 + 本地回退 | 面板下载进度/错误 UI 行为与今天一致（含 60s 停滞超时、另一窗口下载中） |
 | **S3 粘贴 AI 升级** | `PASTE_DETECT.token` + `PASTE_AI_RESULT` + 守卫状态机（含纯函数单测） | 手动验收 3/4/5 通过；单测覆盖守卫失败路径 |
 | **S4 页面挂件** | 注入挂件 + `SITE_AI_GET/SET` + `siteAiEnabled` | 挂件在授权站点可用、无授权站点零接触；不影响页面布局 |
@@ -309,7 +321,7 @@ P6 content script 守卫（全部通过才替换）：
 |---|---|---|
 | **内容脚本能否实例化 WASM（受页面 CSP 限制）** | 中 | **需实测**。这条不是方案的前置条件（方案已不放页面内），但会影响"挂件里能不能做本地兜底检测"。切执行模式后可用带严格 CSP 的测试页 + 加载扩展验证，约 10 分钟 |
 | offscreen 文档与其他潜在用途互斥（只允许一个） | 低 | 代码注释显式占用声明；未来若需第二个用途，改为"类型路由" |
-| 双份模型运行时（侧栏 + offscreen 打包）导致体积/内存增长 | 中 | S2 后实测；若不可接受，`manualChunks` 抽共享 chunk；内存在 D1 下已是单份（侧栏不再自己加载） |
+| 双份模型运行时（侧栏 + offscreen 打包）导致体积/内存增长 | ~~中~~ 已排除 | 实测：入口 chunk 2.2KB，ORT/transformers 与侧栏共用同一批 chunk；S2 后侧栏不再自己加载，运行时只有一份 |
 | SW 与宿主的连接在 SW 重启后断裂 | 中 | `hasDocument()` + `PING` 重连；端口重连要幂等（避免重复 ENSURE 重复下载——已由 `createSingleFlight` + 下载锁兜住） |
 | 挂件被宿主站点移除/样式冲突 | 低 | 全内联样式 + `documentElement` 挂载 + MutationObserver 重挂 |
 | 二次升级守卫过于严格导致 AI 几乎不生效 | 中 | 记录"升级成功率"日志与手动用例；必要时放宽 TTL/守卫（但不得放宽"不改动用户新输入"） |
@@ -323,16 +335,18 @@ P6 content script 守卫（全部通过才替换）：
 **新增**
 
 - `src/offscreen/index.html`、`src/offscreen/host.ts`
-- `src/core/modelHost/client.ts`（SW/面板侧客户端：`ensure()` / `detect()` / `unload()` / `ping()`）
-- `src/core/modelHost/state.ts`（状态归并与 `storage.session` 读写，纯函数可测）
+- `src/modelHost/protocol.ts`（端口名 / op / 请求与回包类型 / 状态通知 / 类型守卫）
+- `src/modelHost/state.ts`（状态归并纯函数，已测）
+- `src/modelHost/client.ts`（SW 侧客户端：`ensureModelHost()` / `detectViaModelHost()` /
+  `pingModelHost()` / `closeModelHost()` / `readModelHostState()`）
 - `src/content/siteWidget.ts`（挂件逻辑的可测纯部分）+ 注入副本（自包含）
 
 **修改**
 
 - `src/manifest.json`（+`offscreen` 权限）
-- `vite.config.ts`（+offscreen input）
+- `vite.config.ts`（+offscreen input，写在 `rolldownOptions.input`）
 - `scripts/postbuild.mjs`（Firefox 移除 `offscreen` 权限）
-- `src/core/messages.ts`（协议常量与类型）
+- `src/modelHost/protocol.ts`（协议常量与类型）—— 已落地，路径不是原先设想的 `src/core/`
 - `src/background/service-worker.ts`（路由器：正则档回包 + 宿主转发 + `PASTE_AI_RESULT` 补发 + offscreen 生命周期）
 - `src/background/pasteEntryPoint.ts`（挂件注入；`token` 透传；`PASTE_AI_RESULT` 监听与守卫）
 - `src/content/pasteText.ts`（抽取升级守卫纯函数 + `effectiveAI` 判定）
@@ -341,5 +355,5 @@ P6 content script 守卫（全部通过才替换）：
 
 **测试**
 
-- `tests/unit/modelHostState.test.ts`、`tests/unit/siteAi.test.ts`、扩展 `tests/unit/pasteRewrite.test.ts`
+- `tests/unit/modelHost.test.ts`、`tests/unit/siteAi.test.ts`、扩展 `tests/unit/pasteRewrite.test.ts`
 - `scripts/probe-layout.mjs`（或新 `scripts/probe-widget.mjs`）
