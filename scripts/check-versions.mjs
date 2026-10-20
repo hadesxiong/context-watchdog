@@ -14,6 +14,7 @@
 import { execSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import { tagsForVersion } from './lib/version-tag.mjs'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const release = process.argv.includes('--release')
@@ -293,21 +294,33 @@ scanDynamicCode('Chrome', 'dist')
 scanDynamicCode('Firefox', 'dist-firefox')
 
 // ---------------------------------------------------------------- 标签
+//
+// 形态见 scripts/lib/version-tag.mjs：`<version>-<target>`（1.0.0-ext），
+// 不用 v 前缀。一个版本对应 ext / site / app 三个 tag，一次性查重。
 
 if (version) {
+  let tags = null
   try {
-    const existing = execSync(`git tag -l "ext-v${version}" "site-v${version}"`, {
-      cwd: root,
-      encoding: 'utf8'
-    }).trim()
-    if (existing) {
-      if (release) fail(`标签已存在，不能重复发布：${existing.split('\n').join(', ')}`)
-      else warn(`标签已存在：${existing.split('\n').join(', ')}`)
-    } else {
-      pass(`待打标签 ext-v${version} / site-v${version} 尚未占用`)
+    tags = tagsForVersion(version)
+  } catch (error) {
+    fail(`无法由版本号推出发布标签：${error instanceof Error ? error.message : String(error)}`)
+  }
+
+  if (tags) {
+    try {
+      const existing = execSync(`git tag -l ${tags.map((tag) => `"${tag}"`).join(' ')}`, {
+        cwd: root,
+        encoding: 'utf8'
+      }).trim()
+      if (existing) {
+        if (release) fail(`标签已存在，不能重复发布：${existing.split('\n').join(', ')}`)
+        else warn(`标签已存在：${existing.split('\n').join(', ')}`)
+      } else {
+        pass(`待打标签 ${tags.join(' / ')} 尚未占用`)
+      }
+    } catch {
+      warn('git 不可用，跳过标签检查')
     }
-  } catch {
-    warn('git 不可用，跳过标签检查')
   }
 }
 

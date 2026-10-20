@@ -5,6 +5,23 @@
 > 设计决策与后续迭代规划：`docs/design/`。
 > 单条提交详情见 `git log`；被清退的历史规划文档见 `f35ceae` 之前的 TODO。
 
+## 2026-10-20
+
+### 发布标签改为 `<version>-<target>`
+
+- tag 形态从 `ext-v1.0.0` / `site-v1.0.0` 改为 `1.0.0-ext` / `1.0.0-site`（本地应用用 `-app`）。
+  不用 `v` 前缀（它不增加任何信息）；`ext` / `site` / `app` 是**发布产物**的边界，不是渠道边界
+  —— 一个 `-ext` Release 同时挂 Chrome 与 Firefox 两个包，所以不叫 `-crx`。
+- 规则与查重抽为 `scripts/lib/version-tag.mjs`（`formatVersionTag` / `parseVersionTag` /
+  `tagsForVersion` / `tagMatchesVersion`），`check-versions` 改为一次查三个 tag 是否占用；
+  新增 `tests/unit/versionTag.test.ts`，其中「旧形态必须认不出来」是反向断言——改名时漏改
+  一处，`check-versions` 会以为标签没被占用，这条会先红。
+- 版本核心限定三段数字：预发布号（`1.0.0-rc.1`）会与 target 后缀抢 semver 的 pre-release 段，
+  排序语义不可预期，因此直接禁止；要发预发布就把版本写进主体。
+- 两个已知副作用已写进 `docs/releasing.md`：GitHub 会把 `1.0.0-ext` 自动判为 pre-release
+  （建 Release 时手动取消勾选），同时保持「Set as the latest release」勾选
+  （`{repo}/releases/latest` 依赖它）。
+
 ## 2026-10-19
 
 ### 1.0.0 发布前 · 验收体验修正
