@@ -7,6 +7,19 @@
 
 ## 2026-10-20
 
+### ⑤ S5：收尾（挂件探针 + 宿主销毁 + 文档）
+
+- 新增 `npm run probe:widget`：无头 Chrome 实测授权站点挂件出现、iframe 内不出现、
+  未授权站点零注入、不产生横向滚动条、不往 body 塞节点。运行期临时给
+  `dist/manifest.json` 加测试站 `host_permissions`，结束后原样恢复；新版正式版 Chrome
+  忽略 `--load-extension`，脚本优先使用 Chrome for Testing / Chromium。
+- 宿主销毁实测：`MODEL_HOST_CLOSE` 后 offscreen 目标数 1 → 0、`hasDocument=false`、
+  `storage.session` 快照清空（模型内存随文档销毁回落到基线）。
+- 文档：`spec.md` 改写「拦截为正则档」的已知限制，补 `offscreen` 权限与逐站/宿主 session 键；
+  `test-cases.md` 新增 TC-07-8（挂件与逐站开关）、TC-07-9（AI 二次升级）与探针基线；
+  `releasing.md` 发布前检查加入 `probe:widget`。
+- 发布包按当前代码重打：`release/contextwatchdog-1.0.0-{chrome,firefox}.zip` + `SHA256SUMS`。
+
 ### ④ S3：粘贴链路 AI 二次升级（数据面）
 
 正则先落地，AI 只做增量；任何失败都保留正则结果：

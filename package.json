@@ -20,6 +20,7 @@
     "test:watch": "vitest",
     "icons": "node scripts/generate-icons.mjs",
     "probe:layout": "node scripts/probe-layout.mjs",
+    "probe:widget": "node scripts/probe-widget.mjs",
     "notices": "node scripts/third-party-notices.mjs",
     "check:versions": "node scripts/check-versions.mjs",
     "release:pack": "node scripts/pack-release.mjs",

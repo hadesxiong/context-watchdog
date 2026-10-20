@@ -24,21 +24,25 @@
   删除站点自动清理逐站配置。
   **S3 已落地**：粘贴链路正则先回包并落地，随后按「全局 ∧ 本站 ∧ 宿主就绪」异步补一次
   AI 检测；四道守卫（未继续输入 / 正则结果仍在原位 / AI 确有增量 / 8s 内）全过才二次替换，
-  失败/超时保留正则结果。**S5（收尾：文案、内存回落验证、探针扩展）尚未开始**。
+  失败/超时保留正则结果。
+  **S5 已收尾**：延迟提示文案、宿主销毁验证（offscreen 目标消失 + `hasDocument=false` +
+  session 快照清空）、`npm run probe:widget` 探针、spec/test-cases 文档均已落地；
+  剩作者按 `docs/test-cases.md` TC-07-8/9 做真机手动验收。
 - **功能全部实现、验收全绿**：侧栏手动脱敏（正则恒开 + AI 级联可选）、
   自定义档案/正则/白名单与 JSON 导入导出、粘贴自动拦截（逐站授权，含 contenteditable
   富文本与「已脱敏 N 处」轻提示）、GLiNER 推理链路（wasm/模型全本地、断网可用、
   形状门禁拦截幻觉）、Chrome/Firefox 双目标构建、明暗主题、中英双语界面、双语落地页与隐私权政策页。
 - **校验基线**：`npm run typecheck` 0 错误 / `npm test` **360 passed（29 文件）** /
   `npm run build` + `npm run build:firefox` 通过 / `npm run probe:layout` 全通过 /
+  `npm run probe:widget` 全通过（授权站点挂件 / iframe 不挂 / 未授权零注入）/
   `npm run site:check` 0 诊断 / `npm run site:build` 通过 / `npm run check:versions` 通过（2 项预期警告：SITE_URL 与渠道未配置）。
 
 ## 回归命令
 
 ```bash
-npm run typecheck && npm test && npm run build && npm run build:firefox && npm run probe:layout
+npm run typecheck && npm test && npm run build && npm run build:firefox && npm run probe:layout && npm run probe:widget
 npm run site:check && npm run site:build && npm run check:versions
-# 期望：0 error / 360 passed / 双目标构建通过 / 布局探针全通过 / 站点 0 诊断且构建通过 /
+# 期望：0 error / 360 passed / 双目标构建通过 / 布局与挂件探针全通过 / 站点 0 诊断且构建通过 /
 #       check:versions 通过（SITE_URL 与渠道未配置时为 2 项警告）
 ```
 
