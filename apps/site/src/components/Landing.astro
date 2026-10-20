@@ -7,7 +7,7 @@
 // 两个语言页面共用这一个组件，避免 / 与 /en/ 两处各写一遍结构（结构一旦
 // 分叉，两边迟早会长得不一样）。
 import { dict, format, type SiteLocale } from '@site/i18n'
-import { repoUrl } from '@site/data/links'
+import { repoUrlFor } from '@site/data/links'
 import { tests, probes, measuredAt, count } from '@site/data/evidence'
 import { supporters } from '@site/data/supporters'
 import { extensionVersion } from '@site/data/version'
@@ -34,7 +34,7 @@ const supporterLabel = supporters.length === 0 ? d.evidence.supportersNone : d.e
     <h1>{d.hero.title}</h1>
     <p>{d.hero.subtitle}</p>
     <div class="pg-actions">
-      <a class="pg-btn pg-btn-secondary" href={repoUrl} rel="noopener">{d.hero.secondary}</a>
+      <a class="pg-btn pg-btn-secondary" href={repoUrlFor(locale)} rel="noopener">{d.hero.secondary}</a>
     </div>
   </div>
 </section>

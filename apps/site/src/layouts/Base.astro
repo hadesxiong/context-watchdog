@@ -8,7 +8,7 @@ import '@site/styles/global.css'
 import Mark from '@site/components/Mark.astro'
 import { dict, localePath, otherLocale, localeLabel, type SiteLocale } from '@site/i18n'
 import { extensionVersion } from '@site/data/version'
-import { repoUrl, releasesUrl, siteUrl, hasCanonicalOrigin } from '@site/data/links'
+import { releasesUrlFor, repoUrlFor, blobUrl, treeUrl, siteUrl, hasCanonicalOrigin } from '@site/data/links'
 
 interface Props {
   locale: SiteLocale
@@ -94,12 +94,12 @@ const pageTitle = d.meta.title
       <div class="pg-shell">
         <div class="pg-footer-links">
           <a href={`${localePath(locale)}privacy/`}>{d.footer.privacy}</a>
-          <a href={repoUrl}>{d.footer.repo}</a>
-          <a href={releasesUrl}>{d.footer.release}</a>
-          <a href={`${repoUrl}/blob/main/LICENSE`}>{d.footer.license}</a>
-          <a href={`${repoUrl}/blob/main/NOTICE`}>{d.footer.trademark}</a>
-          <a href={`${repoUrl}/blob/main/PATENTS.md`}>{d.footer.patents}</a>
-          <a href={`${repoUrl}/tree/main/docs/design`}>{d.footer.designDocs}</a>
+          <a href={repoUrlFor(locale)}>{d.footer.repo}</a>
+          <a href={releasesUrlFor(locale)}>{d.footer.release}</a>
+          <a href={blobUrl('LICENSE')}>{d.footer.license}</a>
+          <a href={blobUrl('NOTICE')}>{d.footer.trademark}</a>
+          <a href={blobUrl('PATENTS.md')}>{d.footer.patents}</a>
+          <a href={treeUrl('docs/design')}>{d.footer.designDocs}</a>
         </div>
         <p>
           <span class="pg-footer-version">v{extensionVersion}</span> · {d.footer.static}

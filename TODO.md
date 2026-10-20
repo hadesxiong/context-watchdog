@@ -10,7 +10,7 @@
   E Astro 落地页、F 发布就绪（`check:versions` / `pack-release` / `docs/releasing.md`）
   均已落地。**剩三件只能由作者做的事**：
   1. **F8 打 tag**（`1.0.0-ext` / `1.0.0-site`）——`npm run check:versions -- --release` 会先列出还差什么
-  2. **F7 互链**：把落地页域名填进 `apps/site/src/data/links.json` 的 `siteUrl`，并在渠道上架后回填 `available`/`url`
+  2. **F7 互链**：把落地页域名填进 `apps/site/.env` 的 `SITE_URL`，渠道上架后填对应的 `*_URL`（模板见 `apps/site/.env.example`）
   3. **素材**：演示 GIF、打赏收款码、商店截图与 promo tile（清单见 `docs/releasing.md` §6）
 - **功能全部实现、验收全绿**：侧栏手动脱敏（正则恒开 + AI 级联可选）、
   自定义档案/正则/白名单与 JSON 导入导出、粘贴自动拦截（逐站授权，含 contenteditable

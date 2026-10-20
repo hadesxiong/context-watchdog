@@ -15,7 +15,7 @@
 //
 // GitHub 源码行指 Release 页：手动安装的 zip 与步骤都在那（页面上不再抄步骤）。
 import { dict, type SiteLocale } from '@site/i18n'
-import { channels, appChannels, manualZip } from '@site/data/links'
+import { storeChannels, appChannels, manualChannel } from '@site/data/links'
 
 interface Props {
   locale: SiteLocale
@@ -37,7 +37,7 @@ const labels: Record<string, string> = {
 const groups = [
   {
     label: d.download.plugin,
-    items: [...channels, { key: 'manual' as const, ...manualZip }]
+    items: [...storeChannels, manualChannel(locale)]
   },
   { label: d.download.app, items: appChannels }
 ]

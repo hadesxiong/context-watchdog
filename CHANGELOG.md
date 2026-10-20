@@ -7,6 +7,31 @@
 
 ## 2026-10-20
 
+### 站点部署身份改走 `.env`（域名 / 商店链接 / 备案 / 收款码）
+
+源码是公开的，而上面这些值描述的是**这一份部署**。放在仓库里，别人 fork 之后会
+静默继承：canonical 指向作者的站、下载按钮导向作者的商店页、页脚挂着别人的备案号
+（等于冒用备案）、打赏二维码把访客的钱导向作者账户。
+
+- 新增 `apps/site/.env.example`（全量键名与降级行为）与 `scripts/lib/site-links.mjs`
+  （`resolveSiteLinks` / `parseHttpsBase` / `normalizeRepository` / `channelStates`，
+  纯函数 + 12 例单测）。`astro.config.mjs` 在配置阶段读 env 并通过 `vite.define`
+  注入 `__SITE_LINKS__`，页面里拿到的仍是构建期常量（prerender chunk 里可安全使用）。
+- **删掉 `apps/site/src/data/links.json`**：`available` 不再手写布尔值，改由「URL 是否为空」
+  派生——状态与链接在类型上不可能再对不上。
+- 仓库与 Release 的链接改由 `package.json#repository` 派生（一个字段驱动源码 / Release /
+  Issues 与扩展 `manifest.homepage_url` 的后续接入），fork 改一处即可。
+- 中文页的「阅读源码」与「下载」按语言指向镜像（`GITEE_URL`，为空回退 GitHub）；
+  深度链接（LICENSE / NOTICE / PATENTS / docs）与 Issues 固定指 GitHub——镜像的默认
+  分支名不保证是 `main`，写死路径会 404。
+- `check:versions` 不再读 JSON，改为「env 合法性 + 产物自洽」两段：逐页核对 canonical
+  路径，并核对产物里的域名与当前 `SITE_URL` 一致（改了 env 忘了重建会被抓住）；
+  `--release` 要求 `SITE_URL` 已配、至少一个商店渠道已配。
+- 缺 `SITE_URL` 时普通构建只警告（fork 仍可构建出相对链接的产物），发布构建用
+  `SITE_REQUIRE_URL=1` 直接失败——避免静默产出一份没有 canonical 的线上站点。
+- 部署相关（nginx / 证书 / 上传）明确排除在仓库之外；文档只保留「构建命令 / 产物路径 /
+  需要哪些 env」。
+
 ### 发布标签改为 `<version>-<target>`
 
 - tag 形态从 `ext-v1.0.0` / `site-v1.0.0` 改为 `1.0.0-ext` / `1.0.0-site`（本地应用用 `-app`）。

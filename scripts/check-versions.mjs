@@ -56,51 +56,50 @@ if (version && manifestVersion && version === manifestVersion) {
   fail(`版本号不一致：package.json=${version}，扩展 manifest=${manifestVersion}`)
 }
 
-// ---------------------------------------------------------------- 落地页数据
+// ---------------------------------------------------------------- 落地页部署身份
+//
+// 域名 / 商店链接 / 备案号来自环境变量（apps/site/.env 或 shell），不再读仓库里的
+// JSON：这些值描述的是**这一份部署**，fork 之后不该静默继承。校验用的是构建期同一套
+// 纯函数（scripts/lib/site-links.mjs），所以「构建能过但 check 报错」不可能发生。
+import { loadEnv } from 'vite'
+import { channelStates, resolveSiteLinks } from './lib/site-links.mjs'
 
-let links = null
+const STORE_KEYS = ['edge', 'cws', 'amo']
+
+let siteLinks = null
 try {
-  links = readJson('/apps/site/src/data/links.json')
+  const env = loadEnv('production', abs('/apps/site'), '')
+  siteLinks = resolveSiteLinks(env, { repository: readJson('/package.json').repository })
 } catch (error) {
-  fail(`读不到 apps/site/src/data/links.json：${error.message}`)
+  fail(`落地页部署身份不合法：${error instanceof Error ? error.message : String(error)}`)
 }
 
-if (links) {
-  const channels = ['edge', 'cws', 'amo']
-  let consistent = true
-  for (const key of channels) {
-    const channel = links[key]
-    if (!channel) {
-      fail(`links.json 缺少渠道 ${key}`)
-      consistent = false
-      continue
-    }
-    if (channel.available && !/^https:\/\/\S+$/.test(channel.url)) {
-      fail(`links.json 渠道 ${key} 标记 available 但 url 不是 https：${JSON.stringify(channel.url)}`)
-      consistent = false
-    }
-    if (!channel.available && channel.url !== '') {
-      fail(`links.json 渠道 ${key} 未标记 available 却填了 url：${channel.url}`)
-      consistent = false
-    }
+if (siteLinks) {
+  if (siteLinks.siteUrl) {
+    pass(`落地页站点域名已配置：${siteLinks.siteUrl}`)
+  } else if (release) {
+    fail('发布前必须配置 SITE_URL（apps/site/.env）—— 否则线上 canonical 是相对路径')
+  } else {
+    warn('SITE_URL 未配置：canonical 为相对路径（仅本地预览 / fork 可接受）')
   }
-  if (consistent) pass('落地页 links.json 的上架状态与链接自洽')
 
-  const channelState = channels.map((key) => `${key}=${links[key]?.available ? '已上架' : '未上架'}`)
-  if (release) {
-    if (!/^https:\/\//.test(links.siteUrl ?? '')) {
-      fail(`发布前必须填好 links.json 的 siteUrl（当前为 ${JSON.stringify(links.siteUrl)}）`)
-    } else {
-      pass(`落地页站点域名已配置：${links.siteUrl}`)
-    }
-    const pending = channels.filter((key) => !links[key]?.available)
-    if (pending.length > 0) {
-      fail(`发布前渠道仍未上架：${pending.join(', ')}`)
-    } else {
-      pass('三个渠道均已上架')
-    }
-  } else if (channelState.some((state) => state.includes('未上架'))) {
-    warn(`渠道尚未上架（可接受，发布前需处理）：${channelState.join(' ')}`)
+  const states = channelStates(siteLinks)
+  const configured = states.filter((state) => state.configured).map((state) => state.key)
+  const missing = states.filter((state) => !state.configured).map((state) => state.key)
+  const stores = configured.filter((key) => STORE_KEYS.includes(key))
+
+  if (release && stores.length === 0) {
+    fail('发布前至少要配置一个商店渠道（EDGE_URL / CWS_URL / AMO_URL）')
+  } else if (missing.length > 0) {
+    warn(`渠道未配置，页面显示「即将上架」：${missing.join(', ')}`)
+  } else {
+    pass('五个渠道均已配置')
+  }
+
+  // 中文页下载指向镜像时，镜像的 Release 必须已经传了同样的 zip —— 否则中文用户
+  // 点下载会 404。这里不联网探测（构建不该依赖外网），只做一次提醒。
+  if (siteLinks.gitee) {
+    pass(`中文页的源码 / 下载指向镜像：${siteLinks.gitee}（发布时记得在镜像上传同样的 zip）`)
   }
 }
 
@@ -201,17 +200,49 @@ if (existsSync(siteIndex)) {
 
   let canonicalProblems = 0
   let scriptProblems = 0
+  const origins = new Set()
   for (const file of htmlFiles) {
     const relative = file.slice(siteDist.length + 1)
     // 构建用 format: 'directory'，子页面服务的真实地址带尾斜杠
-    const expected =
+    const expectedPath =
       relative === 'index.html' ? '/' : `/${relative.replace(/index\.html$/, '')}`
     const html = readFileSync(file, 'utf8')
 
     const canonical = /<link rel="canonical" href="([^"]*)"/.exec(html)?.[1]
-    if (canonical !== expected) {
-      fail(`落地页 ${relative} 的 canonical 应为 ${expected}，实际为 ${canonical ?? '(缺失)'}`)
+    if (!canonical) {
+      fail(`落地页 ${relative} 缺少 canonical`)
       canonicalProblems += 1
+    } else {
+      // 两种合法形态：相对路径（未配置 SITE_URL）与绝对地址（已配置）。
+      // 同一份产物里必须统一 —— 混用说明 env 只对部分页面生效了。
+      const isAbsolute = /^https:\/\//.test(canonical)
+      let actualPath = canonical
+      if (isAbsolute) {
+        try {
+          const url = new URL(canonical)
+          origins.add(url.origin)
+          actualPath = url.pathname
+        } catch {
+          fail(`落地页 ${relative} 的 canonical 不是合法 URL：${canonical}`)
+          canonicalProblems += 1
+          continue
+        }
+      }
+
+      if (actualPath !== expectedPath) {
+        fail(`落地页 ${relative} 的 canonical 应为 ${expectedPath}，实际为 ${actualPath}`)
+        canonicalProblems += 1
+      } else if (isAbsolute && siteLinks?.siteUrl && canonical !== `${siteLinks.siteUrl}${expectedPath}`) {
+        // 产物里的域名与当前 env 不一致 = 改了 .env 却没重建，或构建时用的是另一份 .env
+        fail(
+          `落地页 ${relative} 的 canonical 与 SITE_URL 不一致：${canonical} ≠ ${siteLinks.siteUrl}${expectedPath}` +
+            `（env 改过？重新跑 npm run site:build）`
+        )
+        canonicalProblems += 1
+      } else if (!isAbsolute && release) {
+        fail(`发布前 ${relative} 的 canonical 仍是相对路径 —— 配置 SITE_URL 后重新构建落地页`)
+        canonicalProblems += 1
+      }
     }
 
     // 「零客户端 JS」是这个站点的取向，也写进了文档；有脚本就直接失败
@@ -219,6 +250,11 @@ if (existsSync(siteIndex)) {
       fail(`落地页 ${relative} 引用了外部脚本——落地页的取向是零客户端 JS`)
       scriptProblems += 1
     }
+  }
+
+  if (origins.size > 1) {
+    fail(`落地页各页的 canonical 指向了多个域名：${[...origins].join(', ')}`)
+    canonicalProblems += 1
   }
 
   if (canonicalProblems === 0 && scriptProblems === 0) {
