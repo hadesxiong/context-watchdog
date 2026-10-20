@@ -2,7 +2,7 @@
 
 **English** | [简体中文](README.zh-CN.md)
 
-ContextWatchdog is a Chrome / Firefox extension (Manifest V3) that detects and replaces sensitive information before you send text to an AI. It covers **two tracks at once**: general-text PII (phone numbers, national IDs, bank cards, email, license plates, IP addresses) and developer secrets (API keys, passwords, connection strings, JWTs, private keys). Everything runs locally.
+ContextWatchdog is local-first detection and redaction for AI workflows: it finds and replaces sensitive information before the text reaches a model. It ships today as a Chrome / Firefox extension (Manifest V3), with desktop, CLI and proxy clients planned. It covers **two tracks at once**: general-text PII (phone numbers, national IDs, bank cards, email, license plates, IP addresses) and developer secrets (API keys, passwords, connection strings, JWTs, private keys). Everything runs locally.
 
 Two ways to use it:
 

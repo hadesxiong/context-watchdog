@@ -3,7 +3,7 @@
     "lang": "en",
     "ogLocale": "en_US",
     "title": "ContextWatchdog — redact in place before you paste, without your data leaving the machine",
-    "description": "An open-source, free, serverless browser extension. It detects and replaces secrets and personal data before you send text to an AI — entirely on your own device."
+    "description": "Open-source, free and backend-free local redaction for AI workflows: detects and replaces secrets and personal data before text reaches a model. A browser extension today; desktop, CLI and proxy planned."
   },
   "nav": {
     "how": "How it works",

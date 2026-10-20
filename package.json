@@ -1,7 +1,7 @@
 {
   "name": "context-watchdog",
   "version": "1.0.0",
-  "description": "AI对话前的本地数据脱敏浏览器插件，保护您的敏感信息",
+  "description": "面向 AI 工作流的本地敏感数据检测与脱敏：正则 + 本地 NER，在文本进入模型前完成。当前形态为浏览器扩展。",
   "license": "Apache-2.0",
   "author": "hadesxiong",
   "homepage": "https://github.com/hadesxiong/context-watchdog#readme",

@@ -2,7 +2,7 @@
 
 [English](README.md) | **简体中文**
 
-ContextWatchdog（文本守卫）是 Chrome / Firefox 浏览器扩展（Manifest V3），在用户将文本发送给 AI 前，自动检测并替换敏感信息。**双轨检测**：通用文本 PII（手机号/身份证/银行卡/邮箱/车牌/IP）与开发场景密钥（API Key/密码/连接串/JWT/私钥）并重。所有处理在本地完成。
+ContextWatchdog（文本守卫）是面向 AI 工作流的本地检测与脱敏工具：在文本进入模型前，自动检出并替换敏感信息。当前形态为 Chrome / Firefox 浏览器扩展（Manifest V3），后续扩展到桌面端、CLI 与本地代理。**双轨检测**：通用文本 PII（手机号/身份证/银行卡/邮箱/车牌/IP）与开发场景密钥（API Key/密码/连接串/JWT/私钥）并重。所有处理在本地完成。
 
 两种用法：
 
