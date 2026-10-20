@@ -229,7 +229,6 @@ CSP 收紧后扩展页无任何外部脚本/连接可能。
 | `contextwatchdog.userProfiles` | 用户自定义档案全量（CRUD 持久化） |
 | `contextwatchdog.protectedSites` | 粘贴拦截授权站点列表 |
 | `contextwatchdog.siteAiEnabled` | 逐站 AI 开关（`Record<pattern, boolean>`，缺省关闭） |
-| `contextwatchdog.siteWidgetHidden` | 逐站挂件隐藏（`Record<pattern, boolean>`，缺省显示） |
 | `contextwatchdog.modelLock` | 多窗口下载锁（owner + 心跳 TTL + 进度） |
 | `contextwatchdog.lastModelProbe` | 缓存探测节流戳（24h） |
 | Cache Storage `?partial` 条目 | 模型断点续传分片（元数据在响应头） |

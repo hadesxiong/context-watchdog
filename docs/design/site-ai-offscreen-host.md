@@ -164,14 +164,16 @@ export interface PasteDetectRequest {
 ├─ 展开面板
 │   ├─ 行1：本站 AI 增强  [Switch]   副文案：启用后首段粘贴可能慢 1~2 秒
 │   └─ 行2：在侧边栏中打开 [按钮]     → 发 OPEN_SIDE_PANEL
-└─ 收起/隐藏（×）：写入 contextwatchdog.siteWidgetHidden[pattern]=true
+└─ 收起（× / Esc / 点击面板外）：仅折叠面板，不写存储，挂件本身常驻
 ```
 
 实现要点（全部内联样式，禁止依赖宿主页面 CSS，同现有 `showToast` 的做法）：
 
 1. 挂到 `document.documentElement`，避免 SPA 重渲染 `#root` 时被清掉。
-2. `MutationObserver` 监听自身被移除 → 重挂（节流，仅当 `document.documentElement.contains(node) === false`）。
+2. `MutationObserver` 在挂载时立即启动，自身被移除就重挂；另加 3s 心跳兜住
+   `document.open/write` 与 `documentElement` 被整体替换（观察器会随旧节点失效）。
 3. 状态初始化：注入时发 `SITE_AI_GET`（携带 `location.origin` 规范化后的 pattern）。
+   回包前开关禁用；SW 瞬时不可用**不卸载**挂件（保持禁用态），只有页面卸载才消失。
 4. 全局 AI 关闭时，Switch 显示为禁用并附文案"需先在侧边栏开启 AI 模型"。
 5. 挂件与粘贴监听共用同一个 `__contextWatchdogInstalled` 守卫（同一次注入调用完成两件事）。
 6. **不新增权限**：授权站点本来就有 host permission；挂件不发起网络请求。
@@ -213,7 +215,6 @@ P6 content script 守卫（全部通过才替换）：
 |---|---|---|---|
 | `contextwatchdog.aiEnabled` | local | boolean | 既有全局开关，语义变为"允许使用 AI" |
 | `contextwatchdog.siteAiEnabled` | local | `Record<pattern, boolean>` | 新增，逐站开关 |
-| `contextwatchdog.siteWidgetHidden` | local | `Record<pattern, boolean>` | 新增，逐站隐藏挂件 |
 | `contextwatchdog.modelHost` | **session** | `{ state, percent, received, total, waiting, downloadStarted, error, updatedAt }` | 新增，宿主经 Port 上报、**SW 代写**（宿主只有 `chrome.runtime`）；面板订阅 `storage.onChanged` 渲染 |
 | `contextwatchdog.modelLock` / `lastModelProbe` | local | — | 既有，宿主复用 |
 
@@ -280,7 +281,7 @@ P6 content script 守卫（全部通过才替换）：
 
 **回归**
 
-- `npm run typecheck`、`npx vitest run`（当前基线 360 项）、`npm run build`（零警告）、`npm run probe:layout`（85 项）、`npm run probe:widget`（7 项）必须全绿。
+- `npm run typecheck`、`npx vitest run`（当前基线 360 项）、`npm run build`（零警告）、`npm run probe:layout`（85 项）、`npm run probe:widget`（8 项）必须全绿。
 - 新增探针断言（扩 `scripts/probe-layout.mjs` 或新脚本）：
   - 挂件在授权站点渲染、无授权站点不渲染；
   - 挂件不影响页面布局（不产生滚动条、不遮挡输入框，可用简易碰撞检测）。

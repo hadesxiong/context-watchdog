@@ -21,7 +21,8 @@
   检测经 `MODEL_HOST_DETECT`），Firefox 仍走 `LocalHost`；关闭全局 AI 会销毁 offscreen 文档。
   **S4 已落地**：授权站点右下角挂件（Shadow DOM + 全内联样式，不影响页面布局），
   逐站 AI 开关经 `SITE_AI_GET/SET` 双校验（`sender.url` + 授权列表）；未授权站点零注入，
-  删除站点自动清理逐站配置。
+  删除站点自动清理逐站配置。**挂件常驻**：× / Esc / 点击面板外只收起，不写隐藏状态；
+  页面清 DOM 后自动重挂。
   **S3 已落地**：粘贴链路正则先回包并落地，随后按「全局 ∧ 本站 ∧ 宿主就绪」异步补一次
   AI 检测；四道守卫（未继续输入 / 正则结果仍在原位 / AI 确有增量 / 8s 内）全过才二次替换，
   失败/超时保留正则结果。
@@ -34,7 +35,7 @@
   形状门禁拦截幻觉）、Chrome/Firefox 双目标构建、明暗主题、中英双语界面、双语落地页与隐私权政策页。
 - **校验基线**：`npm run typecheck` 0 错误 / `npm test` **360 passed（29 文件）** /
   `npm run build` + `npm run build:firefox` 通过 / `npm run probe:layout` 全通过 /
-  `npm run probe:widget` 全通过（授权站点挂件 / iframe 不挂 / 未授权零注入）/
+  `npm run probe:widget` 全通过（授权站点挂件 / iframe 不挂 / 未授权零注入 / 删除后重挂）/
   `npm run site:check` 0 诊断 / `npm run site:build` 通过 / `npm run check:versions` 通过（2 项预期警告：SITE_URL 与渠道未配置）。
 
 ## 回归命令

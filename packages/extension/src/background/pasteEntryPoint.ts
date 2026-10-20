@@ -16,7 +16,7 @@ export const contextWatchdogEntryPoint = (messages?: {
     needAi?: string
     loading?: string
     cost?: string
-    hide?: string
+    collapse?: string
   }
 }): void => {
   // 语言模板（含 {count} 占位），缺失时退化为「只显示数字」，不至于报错或空白
@@ -300,7 +300,7 @@ export const contextWatchdogEntryPoint = (messages?: {
       needAi: messages?.widget?.needAi ?? 'Enable AI in the side panel first',
       loading: messages?.widget?.loading ?? 'AI model is still loading',
       cost: messages?.widget?.cost ?? 'First paste may take 1–2s longer',
-      hide: messages?.widget?.hide ?? 'Hide this widget'
+      collapse: messages?.widget?.collapse ?? 'Collapse'
     }
 
     const ROOT_ID = 'context-watchdog-widget'
@@ -309,7 +309,6 @@ export const contextWatchdogEntryPoint = (messages?: {
     // 与 normalizeSiteInput 的输出同构；SW 会拿 sender.url 再算一遍做双校验
     const pattern = `${location.protocol}//${location.host}/*`
     let expanded = false
-    let hidden = false
     let ready = false
     let globalEnabled = false
     let siteEnabled = false
@@ -322,7 +321,7 @@ export const contextWatchdogEntryPoint = (messages?: {
       right: '16px',
       bottom: '16px',
       zIndex: '2147483647',
-      display: 'none'
+      display: 'block'
     })
     const shadow = host.attachShadow({ mode: 'closed' })
 
@@ -376,12 +375,32 @@ export const contextWatchdogEntryPoint = (messages?: {
     shadow.appendChild(root)
     document.documentElement.appendChild(host)
 
-    // 失败关闭：未授权 / SW 不可用时不展示一个不能用的 UI
-    const unmount = (): void => {
-      hidden = true
-      root.remove()
-      host.remove()
+    // 常驻：挂上就显示，状态回包只更新内容。页面重渲染 / 站点脚本清 DOM 时自动重挂；
+    // 3s 心跳兜住 document.open/write 与 documentElement 被整体替换（观察器会随旧节点失效）。
+    const reattach = (): void => {
+      if (!document.documentElement) return
+      if (!document.documentElement.contains(host)) document.documentElement.appendChild(host)
     }
+    const observer = new MutationObserver(reattach)
+    observer.observe(document.documentElement, { childList: true })
+    setInterval(reattach, 3000)
+
+    // 面板外的点击与 Esc 只做「收起」，挂件本身始终留在页面上
+    document.addEventListener(
+      'pointerdown',
+      event => {
+        if (!expanded) return
+        if (event.composedPath().includes(host)) return
+        expanded = false
+        render()
+      },
+      true
+    )
+    document.addEventListener('keydown', event => {
+      if (event.key !== 'Escape' || !expanded) return
+      expanded = false
+      render()
+    })
 
     const send = (message: unknown, done?: (response: unknown) => void): void => {
       chrome.runtime.sendMessage(message, response => {
@@ -394,7 +413,8 @@ export const contextWatchdogEntryPoint = (messages?: {
     }
 
     function disabledReason(): string {
-      if (!ready) return ''
+      // 状态回包前（或 SW 瞬时不可用）一律禁用：宁可晚一点可点，也不能显示错的状态
+      if (!ready) return t.loading
       if (!globalEnabled) return t.needAi
       if (!hostReady) return t.loading
       return ''
@@ -415,12 +435,12 @@ export const contextWatchdogEntryPoint = (messages?: {
       const title = document.createElement('span')
       title.textContent = 'ContextWatchdog'
       Object.assign(title.style, { fontWeight: '600', fontSize: '12px', opacity: '0.92' })
-      const hideButton = document.createElement('button')
-      hideButton.type = 'button'
-      hideButton.textContent = '×'
-      hideButton.setAttribute('aria-label', t.hide)
-      hideButton.title = t.hide
-      Object.assign(hideButton.style, {
+      const collapseButton = document.createElement('button')
+      collapseButton.type = 'button'
+      collapseButton.textContent = '×'
+      collapseButton.setAttribute('aria-label', t.collapse)
+      collapseButton.title = t.collapse
+      Object.assign(collapseButton.style, {
         border: 'none',
         background: 'transparent',
         color: 'inherit',
@@ -430,12 +450,12 @@ export const contextWatchdogEntryPoint = (messages?: {
         padding: '0 2px',
         opacity: '0.7'
       })
-      hideButton.addEventListener('click', event => {
+      collapseButton.addEventListener('click', event => {
         event.stopPropagation()
-        send({ type: 'SITE_WIDGET_HIDE', pattern })
-        unmount()
+        expanded = false
+        render()
       })
-      header.append(title, hideButton)
+      header.append(title, collapseButton)
 
       const row = document.createElement('div')
       Object.assign(row.style, {
@@ -535,32 +555,17 @@ export const contextWatchdogEntryPoint = (messages?: {
               globalEnabled?: boolean
               siteEnabled?: boolean
               hostReady?: boolean
-              widgetHidden?: boolean
             }
           }
         | undefined
-      if (!result?.ok || !result.state) {
-        unmount()
-        return
-      }
-      if (result.state.widgetHidden) {
-        unmount()
-        return
-      }
+      // SW 瞬时不可用（休眠/重启）不卸载挂件：保持禁用态，下一次交互仍可重试
+      if (!result?.ok || !result.state) return
 
       globalEnabled = result.state.globalEnabled === true
       siteEnabled = result.state.siteEnabled === true
       hostReady = result.state.hostReady === true
       ready = true
-      host.style.display = 'block'
       render()
-
-      // SPA 重渲染 / 站点脚本清理 DOM 时自动重挂（只监听自身是否还在 document 里）
-      const observer = new MutationObserver(() => {
-        if (hidden) return
-        if (!document.documentElement.contains(host)) document.documentElement.appendChild(host)
-      })
-      observer.observe(document.documentElement, { childList: true })
     })
   }
 

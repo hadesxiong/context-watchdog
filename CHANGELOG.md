@@ -7,6 +7,17 @@
 
 ## 2026-10-20
 
+### ⑥ 挂件常驻（× = 收起）
+
+- 页面挂件改为常驻：移除 `siteWidgetHidden` 存储键、`SITE_WIDGET_HIDE` 消息与站点删除时的
+  相关清理；`×` / `Esc` / 点击面板外都只**收起面板**（`expanded = false`），右下角圆形按钮
+  始终保留。旧 profile 里的残留值不再读取，零用户无迁移。
+- 常驻加固：`MutationObserver` 在挂载时立即启动，页面清 DOM 后自动重挂；另加 3 秒心跳兜住
+  `document.open/write` 与 `documentElement` 被整体替换；`SITE_AI_GET` 瞬时失败不再卸载挂件；
+  状态回包前开关一律禁用（含 `ready=false`），避免显示错状态或误点。
+- `probe:widget` 新增「页面删除 host → 自动重挂」断言（共 8 项）；TC-07-8 第 5 步改为常驻判据。
+- 发布包重打：`release/contextwatchdog-1.0.0-{chrome,firefox}.zip` + `SHA256SUMS`。
+
 ### ⑤ S5：收尾（挂件探针 + 宿主销毁 + 文档）
 
 - 新增 `npm run probe:widget`：无头 Chrome 实测授权站点挂件出现、iframe 内不出现、

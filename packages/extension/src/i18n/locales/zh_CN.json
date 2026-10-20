@@ -115,7 +115,7 @@
   "site_widget_need_ai": "需先在侧边栏开启 AI 模型",
   "site_widget_loading": "AI 模型尚未就绪",
   "site_widget_cost": "启用后首段粘贴可能慢 1–2 秒",
-  "site_widget_hide": "隐藏此挂件",
+  "site_widget_collapse": "收起",
 
   "ps_name": "档案名称",
   "ps_name_placeholder": "如：仅密钥",

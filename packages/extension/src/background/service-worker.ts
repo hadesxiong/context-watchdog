@@ -16,7 +16,6 @@ import {
   PASTE_DETECT,
   SITE_AI_GET,
   SITE_AI_SET,
-  SITE_WIDGET_HIDE,
   type PasteAiResult,
   type PasteDetectResponse,
   type SiteAiGetResponse,
@@ -26,7 +25,6 @@ import {
 import {
   AI_ENABLED_KEY,
   SITE_AI_ENABLED_KEY,
-  SITE_WIDGET_HIDDEN_KEY,
   isEffectiveAI,
   readBooleanMap
 } from '@engine/settings'
@@ -143,12 +141,10 @@ const isAiEffectiveForSite = async (pattern: string): Promise<boolean> => {
 // 站点移除后清掉它的逐站配置，避免「删了再加回来还是开着」
 const pruneSiteSettings = async (sites: string[]): Promise<void> => {
   const allowed = new Set(sites)
-  for (const key of [SITE_AI_ENABLED_KEY, SITE_WIDGET_HIDDEN_KEY]) {
-    const map = await readBooleanMap(key)
-    const next = Object.fromEntries(Object.entries(map).filter(([pattern]) => allowed.has(pattern)))
-    if (Object.keys(next).length !== Object.keys(map).length) {
-      await chrome.storage.local.set({ [key]: next })
-    }
+  const map = await readBooleanMap(SITE_AI_ENABLED_KEY)
+  const next = Object.fromEntries(Object.entries(map).filter(([pattern]) => allowed.has(pattern)))
+  if (Object.keys(next).length !== Object.keys(map).length) {
+    await chrome.storage.local.set({ [SITE_AI_ENABLED_KEY]: next })
   }
 }
 
@@ -164,7 +160,7 @@ const injectContextWatchdog = (tabId: number): void => {
     needAi: chrome.i18n.getMessage('site_widget_need_ai') || 'Enable AI in the side panel first',
     loading: chrome.i18n.getMessage('site_widget_loading') || 'AI model is still loading',
     cost: chrome.i18n.getMessage('site_widget_cost') || 'The first paste may take 1–2s longer',
-    hide: chrome.i18n.getMessage('site_widget_hide') || 'Hide this widget'
+    collapse: chrome.i18n.getMessage('site_widget_collapse') || 'Collapse'
   }
   chrome.scripting
     .executeScript({
@@ -298,18 +294,16 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
         sendResponse({ ok: false, error: 'unauthorized' } satisfies SiteAiGetResponse)
         return
       }
-      const [globalStore, siteMap, hiddenMap, hostReady] = await Promise.all([
+      const [globalStore, siteMap, hostReady] = await Promise.all([
         chrome.storage.local.get(AI_ENABLED_KEY),
         readBooleanMap(SITE_AI_ENABLED_KEY),
-        readBooleanMap(SITE_WIDGET_HIDDEN_KEY),
         readHostReady()
       ])
       const state: SiteAiState = {
         pattern,
         globalEnabled: globalStore[AI_ENABLED_KEY] === true,
         siteEnabled: siteMap[pattern] === true,
-        hostReady,
-        widgetHidden: hiddenMap[pattern] === true
+        hostReady
       }
       sendResponse({ ok: true, state } satisfies SiteAiGetResponse)
     })()
@@ -327,21 +321,6 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
       if (request.enabled === true) map[pattern] = true
       else delete map[pattern]
       await chrome.storage.local.set({ [SITE_AI_ENABLED_KEY]: map })
-      sendResponse({ ok: true } satisfies SiteAiSetResponse)
-    })()
-    return true
-  }
-
-  if (request?.type === SITE_WIDGET_HIDE) {
-    void (async () => {
-      const pattern = await authorizedSitePattern(sender, request.pattern)
-      if (!pattern) {
-        sendResponse({ ok: false, error: 'unauthorized' } satisfies SiteAiSetResponse)
-        return
-      }
-      const map = await readBooleanMap(SITE_WIDGET_HIDDEN_KEY)
-      map[pattern] = true
-      await chrome.storage.local.set({ [SITE_WIDGET_HIDDEN_KEY]: map })
       sendResponse({ ok: true } satisfies SiteAiSetResponse)
     })()
     return true

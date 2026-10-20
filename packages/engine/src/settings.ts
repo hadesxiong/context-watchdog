@@ -9,9 +9,6 @@ export const AI_ENABLED_KEY = 'contextwatchdog.aiEnabled'
 /** 逐站 AI 开关：Record<pattern, boolean>，缺省 = 关闭 */
 export const SITE_AI_ENABLED_KEY = 'contextwatchdog.siteAiEnabled'
 
-/** 逐站挂件隐藏：Record<pattern, boolean>，缺省 = 显示 */
-export const SITE_WIDGET_HIDDEN_KEY = 'contextwatchdog.siteWidgetHidden'
-
 /**
  * 有效 AI = 全局允许 ∧ 本站开启 ∧ 宿主就绪。
  * 三个条件缺一不可：任何一层没准备好都必须退回正则档（AI 是增量，不是前提）。

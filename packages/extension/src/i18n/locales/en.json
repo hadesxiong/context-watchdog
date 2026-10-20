@@ -115,7 +115,7 @@
   "site_widget_need_ai": "Enable AI in the side panel first",
   "site_widget_loading": "AI model is still loading",
   "site_widget_cost": "First paste may take 1–2s longer",
-  "site_widget_hide": "Hide this widget",
+  "site_widget_collapse": "Collapse",
 
   "ps_name": "Profile name",
   "ps_name_placeholder": "e.g. Secrets only",

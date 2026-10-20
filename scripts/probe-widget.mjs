@@ -8,6 +8,7 @@
  *   2) iframe 内不出现（粘贴监听 allFrames 注入，但挂件只挂顶层）
  *   3) 未授权站点完全不注入
  *   4) 不产生横向滚动条，不往 body 里塞节点
+ *   5) 常驻：页面主动删除挂件后自动重挂
  *
  * 为了免去 optional_host_permissions 的交互授权，脚本运行期间会临时给
  * dist/manifest.json 加上测试站的 host_permissions，结束后**原样恢复**。
@@ -243,11 +244,18 @@ try {
   check('不往 body 里塞节点（body 仍为 textarea + iframe）', authorized.bodyChildren === 2)
   check('无横向滚动条', authorized.overflowX === false)
 
-  // ② 未授权站点（host 不同 → pattern 不同）
+  // ② 常驻：页面主动删除 host 后，观察器应立即重挂
+  await cdp.eval(`document.getElementById('${WIDGET_ID}')?.remove()`)
+  await sleep(800)
+  const remounted = await cdp.eval(`!!document.getElementById('${WIDGET_ID}')`)
+  console.log('[2] 常驻')
+  check('页面删除挂件后自动重挂', remounted === true)
+
+  // ③ 未授权站点（host 不同 → pattern 不同）
   await cdp.send('Page.navigate', { url: `http://localhost:${httpPort}/` })
   await sleep(1500)
   const unauthorized = await cdp.eval(`!!document.getElementById('${WIDGET_ID}')`)
-  console.log('[2] 未授权站点 http://localhost:' + httpPort)
+  console.log('[3] 未授权站点 http://localhost:' + httpPort)
   check('完全不注入挂件', unauthorized === false)
 
   console.log(failed ? '\n挂件探针失败 ✗' : '\n挂件探针全部通过 ✓')
