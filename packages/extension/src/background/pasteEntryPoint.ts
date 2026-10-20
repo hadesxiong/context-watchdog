@@ -7,7 +7,17 @@
 //
 // 规则与守卫逻辑的可测版本见 src/content/pasteText.ts（有单测），改动需两边同步；
 // 消息类型常量见 @engine/messages。
-export const contextWatchdogEntryPoint = (messages?: { toastRedacted?: string }): void => {
+export const contextWatchdogEntryPoint = (messages?: {
+  toastRedacted?: string
+  widget?: {
+    ai?: string
+    open?: string
+    needAi?: string
+    loading?: string
+    cost?: string
+    hide?: string
+  }
+}): void => {
   // 语言模板（含 {count} 占位），缺失时退化为「只显示数字」，不至于报错或空白
   const toastTemplate = messages?.toastRedacted ?? '{count}'
   const globalRef = window as unknown as Record<string, unknown>
@@ -197,4 +207,283 @@ export const contextWatchdogEntryPoint = (messages?: { toastRedacted?: string })
     },
     true
   )
+
+  // ---------- 站点挂件（控制面） ----------
+  // 只挂顶层文档：粘贴监听需要 allFrames，但挂件出现在广告/嵌入 iframe 里只会制造噪音。
+  // 所有样式内联 + Shadow DOM 隔离：既不依赖宿主页面 CSS，也不污染宿主页面。
+  const mountSiteWidget = (): void => {
+    const t = {
+      ai: messages?.widget?.ai ?? 'AI enhancement',
+      open: messages?.widget?.open ?? 'Open side panel',
+      needAi: messages?.widget?.needAi ?? 'Enable AI in the side panel first',
+      loading: messages?.widget?.loading ?? 'AI model is still loading',
+      cost: messages?.widget?.cost ?? 'First paste may take 1–2s longer',
+      hide: messages?.widget?.hide ?? 'Hide this widget'
+    }
+
+    const ROOT_ID = 'context-watchdog-widget'
+    if (document.getElementById(ROOT_ID)) return
+
+    // 与 normalizeSiteInput 的输出同构；SW 会拿 sender.url 再算一遍做双校验
+    const pattern = `${location.protocol}//${location.host}/*`
+    let expanded = false
+    let hidden = false
+    let ready = false
+    let globalEnabled = false
+    let siteEnabled = false
+    let hostReady = false
+
+    const host = document.createElement('div')
+    host.id = ROOT_ID
+    Object.assign(host.style, {
+      position: 'fixed',
+      right: '16px',
+      bottom: '16px',
+      zIndex: '2147483647',
+      display: 'none'
+    })
+    const shadow = host.attachShadow({ mode: 'closed' })
+
+    const root = document.createElement('div')
+    Object.assign(root.style, {
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'flex-end',
+      font: '13px/1.4 system-ui, -apple-system, sans-serif',
+      color: '#f9fafb'
+    })
+
+    const panel = document.createElement('div')
+    panel.id = 'cw-panel'
+    Object.assign(panel.style, {
+      width: '248px',
+      marginBottom: '8px',
+      padding: '12px',
+      borderRadius: '12px',
+      background: 'rgba(17, 24, 39, 0.96)',
+      color: '#f9fafb',
+      boxShadow: '0 8px 24px rgba(0, 0, 0, 0.28)',
+      display: 'none'
+    })
+
+    const fab = document.createElement('button')
+    fab.type = 'button'
+    fab.textContent = 'AI'
+    fab.setAttribute('aria-label', 'ContextWatchdog')
+    fab.setAttribute('aria-controls', 'cw-panel')
+    fab.title = 'ContextWatchdog'
+    Object.assign(fab.style, {
+      width: '28px',
+      height: '28px',
+      padding: '0',
+      borderRadius: '50%',
+      border: 'none',
+      background: 'rgba(17, 24, 39, 0.92)',
+      color: '#fff',
+      font: '600 10px/1 system-ui, -apple-system, sans-serif',
+      letterSpacing: '0.02em',
+      cursor: 'pointer',
+      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.25)'
+    })
+    fab.addEventListener('click', () => {
+      expanded = !expanded
+      render()
+    })
+
+    root.append(panel, fab)
+    shadow.appendChild(root)
+    document.documentElement.appendChild(host)
+
+    // 失败关闭：未授权 / SW 不可用时不展示一个不能用的 UI
+    const unmount = (): void => {
+      hidden = true
+      root.remove()
+      host.remove()
+    }
+
+    const send = (message: unknown, done?: (response: unknown) => void): void => {
+      chrome.runtime.sendMessage(message, response => {
+        if (chrome.runtime.lastError) {
+          done?.(undefined)
+          return
+        }
+        done?.(response)
+      })
+    }
+
+    function disabledReason(): string {
+      if (!ready) return ''
+      if (!globalEnabled) return t.needAi
+      if (!hostReady) return t.loading
+      return ''
+    }
+
+    function render(): void {
+      panel.replaceChildren()
+      panel.style.display = expanded ? 'block' : 'none'
+      fab.setAttribute('aria-expanded', String(expanded))
+
+      const header = document.createElement('div')
+      Object.assign(header.style, {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: '8px'
+      })
+      const title = document.createElement('span')
+      title.textContent = 'ContextWatchdog'
+      Object.assign(title.style, { fontWeight: '600', fontSize: '12px', opacity: '0.92' })
+      const hideButton = document.createElement('button')
+      hideButton.type = 'button'
+      hideButton.textContent = '×'
+      hideButton.setAttribute('aria-label', t.hide)
+      hideButton.title = t.hide
+      Object.assign(hideButton.style, {
+        border: 'none',
+        background: 'transparent',
+        color: 'inherit',
+        cursor: 'pointer',
+        fontSize: '16px',
+        lineHeight: '1',
+        padding: '0 2px',
+        opacity: '0.7'
+      })
+      hideButton.addEventListener('click', event => {
+        event.stopPropagation()
+        send({ type: 'SITE_WIDGET_HIDE', pattern })
+        unmount()
+      })
+      header.append(title, hideButton)
+
+      const row = document.createElement('div')
+      Object.assign(row.style, {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '10px'
+      })
+      const label = document.createElement('span')
+      label.textContent = t.ai
+      Object.assign(label.style, { fontSize: '13px' })
+
+      const reason = disabledReason()
+      const disabled = Boolean(reason)
+      const toggle = document.createElement('button')
+      toggle.type = 'button'
+      toggle.setAttribute('role', 'switch')
+      toggle.setAttribute('aria-checked', String(siteEnabled))
+      toggle.setAttribute('aria-label', t.ai)
+      toggle.disabled = disabled
+      Object.assign(toggle.style, {
+        position: 'relative',
+        flex: '0 0 auto',
+        width: '36px',
+        height: '20px',
+        padding: '0',
+        borderRadius: '999px',
+        border: 'none',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        background: siteEnabled ? '#6366f1' : 'rgba(255, 255, 255, 0.28)',
+        opacity: disabled ? '0.5' : '1',
+        transition: 'background 0.15s ease'
+      })
+      const knob = document.createElement('span')
+      Object.assign(knob.style, {
+        position: 'absolute',
+        top: '2px',
+        left: siteEnabled ? '18px' : '2px',
+        width: '16px',
+        height: '16px',
+        borderRadius: '50%',
+        background: '#fff',
+        transition: 'left 0.15s ease'
+      })
+      toggle.appendChild(knob)
+      toggle.addEventListener('click', () => {
+        if (disabled) return
+        const next = !siteEnabled
+        siteEnabled = next
+        render()
+        send({ type: 'SITE_AI_SET', pattern, enabled: next }, response => {
+          const result = response as { ok?: boolean } | undefined
+          if (result?.ok) return
+          // 写失败就回滚：不能让 UI 显示一个没落库的开关
+          siteEnabled = !next
+          render()
+        })
+      })
+      row.append(label, toggle)
+
+      const hint = document.createElement('p')
+      hint.textContent = reason || t.cost
+      Object.assign(hint.style, {
+        margin: '6px 0 10px',
+        fontSize: '11px',
+        lineHeight: '1.45',
+        color: reason ? '#fbbf24' : 'rgba(249, 250, 251, 0.62)'
+      })
+
+      const openButton = document.createElement('button')
+      openButton.type = 'button'
+      openButton.textContent = t.open
+      Object.assign(openButton.style, {
+        width: '100%',
+        padding: '7px 10px',
+        borderRadius: '8px',
+        border: '1px solid rgba(255, 255, 255, 0.18)',
+        background: 'rgba(255, 255, 255, 0.06)',
+        color: '#f9fafb',
+        font: 'inherit',
+        cursor: 'pointer'
+      })
+      openButton.addEventListener('click', () => {
+        send({ type: 'OPEN_SIDE_PANEL' })
+      })
+
+      panel.append(header, row, hint, openButton)
+    }
+
+    render()
+
+    send({ type: 'SITE_AI_GET', pattern }, response => {
+      const result = response as
+        | {
+            ok?: boolean
+            state?: {
+              globalEnabled?: boolean
+              siteEnabled?: boolean
+              hostReady?: boolean
+              widgetHidden?: boolean
+            }
+          }
+        | undefined
+      if (!result?.ok || !result.state) {
+        unmount()
+        return
+      }
+      if (result.state.widgetHidden) {
+        unmount()
+        return
+      }
+
+      globalEnabled = result.state.globalEnabled === true
+      siteEnabled = result.state.siteEnabled === true
+      hostReady = result.state.hostReady === true
+      ready = true
+      host.style.display = 'block'
+      render()
+
+      // SPA 重渲染 / 站点脚本清理 DOM 时自动重挂（只监听自身是否还在 document 里）
+      const observer = new MutationObserver(() => {
+        if (hidden) return
+        if (!document.documentElement.contains(host)) document.documentElement.appendChild(host)
+      })
+      observer.observe(document.documentElement, { childList: true })
+    })
+  }
+
+  if (window.top === window) {
+    if (document.documentElement) mountSiteWidget()
+    else document.addEventListener('DOMContentLoaded', mountSiteWidget, { once: true })
+  }
 }

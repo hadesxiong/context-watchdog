@@ -16,6 +16,7 @@ import {
     type ModelHostStatusResponse
 } from '@/modelHost/protocol'
 import type { ModelHostState } from '@/modelHost/state'
+import { AI_ENABLED_KEY } from '@engine/settings'
 
 // 模型状态类型
 type ModelStatus = 'idle' | 'loading' | 'success' | 'error' | 'timeout' | 'disabled'
@@ -29,8 +30,6 @@ interface DetectionEngineStatus {
 
 // Profile 持久化 key
 const PROFILE_STORAGE_KEY = 'contextwatchdog.activeProfile'
-// AI 增强检测显式开关（Phase UI：默认关闭，零网络请求零报错）
-const AI_ENABLED_KEY = 'contextwatchdog.aiEnabled'
 // AI 增强首启引导弹窗「已展示」标记（展示过一次后永不再弹，无论用户是否开启）
 const AI_ONBOARDING_KEY = 'contextwatchdog.aiOnboardingSeen'
 

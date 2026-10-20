@@ -1,6 +1,6 @@
 # ① 授权站点 AI 增强（页面挂件控制面 + 单一模型宿主）
 
-> 状态：**S1–S2 已实现**（offscreen 宿主骨架、侧栏改客户端），S3–S5 未开始。这是 1.0.0 之后的第一条线。
+> 状态：**S1–S2、S4 已实现**（offscreen 宿主、侧栏客户端、页面挂件与逐站开关），S3 与 S5 未开始。这是 1.0.0 之后的第一条线。
 > 关联现状：`packages/extension/src/background/{service-worker,pasteEntryPoint}.ts`、
 > `packages/engine/src/detector/{pipeline}.ts`、
 > `packages/extension/src/model/{contentDetector,modelDownload}.ts`、

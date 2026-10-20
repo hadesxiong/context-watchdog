@@ -109,6 +109,13 @@
   "paste_ok_removed": "Removed",
   "paste_toast_redacted": "{count} redacted",
 
+  "site_widget_ai": "AI enhancement",
+  "site_widget_open": "Open side panel",
+  "site_widget_need_ai": "Enable AI in the side panel first",
+  "site_widget_loading": "AI model is still loading",
+  "site_widget_cost": "First paste may take 1–2s longer",
+  "site_widget_hide": "Hide this widget",
+
   "ps_name": "Profile name",
   "ps_name_placeholder": "e.g. Secrets only",
   "ps_description": "Description",

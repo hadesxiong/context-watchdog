@@ -7,6 +7,24 @@
 
 ## 2026-10-20
 
+### ③ S4：页面挂件与逐站 AI 开关（控制面）
+
+授权站点的右下角新增一个自包含挂件，AI 是否生效由「全局 × 本站」两层开关决定：
+
+- `@engine/settings`：`AI_ENABLED_KEY` / `SITE_AI_ENABLED_KEY` / `SITE_WIDGET_HIDDEN_KEY`
+  与 `isEffectiveAI()`（全局 ∧ 本站 ∧ 宿主就绪），键名只此一处。
+- `SITE_AI_GET` / `SITE_AI_SET` / `SITE_WIDGET_HIDE` / `OPEN_SIDE_PANEL`：
+  SW 侧双校验——`sender.url` 推导的 pattern 必须与请求一致，且在授权列表内；
+  页面隔离世界里的消息内容不可信。
+- 挂件与粘贴监听共用 `__contextWatchdogInstalled`，只挂顶层文档（`allFrames` 注入但不进 iframe）；
+  全内联样式 + Shadow DOM 隔离，`MutationObserver` 在自身被移除时重挂。
+- 全局 AI 关闭或宿主未就绪时，开关禁用并显示原因；未授权站点零注入。
+- 删除站点时 SW 自动清理 `siteAiEnabled` / `siteWidgetHidden`，重新添加回到默认关闭。
+
+实测（Chrome for Testing）：授权站点顶层出现挂件（fixed / z-index 2147483647）、
+iframe 内没有、未授权站点没有、页面无横向滚动条。
+基线：typecheck 0 / 352 tests / 双目标构建通过。
+
 ### ② S2：侧栏改为模型宿主客户端
 
 Chrome/Edge 下侧栏不再自己加载模型，改为向 SW 请求、订阅宿主状态；Firefox 仍走本地加载：

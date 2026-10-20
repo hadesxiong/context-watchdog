@@ -33,6 +33,12 @@ export const normalizeSiteInput = (raw: string): string | null => {
   return `${url.protocol}//${url.host}/*`
 }
 
+// URL → 站点模式（与 normalizeSiteInput 的输出同构）。
+// SW 用它校验 sender.url 与页面挂件上报的 pattern 是否一致：消息内容不可信，
+// 只有 sender.url 是浏览器给的。
+export const sitePatternFromUrl = (url: string | undefined): string | null =>
+  url ? normalizeSiteInput(url) : null
+
 // URL 是否命中任一模式（模式形如 https://host[:port]/*；子域需单独添加）
 export const matchSite = (url: string, patterns: string[]): boolean => {
   if (!patterns.length) return false

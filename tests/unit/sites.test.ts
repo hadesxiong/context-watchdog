@@ -1,6 +1,6 @@
 // 单元用例 - 受保护站点的规范化与匹配（粘贴自动拦截）
 import { describe, it, expect } from 'vitest'
-import { normalizeSiteInput, matchSite } from '@engine/sites'
+import { normalizeSiteInput, matchSite, sitePatternFromUrl } from '@engine/sites'
 
 describe('normalizeSiteInput', () => {
   it('裸域名默认按 https 处理', () => {
@@ -27,6 +27,21 @@ describe('normalizeSiteInput', () => {
   it('拒绝没有点且不是 localhost/IPv4 的主机名', () => {
     expect(normalizeSiteInput('intranet')).toBeNull()
     expect(normalizeSiteInput('localhost')).toBe('https://localhost/*') // 无协议默认 https
+  })
+})
+
+describe('sitePatternFromUrl', () => {
+  it('从页面 URL 推导出与 normalizeSiteInput 同构的模式', () => {
+    expect(sitePatternFromUrl('https://chat.example.com/app?q=1')).toBe('https://chat.example.com/*')
+    expect(sitePatternFromUrl('http://localhost:5173/room/1')).toBe('http://localhost:5173/*')
+  })
+
+  it('非 http(s) / 空值 / 非法 URL 返回 null', () => {
+    expect(sitePatternFromUrl(undefined)).toBeNull()
+    expect(sitePatternFromUrl('')).toBeNull()
+    expect(sitePatternFromUrl('chrome://extensions')).toBeNull()
+    expect(sitePatternFromUrl('file:///etc/passwd')).toBeNull()
+    expect(sitePatternFromUrl('not a url')).toBeNull()
   })
 })
 

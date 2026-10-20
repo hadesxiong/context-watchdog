@@ -9,8 +9,24 @@
 import { detect } from '@engine/detector'
 import { sanitizeText } from '@engine/replacer'
 import { setPlaceholderLocale } from '@engine/replacer/placeholder'
-import { matchSite, readProtectedSites, PROTECTED_SITES_KEY } from '@engine/sites'
-import { PASTE_DETECT, type PasteDetectResponse } from '@engine/messages'
+import { matchSite, readProtectedSites, sitePatternFromUrl, PROTECTED_SITES_KEY } from '@engine/sites'
+import {
+  OPEN_SIDE_PANEL,
+  PASTE_DETECT,
+  SITE_AI_GET,
+  SITE_AI_SET,
+  SITE_WIDGET_HIDE,
+  type PasteDetectResponse,
+  type SiteAiGetResponse,
+  type SiteAiSetResponse,
+  type SiteAiState
+} from '@engine/messages'
+import {
+  AI_ENABLED_KEY,
+  SITE_AI_ENABLED_KEY,
+  SITE_WIDGET_HIDDEN_KEY,
+  readBooleanMap
+} from '@engine/settings'
 import type { ProfileConfig } from '@engine/types'
 import { contextWatchdogEntryPoint } from './pasteEntryPoint'
 import {
@@ -79,16 +95,64 @@ chrome.action.onClicked.addListener(async tab => {
 
 let protectedPatterns: string[] = []
 
+// ---------- 站点挂件的授权与状态 ----------
+
+// 从消息 sender 推导站点模式，并要求：① 与消息里上报的 pattern 一致；
+// ② 在用户的授权列表里。页面隔离世界里的消息内容不可信，只有 sender.url 是浏览器给的。
+const authorizedSitePattern = async (
+  sender: chrome.runtime.MessageSender,
+  claimed: unknown
+): Promise<string | null> => {
+  const actual = sitePatternFromUrl(sender.url)
+  if (!actual) return null
+  if (typeof claimed !== 'string' || claimed !== actual) return null
+  const sites = await readProtectedSites()
+  return sites.includes(actual) ? actual : null
+}
+
+// 宿主是否就绪：Chrome/Edge 看 session 状态；Firefox 的 LocalHost 在侧栏里，
+// SW 观测不到，按可用处理（数据面自行降级，不把开关锁死）。
+const readHostReady = async (): Promise<boolean> => {
+  if (!isModelHostSupported()) return true
+  try {
+    const stored = await chrome.storage.session.get(MODEL_HOST_STATE_KEY)
+    const state = stored[MODEL_HOST_STATE_KEY] as { phase?: string } | undefined
+    return state?.phase === 'ready'
+  } catch {
+    return false
+  }
+}
+
+// 站点移除后清掉它的逐站配置，避免「删了再加回来还是开着」
+const pruneSiteSettings = async (sites: string[]): Promise<void> => {
+  const allowed = new Set(sites)
+  for (const key of [SITE_AI_ENABLED_KEY, SITE_WIDGET_HIDDEN_KEY]) {
+    const map = await readBooleanMap(key)
+    const next = Object.fromEntries(Object.entries(map).filter(([pattern]) => allowed.has(pattern)))
+    if (Object.keys(next).length !== Object.keys(map).length) {
+      await chrome.storage.local.set({ [key]: next })
+    }
+  }
+}
+
 const injectContextWatchdog = (tabId: number): void => {
   // 文案在 SW 侧取好再传进去：注入函数在页面的隔离世界里执行，引用不到模块，
   // 而 chrome.i18n 读的正是 postbuild 从同一份 catalog 生成的 _locales。
   // 兜底用英文（default_locale），免得 _locales 缺失时只显示一个数字。
   const toastRedacted = chrome.i18n.getMessage('paste_toast_redacted') || '{count} redacted'
+  const widget = {
+    ai: chrome.i18n.getMessage('site_widget_ai') || 'AI enhancement',
+    open: chrome.i18n.getMessage('site_widget_open') || 'Open side panel',
+    needAi: chrome.i18n.getMessage('site_widget_need_ai') || 'Enable AI in the side panel first',
+    loading: chrome.i18n.getMessage('site_widget_loading') || 'AI model is still loading',
+    cost: chrome.i18n.getMessage('site_widget_cost') || 'The first paste may take 1–2s longer',
+    hide: chrome.i18n.getMessage('site_widget_hide') || 'Hide this widget'
+  }
   chrome.scripting
     .executeScript({
       target: { tabId, allFrames: true },
       func: contextWatchdogEntryPoint,
-      args: [{ toastRedacted }]
+      args: [{ toastRedacted, widget }]
     })
     .catch(error => console.warn('[ContextWatchdog] 注入粘贴监听失败:', error))
 }
@@ -111,8 +175,9 @@ void readProtectedSites().then(sites => {
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== 'local') return
   if (changes[PROTECTED_SITES_KEY]) {
-    void readProtectedSites().then(sites => {
+    void readProtectedSites().then(async sites => {
       protectedPatterns = sites
+      await pruneSiteSettings(sites)
       return injectIntoOpenTabs()
     })
   }
@@ -130,7 +195,13 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 // ---------- 检测服务 ----------
 
 chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) => {
-  const request = message as { type?: string; text?: string; profile?: ProfileConfig } | null
+  const request = message as {
+    type?: string
+    text?: string
+    profile?: ProfileConfig
+    pattern?: unknown
+    enabled?: unknown
+  } | null
 
   if (request?.type === PASTE_DETECT) {
     if (typeof request.text !== 'string') return undefined
@@ -158,6 +229,91 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
       })
 
     // 返回 true = 允许异步 sendResponse（否则 SW 在 listener 返回后即关闭响应通道）
+    return true
+  }
+
+  // ---------- 站点挂件（控制面） ----------
+  // 一律先双校验 sender.url 与上报的 pattern：页面隔离世界里的消息内容不可信。
+  if (request?.type === SITE_AI_GET) {
+    void (async () => {
+      const pattern = await authorizedSitePattern(sender, request.pattern)
+      if (!pattern) {
+        sendResponse({ ok: false, error: 'unauthorized' } satisfies SiteAiGetResponse)
+        return
+      }
+      const [globalStore, siteMap, hiddenMap, hostReady] = await Promise.all([
+        chrome.storage.local.get(AI_ENABLED_KEY),
+        readBooleanMap(SITE_AI_ENABLED_KEY),
+        readBooleanMap(SITE_WIDGET_HIDDEN_KEY),
+        readHostReady()
+      ])
+      const state: SiteAiState = {
+        pattern,
+        globalEnabled: globalStore[AI_ENABLED_KEY] === true,
+        siteEnabled: siteMap[pattern] === true,
+        hostReady,
+        widgetHidden: hiddenMap[pattern] === true
+      }
+      sendResponse({ ok: true, state } satisfies SiteAiGetResponse)
+    })()
+    return true
+  }
+
+  if (request?.type === SITE_AI_SET) {
+    void (async () => {
+      const pattern = await authorizedSitePattern(sender, request.pattern)
+      if (!pattern) {
+        sendResponse({ ok: false, error: 'unauthorized' } satisfies SiteAiSetResponse)
+        return
+      }
+      const map = await readBooleanMap(SITE_AI_ENABLED_KEY)
+      if (request.enabled === true) map[pattern] = true
+      else delete map[pattern]
+      await chrome.storage.local.set({ [SITE_AI_ENABLED_KEY]: map })
+      sendResponse({ ok: true } satisfies SiteAiSetResponse)
+    })()
+    return true
+  }
+
+  if (request?.type === SITE_WIDGET_HIDE) {
+    void (async () => {
+      const pattern = await authorizedSitePattern(sender, request.pattern)
+      if (!pattern) {
+        sendResponse({ ok: false, error: 'unauthorized' } satisfies SiteAiSetResponse)
+        return
+      }
+      const map = await readBooleanMap(SITE_WIDGET_HIDDEN_KEY)
+      map[pattern] = true
+      await chrome.storage.local.set({ [SITE_WIDGET_HIDDEN_KEY]: map })
+      sendResponse({ ok: true } satisfies SiteAiSetResponse)
+    })()
+    return true
+  }
+
+  if (request?.type === OPEN_SIDE_PANEL) {
+    void (async () => {
+      const authorized = await authorizedSitePattern(sender, sitePatternFromUrl(sender.url))
+      if (!authorized) {
+        sendResponse({ ok: false, error: 'unauthorized' } satisfies SiteAiSetResponse)
+        return
+      }
+      const sidePanel = (chrome as unknown as { sidePanel?: SidePanelLike }).sidePanel
+      const sidebarAction = (chrome as unknown as { sidebarAction?: SidebarActionLike }).sidebarAction
+      try {
+        if (typeof sidePanel?.open === 'function' && typeof sender.tab?.id === 'number') {
+          await sidePanel.open({ tabId: sender.tab.id })
+        } else {
+          await sidebarAction?.open?.()
+        }
+        sendResponse({ ok: true } satisfies SiteAiSetResponse)
+      } catch (error) {
+        console.warn('[ContextWatchdog] 从挂件打开侧栏失败:', error)
+        sendResponse({
+          ok: false,
+          error: error instanceof Error ? error.message : String(error)
+        } satisfies SiteAiSetResponse)
+      }
+    })()
     return true
   }
 
