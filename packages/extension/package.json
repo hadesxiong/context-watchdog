@@ -1,8 +1,8 @@
 {
-  "name": "@pasteguard/extension",
+  "name": "@contextwatchdog/extension",
   "version": "1.0.0",
   "private": true,
-  "description": "PasteGuard 浏览器扩展（Chrome / Edge / Firefox，Manifest V3）",
+  "description": "ContextWatchdog 浏览器扩展（Chrome / Edge / Firefox，Manifest V3）",
   "license": "Apache-2.0",
   "type": "module"
 }

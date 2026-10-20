@@ -41,7 +41,7 @@ const loadGate = createSingleFlight()
 const reportHeapSnapshot = (stage: string): void => {
   const memory = (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory
   if (!memory?.usedJSHeapSize) return
-  console.log(`[PasteGuard] 内存快照（${stage}）：JS 堆 ${(memory.usedJSHeapSize / 1048576).toFixed(1)} MB`)
+  console.log(`[ContextWatchdog] 内存快照（${stage}）：JS 堆 ${(memory.usedJSHeapSize / 1048576).toFixed(1)} MB`)
 }
 
 // 实际加载流程（由 loadGate 保证同一时刻只跑一份）
@@ -126,10 +126,10 @@ const runLoad = async (
     reportHeapSnapshot('初始化完成并释放模型引用')
 
     ready = true
-    console.log('[PasteGuard] Content detector ready')
+    console.log('[ContextWatchdog] Content detector ready')
   } catch (error) {
     // 降噪：AI 增强为可选功能，失败仅警告（基础正则检测不受影响）
-    console.warn('[PasteGuard] Failed to load content model (optional feature):', error)
+    console.warn('[ContextWatchdog] Failed to load content model (optional feature):', error)
     throw error
   } finally {
     onWaiting?.(false)
@@ -191,11 +191,11 @@ export const detectContent = async (
       else dropped.push(`${e.entityType} "${e.text}" (${e.confidence.toFixed(2)})`)
     }
     if (dropped.length > 0) {
-      console.log('[PasteGuard] Dropped', dropped.length, 'implausible model entities:', dropped.join('; '))
+      console.log('[ContextWatchdog] Dropped', dropped.length, 'implausible model entities:', dropped.join('; '))
     }
     return kept
   } catch (error) {
-    console.warn('[PasteGuard] Content detection failed:', error)
+    console.warn('[ContextWatchdog] Content detection failed:', error)
     return []
   }
 }

@@ -18,11 +18,11 @@ interface DetectionEngineStatus {
 }
 
 // Profile 持久化 key
-const PROFILE_STORAGE_KEY = 'pasteguard.activeProfile'
+const PROFILE_STORAGE_KEY = 'contextwatchdog.activeProfile'
 // AI 增强检测显式开关（Phase UI：默认关闭，零网络请求零报错）
-const AI_ENABLED_KEY = 'pasteguard.aiEnabled'
+const AI_ENABLED_KEY = 'contextwatchdog.aiEnabled'
 // AI 增强首启引导弹窗「已展示」标记（展示过一次后永不再弹，无论用户是否开启）
-const AI_ONBOARDING_KEY = 'pasteguard.aiOnboardingSeen'
+const AI_ONBOARDING_KEY = 'contextwatchdog.aiOnboardingSeen'
 
 // 计算某检测项的默认替换动作：Profile 显式配置 > 置信度分层 > 替换
 const resolveDefaultAction = (
@@ -176,7 +176,7 @@ export const useDetectionStore = defineStore('detection', () => {
         isProcessing.value = true
         originalText.value = text
 
-        console.log('[PasteGuard] Starting detection for text:', text.substring(0, 100) + '...')
+        console.log('[ContextWatchdog] Starting detection for text:', text.substring(0, 100) + '...')
 
         try {
         const result = await detect(text, activeProfile.value, {
@@ -184,7 +184,7 @@ export const useDetectionStore = defineStore('detection', () => {
         })
         detections.value = result.items
 
-        console.log('[PasteGuard] Detection completed. Found', result.items.length, 'items:')
+        console.log('[ContextWatchdog] Detection completed. Found', result.items.length, 'items:')
 
         // 初始化替换配置（按 Profile 分类型默认策略 + 置信度分层）
         replaceConfigs.value = result.items.map(item => ({
@@ -192,9 +192,9 @@ export const useDetectionStore = defineStore('detection', () => {
             action: resolveDefaultAction(activeProfile.value, item.type, item.confidence)
         }))
 
-        console.log('[PasteGuard] Detection configs initialized')
+        console.log('[ContextWatchdog] Detection configs initialized')
         } catch (error) {
-        console.error('[PasteGuard] Detection failed:', error)
+        console.error('[ContextWatchdog] Detection failed:', error)
         detections.value = []
         } finally {
         isProcessing.value = false
@@ -218,7 +218,7 @@ export const useDetectionStore = defineStore('detection', () => {
         if (profileId === activeProfileId.value) return
         activeProfileId.value = profileId
         storageLocal?.set({ [PROFILE_STORAGE_KEY]: profileId })
-        console.log('[PasteGuard] Profile switched to:', profileId)
+        console.log('[ContextWatchdog] Profile switched to:', profileId)
 
         if (originalText.value) {
             await detectText(originalText.value)
@@ -250,7 +250,7 @@ export const useDetectionStore = defineStore('detection', () => {
     const updateUserProfile = async (profile: ProfileConfig) => {
         const updated = await profileManager.update(profile)
         userProfilesVersion.value++
-        console.log('[PasteGuard] User profile updated:', updated.id)
+        console.log('[ContextWatchdog] User profile updated:', updated.id)
         if (updated.id === activeProfileId.value && originalText.value) {
             await detectText(originalText.value)
         }
@@ -260,7 +260,7 @@ export const useDetectionStore = defineStore('detection', () => {
     const deleteUserProfile = async (id: string) => {
         await profileManager.remove(id)
         userProfilesVersion.value++
-        console.log('[PasteGuard] User profile deleted:', id)
+        console.log('[ContextWatchdog] User profile deleted:', id)
         if (id === activeProfileId.value) {
             await setActiveProfile(DEFAULT_PROFILE_ID)
         }
@@ -306,17 +306,17 @@ export const useDetectionStore = defineStore('detection', () => {
     const copySanitizedText = async () => {
         try {
         await navigator.clipboard.writeText(sanitizedText.value)
-        console.log('[PasteGuard] Copied sanitized text to clipboard')
+        console.log('[ContextWatchdog] Copied sanitized text to clipboard')
         return true
         } catch (error) {
-        console.error('[PasteGuard] Failed to copy text:', error)
+        console.error('[ContextWatchdog] Failed to copy text:', error)
         return false
         }
     }
 
     // 后台加载模型（仅在用户显式启用 AI 增强后调用）
     const initNER = async () => {
-        console.log('[PasteGuard] Initializing models...')
+        console.log('[ContextWatchdog] Initializing models...')
         nerStatus.value = 'loading'
         nerLoadProgress.value = 0
         nerIndeterminate.value = false
@@ -338,7 +338,7 @@ export const useDetectionStore = defineStore('detection', () => {
                 const arm = () => {
                     if (timeoutTimer) clearTimeout(timeoutTimer)
                     timeoutTimer = setTimeout(() => {
-                        console.warn('[PasteGuard] Model load timeout (no progress for 60s)')
+                        console.warn('[ContextWatchdog] Model load timeout (no progress for 60s)')
                         resolve()
                     }, STALL_TIMEOUT)
                 }
@@ -382,10 +382,10 @@ export const useDetectionStore = defineStore('detection', () => {
                 nerLoadProgress.value = 100
                 engineStatus.value.sceneModel = true
                 engineStatus.value.contentModel = true
-                console.log('[PasteGuard] Models loaded successfully')
+                console.log('[ContextWatchdog] Models loaded successfully')
             }).catch(error => {
                 // 降噪：warn 而非 error（AI 增强为可选功能，基础检测不受影响）
-                console.warn('[PasteGuard] Model preload failed (optional feature):', error)
+                console.warn('[ContextWatchdog] Model preload failed (optional feature):', error)
                 settled = true
                 if (timeoutTimer) clearTimeout(timeoutTimer)
                 nerWaitingOtherWindow.value = false
@@ -407,7 +407,7 @@ export const useDetectionStore = defineStore('detection', () => {
                 engineStatus.value.contentModel = false
             }
         } catch (error) {
-            console.warn('[PasteGuard] Model initialization failed (optional feature):', error)
+            console.warn('[ContextWatchdog] Model initialization failed (optional feature):', error)
             nerStatus.value = 'error'
             nerError.value = error instanceof Error ? error.message : '未知错误'
             engineStatus.value.sceneModel = false
@@ -419,7 +419,7 @@ export const useDetectionStore = defineStore('detection', () => {
     const setAiEnabled = async (enabled: boolean) => {
         aiEnabled.value = enabled
         storageLocal?.set({ [AI_ENABLED_KEY]: enabled })
-        console.log('[PasteGuard] AI enhancement', enabled ? 'enabled' : 'disabled')
+        console.log('[ContextWatchdog] AI enhancement', enabled ? 'enabled' : 'disabled')
 
         if (enabled) {
             await initNER()
@@ -438,7 +438,7 @@ export const useDetectionStore = defineStore('detection', () => {
 
     // 重新加载模型
     const retryLoadNER = async () => {
-        console.log('[PasteGuard] Retrying model load...')
+        console.log('[ContextWatchdog] Retrying model load...')
         await initNER()
     }
 
@@ -458,7 +458,7 @@ export const useDetectionStore = defineStore('detection', () => {
         nerWaitingOtherWindow.value = false
         engineStatus.value.sceneModel = false
         engineStatus.value.contentModel = false
-        console.log('[PasteGuard] Models disabled')
+        console.log('[ContextWatchdog] Models disabled')
     }
 
     return {

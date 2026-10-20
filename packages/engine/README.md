@@ -1,6 +1,6 @@
-# @pasteguard/engine
+# @contextwatchdog/engine
 
-PasteGuard 的检测与替换引擎。**纯 TypeScript，宿主无关**——同一份代码服务三个宿主：
+ContextWatchdog 的检测与替换引擎。**纯 TypeScript，宿主无关**——同一份代码服务三个宿主：
 
 | 宿主 | 用途 |
 |------|------|

@@ -1,8 +1,8 @@
 {
-  "name": "@pasteguard/engine",
+  "name": "@contextwatchdog/engine",
   "version": "1.0.0",
   "private": true,
-  "description": "PasteGuard 检测与替换引擎（纯 TypeScript，宿主无关）",
+  "description": "ContextWatchdog 检测与替换引擎（纯 TypeScript，宿主无关）",
   "license": "Apache-2.0",
   "type": "module",
   "main": "src/index.ts",

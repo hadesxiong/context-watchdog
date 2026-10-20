@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
-  <!-- PasteGuard logo: 盾牌 + 四点掩码 -->
+  <!-- ContextWatchdog logo: 盾牌 + 四点掩码 -->
   <!-- 盾牌实心主体 -->
   <path d="M16 2.5 L5 6.5 V15 C5 22.2 9.8 27.9 16 29.5 C22.2 27.9 27 22.2 27 15 V6.5 Z"
         fill="#18181B"/>

@@ -35,7 +35,7 @@ export const dbPasswordRules: DetectionRule[] = [
       const schemeSepIndex = match[0].indexOf('://')
       const passwordIndex = schemeSepIndex + 3 + user.length + 1
 
-      console.log('[PasteGuard] Found DB_PASSWORD in connection string:', password.substring(0, 20) + (password.length > 20 ? '...' : ''))
+      console.log('[ContextWatchdog] Found DB_PASSWORD in connection string:', password.substring(0, 20) + (password.length > 20 ? '...' : ''))
 
       return {
         original: password,
@@ -74,7 +74,7 @@ export const dbPasswordRules: DetectionRule[] = [
 
       const passwordIndex = user.length + 1
 
-      console.log('[PasteGuard] Found DB_PASSWORD (standalone):', password.substring(0, 20) + (password.length > 20 ? '...' : ''))
+      console.log('[ContextWatchdog] Found DB_PASSWORD (standalone):', password.substring(0, 20) + (password.length > 20 ? '...' : ''))
 
       return {
         original: password,

@@ -125,7 +125,7 @@ delete manifest.background.service_worker
 // 侧栏：side_panel → sidebar_action（路径不变，CRXJS 已按 side_panel 打包该页面）
 if (manifest.side_panel?.default_path) {
   manifest.sidebar_action = {
-    default_title: 'PasteGuard - AI脱敏助手',
+    default_title: 'ContextWatchdog - AI脱敏助手',
     default_panel: manifest.side_panel.default_path,
     default_position: 'right'
   }
@@ -142,7 +142,7 @@ if (Array.isArray(manifest.permissions)) {
 // gecko id
 manifest.browser_specific_settings = {
   gecko: {
-    id: 'pasteguard@pasteguard.dev',
+    id: 'contextwatchdog@contextwatchdog.invalid',
     strict_min_version: '121.0'
   }
 }

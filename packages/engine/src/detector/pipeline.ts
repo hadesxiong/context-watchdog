@@ -274,7 +274,7 @@ const propagateKnownValues = (items: DetectionItem[], text: string): DetectionIt
   }
 
   if (propagated.length > 0) {
-    console.log('[PasteGuard] Propagated', propagated.length, 'repeated occurrences of known values')
+    console.log('[ContextWatchdog] Propagated', propagated.length, 'repeated occurrences of known values')
   }
   return [...items, ...propagated]
 }
@@ -286,7 +286,7 @@ const applyWhitelist = (items: DetectionItem[], whitelist?: string[]): Detection
   const set = new Set(whitelist)
   const filtered = items.filter(item => !set.has(item.original))
   if (filtered.length !== items.length) {
-    console.log('[PasteGuard] Whitelist filtered', items.length - filtered.length, 'items')
+    console.log('[ContextWatchdog] Whitelist filtered', items.length - filtered.length, 'items')
   }
   return filtered
 }
@@ -384,17 +384,17 @@ export const detect = async (
   const mergedConfig = { ...defaultConfig, ...config }
   let items: DetectionItem[] = []
 
-  console.log('[PasteGuard] Pipeline started. Profile:', profile.id, 'Text length:', text.length)
+  console.log('[ContextWatchdog] Pipeline started. Profile:', profile.id, 'Text length:', text.length)
 
   // Step 2: 按 Profile 启用的规则类别运行正则规则（正则为基础引擎恒开，
   // SW 粘贴拦截仅依赖此档，不提供关闭入口）
-  console.log('[PasteGuard] Running regex rules for categories:', profile.enabledCategories.join(', '))
+  console.log('[ContextWatchdog] Running regex rules for categories:', profile.enabledCategories.join(', '))
   const enabledRules = profile.enabledCategories.flatMap(cat => rulesByCategory[cat] || [])
   const enableEntropy = profile.enabledCategories.includes('entropy')
   const entropyThresholds = ENTROPY_THRESHOLDS[getSensitivity(profile, 'entropy')]
 
   const regexItems = scanRegexRules(text, enabledRules, { enableEntropy, entropyThresholds })
-  console.log('[PasteGuard] Regex found', regexItems.length, 'items')
+  console.log('[ContextWatchdog] Regex found', regexItems.length, 'items')
 
   // 为正则结果添加 source 标记
   for (const item of regexItems) {
@@ -408,9 +408,9 @@ export const detect = async (
   const customRules = (profile.customRules || []).filter(r => r.enabled)
   if (customRules.length > 0) {
     const custom = scanCustomRules(text, customRules)
-    console.log('[PasteGuard] Custom rules found', custom.items.length, 'items')
+    console.log('[ContextWatchdog] Custom rules found', custom.items.length, 'items')
     for (const warning of custom.warnings) {
-      console.warn('[PasteGuard]', warning)
+      console.warn('[ContextWatchdog]', warning)
     }
     items.push(...custom.items)
   }
@@ -425,13 +425,13 @@ export const detect = async (
       let scene: SceneResult = { type: 'plain', confidence: 0, scores: {} as any }
       try {
         scene = await detectScene(text)
-        console.log('[PasteGuard] Scene:', scene.type, `(${(scene.confidence * 100).toFixed(1)}%)`)
+        console.log('[ContextWatchdog] Scene:', scene.type, `(${(scene.confidence * 100).toFixed(1)}%)`)
       } catch (error) {
-        console.warn('[PasteGuard] Scene detection failed, using default:', error)
+        console.warn('[ContextWatchdog] Scene detection failed, using default:', error)
       }
 
       const segments = buildUncoveredSegments(text, items)
-      console.log('[PasteGuard] Cascade: sending', segments.length, 'uncovered segments to model')
+      console.log('[ContextWatchdog] Cascade: sending', segments.length, 'uncovered segments to model')
 
       const entities: ContentEntity[] = []
       for (const segment of segments) {
@@ -447,13 +447,13 @@ export const detect = async (
           })
         }
       }
-      console.log('[PasteGuard] Found', entities.length, 'entities from model')
+      console.log('[ContextWatchdog] Found', entities.length, 'entities from model')
 
       // 分类实体
       const sensitive = entities.filter(e => categorizeEntity(e) === 'sensitive')
       const uncertain = entities.filter(e => categorizeEntity(e) === 'uncertain')
 
-      console.log(`[PasteGuard] Model categories: ${sensitive.length} sensitive, ${uncertain.length} uncertain`)
+      console.log(`[ContextWatchdog] Model categories: ${sensitive.length} sensitive, ${uncertain.length} uncertain`)
 
       // Step 5a: 验证并添加高置信度模型结果（跳过已被正则覆盖的）
       const validatedSensitive = sensitive.filter(e => validateSensitiveEntity(e))
@@ -489,10 +489,10 @@ export const detect = async (
         }
       }
     } catch (error) {
-      console.warn('[PasteGuard] Content detection failed, using regex only:', error)
+      console.warn('[ContextWatchdog] Content detection failed, using regex only:', error)
     }
   } else {
-    console.log('[PasteGuard] Model not ready, using regex only')
+    console.log('[ContextWatchdog] Model not ready, using regex only')
   }
 
   // 去重 → 排序 → 重叠归并 → 值传播 → 白名单过滤 → 按值聚合 → 占位符按值共享
@@ -505,7 +505,7 @@ export const detect = async (
   items = aggregateByValue(items)
   items = regeneratePlaceholders(items)
 
-  console.log('[PasteGuard] Pipeline completed. Total items:', items.length)
+  console.log('[ContextWatchdog] Pipeline completed. Total items:', items.length)
 
   return { items, text }
 }

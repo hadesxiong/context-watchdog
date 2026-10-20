@@ -12,7 +12,7 @@ import { setPlaceholderLocale } from '@engine/replacer/placeholder'
 import { matchSite, readProtectedSites, PROTECTED_SITES_KEY } from '@engine/sites'
 import { PASTE_DETECT, type PasteDetectResponse } from '@engine/messages'
 import type { ProfileConfig } from '@engine/types'
-import { pasteGuardEntryPoint } from './pasteEntryPoint'
+import { contextWatchdogEntryPoint } from './pasteEntryPoint'
 import {
   attachModelHostPort,
   detectViaModelHost,
@@ -28,7 +28,7 @@ import { MODEL_HOST_DETECT, MODEL_HOST_ENSURE, MODEL_HOST_STATUS } from '@/model
 setPlaceholderLocale(chrome.i18n.getUILanguage().toLowerCase().startsWith('zh') ? 'zh_CN' : 'en')
 
 chrome.runtime.onInstalled.addListener(() => {
-  console.log('[PasteGuard] installed')
+  console.log('[ContextWatchdog] installed')
 })
 
 // 单次粘贴送检的字符上限：超长文本多半不是「粘贴一段配置」，直接放行避免拖垮 SW
@@ -51,7 +51,7 @@ chrome.action.onClicked.addListener(async tab => {
       await sidePanel.open({ tabId: tab.id })
       return
     } catch (error) {
-      console.warn('[PasteGuard] sidePanel.open 失败，回退 sidebarAction:', error)
+      console.warn('[ContextWatchdog] sidePanel.open 失败，回退 sidebarAction:', error)
     }
   }
 
@@ -61,7 +61,7 @@ chrome.action.onClicked.addListener(async tab => {
   try {
     await sidebarAction?.open?.()
   } catch (error) {
-    console.warn('[PasteGuard] 打开侧栏失败:', error)
+    console.warn('[ContextWatchdog] 打开侧栏失败:', error)
   }
 })
 
@@ -69,7 +69,7 @@ chrome.action.onClicked.addListener(async tab => {
 
 let protectedPatterns: string[] = []
 
-const injectPasteGuard = (tabId: number): void => {
+const injectContextWatchdog = (tabId: number): void => {
   // 文案在 SW 侧取好再传进去：注入函数在页面的隔离世界里执行，引用不到模块，
   // 而 chrome.i18n 读的正是 postbuild 从同一份 catalog 生成的 _locales。
   // 兜底用英文（default_locale），免得 _locales 缺失时只显示一个数字。
@@ -77,10 +77,10 @@ const injectPasteGuard = (tabId: number): void => {
   chrome.scripting
     .executeScript({
       target: { tabId, allFrames: true },
-      func: pasteGuardEntryPoint,
+      func: contextWatchdogEntryPoint,
       args: [{ toastRedacted }]
     })
-    .catch(error => console.warn('[PasteGuard] 注入粘贴监听失败:', error))
+    .catch(error => console.warn('[ContextWatchdog] 注入粘贴监听失败:', error))
 }
 
 // 对已打开的匹配标签页立即注入（新增站点即生效，无需等刷新）
@@ -88,7 +88,7 @@ const injectIntoOpenTabs = async (): Promise<void> => {
   const tabs = await chrome.tabs.query({})
   for (const tab of tabs) {
     if (typeof tab.id !== 'number' || !tab.url) continue
-    if (matchSite(tab.url, protectedPatterns)) injectPasteGuard(tab.id)
+    if (matchSite(tab.url, protectedPatterns)) injectContextWatchdog(tab.id)
   }
 }
 
@@ -114,7 +114,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status !== 'loading') return
   const url = tab.url ?? changeInfo.url
   if (!url || !matchSite(url, protectedPatterns)) return
-  injectPasteGuard(tabId)
+  injectContextWatchdog(tabId)
 })
 
 // ---------- 检测服务 ----------

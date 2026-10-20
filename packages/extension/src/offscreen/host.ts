@@ -77,7 +77,7 @@ const connect = (): void => {
     port = chrome.runtime.connect({ name: MODEL_HOST_PORT })
   } catch (error) {
     // 文档正在销毁时 connect 会抛；此时重连没有意义
-    console.warn('[PasteGuard] 模型宿主连接 SW 失败:', error)
+    console.warn('[ContextWatchdog] 模型宿主连接 SW 失败:', error)
     return
   }
 
@@ -122,7 +122,7 @@ const ensure = async (token: string): Promise<void> => {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     publish(withError(state, message, Date.now()), true)
-    console.warn('[PasteGuard] 模型宿主加载失败（AI 可选，正则档不受影响）:', error)
+    console.warn('[ContextWatchdog] 模型宿主加载失败（AI 可选，正则档不受影响）:', error)
     reply({ token, ok: false, ready: false, error: message })
   }
 }

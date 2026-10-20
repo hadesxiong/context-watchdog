@@ -28,16 +28,16 @@
 | 2 | 保留 `NOTICE` 中的署名与商标保留声明 | Apache-2.0 §4(d) |
 | 3 | **改动过的文件必须显著标注"你修改过这些文件"** | Apache-2.0 §4(b) |
 | 4 | 使用**你自己的名称、标识与图标** | Apache-2.0 §6 |
-| 5 | 不得使用 `PasteGuard` 名称或图标，不得暗示获得原作者背书 | 商标保留 |
+| 5 | 不得使用 `ContextWatchdog` 名称或图标，不得暗示获得原作者背书 | 商标保留 |
 
 ### 为什么 fork 必须改名
 
-`PasteGuard` 名称与图标属于作者的商标，**不在 Apache-2.0 的授权范围内**（该许可第 6 条明确排除商标授权，只保留"描述来源"的合理使用）。
+`ContextWatchdog` 名称与图标属于作者的商标，**不在 Apache-2.0 的授权范围内**（该许可第 6 条明确排除商标授权，只保留"描述来源"的合理使用）。
 
 因此：
 
-- ✅ 事实性引用，例如：`Based on PasteGuard (https://github.com/hadesxiong/paste-guard)`；
-- ❌ 把 `PasteGuard` 用作你的衍生作品名称、图标或包名；
+- ✅ 事实性引用，例如：`Based on ContextWatchdog (https://github.com/hadesxiong/context-watchdog)`；
+- ❌ 把 `ContextWatchdog` 用作你的衍生作品名称、图标或包名；
 - ❌ 暗示你的作品是原项目官方版本或获得原作者背书。
 
 ### 建议的 fork 做法

@@ -174,7 +174,7 @@ const loadingCaption = computed(() => {
                         <Logo :size="32" class="shrink-0 drop-shadow-xs" />
                         <div class="flex items-baseline gap-2">
                             <h1 class="text-lg font-semibold text-foreground">
-                                PasteGuard</h1>
+                                ContextWatchdog</h1>
                             <p class="text-sm text-muted-foreground">
                                 {{ t('app_subtitle') }}</p>
                         </div>

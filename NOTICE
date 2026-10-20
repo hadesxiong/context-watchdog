@@ -1,10 +1,10 @@
-PasteGuard
+ContextWatchdog
 Copyright 2026 hadesxiong
 
 This product includes software developed by hadesxiong
-(https://github.com/hadesxiong/paste-guard).
+(https://github.com/hadesxiong/context-watchdog).
 
-The "PasteGuard" name, word mark and logo are trademarks of hadesxiong.
+The "ContextWatchdog" name, word mark and logo are trademarks of hadesxiong.
 The Apache License, Version 2.0, does not grant permission to use them —
 see Section 6 of the License, which expressly reserves trade names,
 trademarks, service marks and product names of the Licensor.
@@ -14,6 +14,6 @@ Derivative works are welcome, but they must:
   2. state prominently that their files have been changed
      (Section 4(b)); and
   3. must not suggest, imply or otherwise imply endorsement by
-     hadesxiong or by the original PasteGuard project.
+     hadesxiong or by the original ContextWatchdog project.
 
 See CONTRIBUTING.md for the full contribution and fork policy.

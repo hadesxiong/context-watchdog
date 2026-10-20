@@ -795,7 +795,7 @@ describe('downloadModel', () => {
   it('多窗口：对方锁已过期 → 直接接管继续下载', async () => {
     const { storage, map } = createMemoryStorage()
     // 对方 30 秒没心跳（关面板/崩溃），锁已过期
-    map.set('pasteguard.modelLock', {
+    map.set('contextwatchdog.modelLock', {
       owner: 'other-dead',
       expiresAt: Date.now() - 1,
       percent: 30,

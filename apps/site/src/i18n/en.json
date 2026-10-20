@@ -2,7 +2,7 @@
   "meta": {
     "lang": "en",
     "ogLocale": "en_US",
-    "title": "PasteGuard — redact in place before you paste, without your data leaving the machine",
+    "title": "ContextWatchdog — redact in place before you paste, without your data leaving the machine",
     "description": "An open-source, free, serverless browser extension. It detects and replaces secrets and personal data before you send text to an AI — entirely on your own device."
   },
   "nav": {
@@ -13,7 +13,7 @@
   "hero": {
     "badge": "Open source · Free · No server · No account",
     "title": "Redact in place, before you paste",
-    "subtitle": "Before you paste a config, a log, a ticket or a stack trace into an AI, PasteGuard finds the secrets and personal data inside it and replaces them with placeholders in place. Detection and replacement happen entirely on your device — the text never leaves it.",
+    "subtitle": "Before you paste a config, a log, a ticket or a stack trace into an AI, ContextWatchdog finds the secrets and personal data inside it and replaces them with placeholders in place. Detection and replacement happen entirely on your device — the text never leaves it.",
     "secondary": "Read the source"
   },
   "download": {
@@ -132,7 +132,7 @@
       },
       {
         "q": "Can I use it commercially?",
-        "a": "Yes — Apache-2.0 permits closed-source commercial use. The conditions are that you keep the copyright and NOTICE notices, mark your changes, and use your own name and icons; the PasteGuard name and icon are the author's trademark and are not covered by the code licence."
+        "a": "Yes — Apache-2.0 permits closed-source commercial use. The conditions are that you keep the copyright and NOTICE notices, mark your changes, and use your own name and icons; the ContextWatchdog name and icon are the author's trademark and are not covered by the code licence."
       },
       {
         "q": "Will there be paid features later?",
@@ -160,7 +160,7 @@
   "privacyPage": {
     "title": "Privacy policy",
     "lead": "In one sentence: we do not collect any of your data. The verifiable details are below.",
-    "noCollect": "PasteGuard does not collect, upload or store any of your text or personal information. No account, no telemetry, no third-party analytics SDK.",
+    "noCollect": "ContextWatchdog does not collect, upload or store any of your text or personal information. No account, no telemetry, no third-party analytics SDK.",
     "flowTitle": "Data flow",
     "flowRows": [
       { "stage": "Text detection and replacement", "where": "on-device (service worker or side-panel memory); never leaves your machine" },

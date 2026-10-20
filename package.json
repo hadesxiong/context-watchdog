@@ -1,13 +1,13 @@
 {
-  "name": "paste-guard",
+  "name": "context-watchdog",
   "version": "1.0.0",
   "description": "AI对话前的本地数据脱敏浏览器插件，保护您的敏感信息",
   "license": "Apache-2.0",
   "author": "hadesxiong",
-  "homepage": "https://github.com/hadesxiong/paste-guard#readme",
+  "homepage": "https://github.com/hadesxiong/context-watchdog#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/hadesxiong/paste-guard.git"
+    "url": "git+https://github.com/hadesxiong/context-watchdog.git"
   },
   "type": "module",
   "scripts": {

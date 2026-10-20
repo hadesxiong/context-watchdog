@@ -2,7 +2,7 @@
 // 纯逻辑供 service worker 与侧栏 UI 共用；单测见 tests/unit/sites.test.ts
 
 // 站点列表在 chrome.storage.local 中的键
-export const PROTECTED_SITES_KEY = 'pasteguard.protectedSites'
+export const PROTECTED_SITES_KEY = 'contextwatchdog.protectedSites'
 
 // 用户输入 → 站点匹配模式（只保留 origin，路径与查询丢弃）：
 //   'chat.example.com'             → 'https://chat.example.com/*'

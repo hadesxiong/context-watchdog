@@ -21,33 +21,33 @@ export const envPasswordRules: DetectionRule[] = [
 
       // 检查是否在白名单中
       if (NON_SENSITIVE_KEYWORDS.some(kw => varName.includes(kw))) {
-        console.log('[PasteGuard] Skipping whitelisted variable:', varName)
+        console.log('[ContextWatchdog] Skipping whitelisted variable:', varName)
         return null
       }
 
       // 检查是否是函数调用（如 os.getenv、process.env）
       if (FUNCTION_PATTERNS.some(pattern => pattern.test(varName))) {
-        console.log('[PasteGuard] Skipping function call:', varName)
+        console.log('[ContextWatchdog] Skipping function call:', varName)
         return null
       }
 
       // 检查变量名是否包含点号（对象属性访问）
       if (varName.includes('.')) {
-        console.log('[PasteGuard] Skipping object property:', varName)
+        console.log('[ContextWatchdog] Skipping object property:', varName)
         return null
       }
 
       // 检查是否是敏感变量名
       const isSensitive = SENSITIVE_KEYWORDS.some(kw => varName.includes(kw))
       if (!isSensitive) {
-        console.log('[PasteGuard] Skipping non-sensitive variable:', varName)
+        console.log('[ContextWatchdog] Skipping non-sensitive variable:', varName)
         return null
       }
 
       // 值质量校验（空值、短值、弱密码、纯数字）
       const { skip, reason } = shouldSkipValue(value)
       if (skip) {
-        console.log('[PasteGuard] Skipping value:', value, `(${reason})`)
+        console.log('[ContextWatchdog] Skipping value:', value, `(${reason})`)
         return null
       }
 
@@ -56,7 +56,7 @@ export const envPasswordRules: DetectionRule[] = [
       const equalsIndex = fullMatch.indexOf('=')
       const valueStartInMatch = fullMatch.indexOf(value, equalsIndex)
 
-      console.log('[PasteGuard] Found ENV_PASSWORD:', varName, '=', value.substring(0, 20) + (value.length > 20 ? '...' : ''))
+      console.log('[ContextWatchdog] Found ENV_PASSWORD:', varName, '=', value.substring(0, 20) + (value.length > 20 ? '...' : ''))
 
       return {
         original: value,
@@ -78,7 +78,7 @@ export const envPasswordRules: DetectionRule[] = [
       // 值质量校验
       const { skip, reason } = shouldSkipValue(password)
       if (skip) {
-        console.log('[PasteGuard] Skipping CLI password:', password, `(${reason})`)
+        console.log('[ContextWatchdog] Skipping CLI password:', password, `(${reason})`)
         return null
       }
 
@@ -87,7 +87,7 @@ export const envPasswordRules: DetectionRule[] = [
         return null
       }
 
-      console.log('[PasteGuard] Found CLI password:', password.substring(0, 20) + (password.length > 20 ? '...' : ''))
+      console.log('[ContextWatchdog] Found CLI password:', password.substring(0, 20) + (password.length > 20 ? '...' : ''))
 
       return {
         original: password,

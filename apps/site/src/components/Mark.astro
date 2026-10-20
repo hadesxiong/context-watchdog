@@ -1,5 +1,5 @@
 ---
-// PasteGuard 标记：盾牌 + 四点掩码
+// ContextWatchdog 标记：盾牌 + 四点掩码
 // 与扩展的 ui/Logo.vue 同一份几何形状（盾牌 = 防护，四点 = 被遮蔽的敏感信息）。
 // 颜色走 CSS 变量，因此自动跟随亮/暗主题。
 interface Props {
@@ -15,7 +15,7 @@ const { size = 32 } = Astro.props
   fill="none"
   xmlns="http://www.w3.org/2000/svg"
   role="img"
-  aria-label="PasteGuard"
+  aria-label="ContextWatchdog"
 >
   <path
     d="M16 2.5 L5 6.5 V15 C5 22.2 9.8 27.9 16 29.5 C22.2 27.9 27 22.2 27 15 V6.5 Z"

@@ -47,7 +47,7 @@ export const detectHighEntropy = (
       const isEmailLike = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/.test(str)
       const isConnectionLike = /:\S*@\S/.test(str)
       if (isEmailLike || isConnectionLike) {
-        console.log('[PasteGuard] High-entropy candidate yields to EMAIL/DB rule:', str.substring(0, 30) + '...')
+        console.log('[ContextWatchdog] High-entropy candidate yields to EMAIL/DB rule:', str.substring(0, 30) + '...')
         continue
       }
     }
@@ -62,7 +62,7 @@ export const detectHighEntropy = (
     const charClasses = [hasLower, hasUpper, hasDigit, hasSpecial].filter(Boolean).length
 
     if (entropy > thresholds.minEntropy && charClasses >= 2) {
-      console.log('[PasteGuard] Found HIGH_ENTROPY:', str.substring(0, 30) + (str.length > 30 ? '...' : ''), 'entropy:', entropy.toFixed(2))
+      console.log('[ContextWatchdog] Found HIGH_ENTROPY:', str.substring(0, 30) + (str.length > 30 ? '...' : ''), 'entropy:', entropy.toFixed(2))
       items.push({
         id: generateId(),
         type: 'HIGH_ENTROPY',

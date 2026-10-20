@@ -1,4 +1,4 @@
-# PasteGuard 待办与状态
+# ContextWatchdog 待办与状态
 
 > 当前架构：`README.md`（快速开始）+ `docs/spec.md`（技术说明）。
 > 手动验收判据：`docs/test-cases.md`；实现轮次与结案沿革：`CHANGELOG.md`。

@@ -7,7 +7,7 @@ import { BUILTIN_PROFILES } from './profiles'
 import { validateCustomPattern } from './rules/customRules'
 import { generateId } from '../utils/id'
 
-export const USER_PROFILES_KEY = 'pasteguard.userProfiles'
+export const USER_PROFILES_KEY = 'contextwatchdog.userProfiles'
 
 // 可注入的 KV 存储接口
 export interface KeyValueStorage {
@@ -206,7 +206,7 @@ export class UserProfileManager {
           .filter((p): p is ProfileConfig => p !== null)
       }
     } catch (error) {
-      console.warn('[PasteGuard] Failed to load user profiles:', error)
+      console.warn('[ContextWatchdog] Failed to load user profiles:', error)
       this.userProfiles = []
     }
   }
@@ -216,7 +216,7 @@ export class UserProfileManager {
     try {
       await this.storage.set({ [USER_PROFILES_KEY]: this.userProfiles })
     } catch (error) {
-      console.warn('[PasteGuard] Failed to persist user profiles:', error)
+      console.warn('[ContextWatchdog] Failed to persist user profiles:', error)
     }
   }
 
@@ -292,7 +292,7 @@ export class UserProfileManager {
     }
 
     await this.persist()
-    console.log('[PasteGuard] Imported', imported.length, 'user profiles')
+    console.log('[ContextWatchdog] Imported', imported.length, 'user profiles')
     return this.userProfiles.slice(-imported.length)
   }
 }

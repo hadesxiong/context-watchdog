@@ -1,11 +1,23 @@
 # Changelog
 
-> PasteGuard 实现轮次与结案记录（按时间倒序，压缩版）。
+> ContextWatchdog 实现轮次与结案记录（按时间倒序，压缩版）。
 > 技术规格：`docs/spec.md`；手动验收判据：`docs/test-cases.md`；当前状态：`TODO.md`；
 > 设计决策与后续迭代规划：`docs/design/`。
 > 单条提交详情见 `git log`；被清退的历史规划文档见 `f35ceae` 之前的 TODO。
 
 ## 2026-10-20
+
+### 品牌改名：PasteGuard → ContextWatchdog
+
+项目更名为 **ContextWatchdog**（中文描述语：**文本守卫**）。这是发布前的纯身份调整，
+不改变任何检测、判定或替换逻辑：
+
+- 包名 `context-watchdog` / `@contextwatchdog/*`；9 个 `chrome.storage` 键前缀改为
+  `contextwatchdog.*`（零用户、未发布，不做迁移）。
+- 扩展名、描述、侧栏与 offscreen 标题、日志前缀 `[ContextWatchdog]`、图标 `aria-label`、
+  发布包名 `contextwatchdog-<version>-<target>.zip`。
+- 站点、README、设计文档与品牌政策同步；中文首次出现处标注「文本守卫」。
+- gecko id 暂为占位 `contextwatchdog@contextwatchdog.invalid`，AMO 首次上传前替换。
 
 ### ① S1：offscreen 模型宿主骨架
 
@@ -174,7 +186,7 @@ Chrome/Edge 下模型运行时移出任何 UI 上下文，放进唯一的 offscr
   206 的总长只信 Content-Range（可见时）、200 才用 Content-Length；三级皆无信息 → unknown
   沿用缓存（离线优先）。下载与断点续传随条目保存 `X-Model-Last-Modified`。补浏览器视角专测
   3 例，测试基线 187 → 190。
-- **验证**：TC-06-9 实测通过（含节流盲区复核：清 `pasteguard.lastModelProbe` 后探测真实执行、
+- **验证**：TC-06-9 实测通过（含节流盲区复核：清 `contextwatchdog.lastModelProbe` 后探测真实执行、
   判定「版本一致」、零重下）。
 
 ### 四项后续候选落地 · F-1/F-2/F-3 结案

@@ -1,4 +1,4 @@
-# PasteGuard 落地页（`apps/site`）
+# ContextWatchdog 落地页（`apps/site`）
 
 Astro 静态站点，`output: 'static'`。产物是纯 HTML + 一个 CSS 文件，**零客户端 JS**
 （`dist` 下不会出现 `.js`）。

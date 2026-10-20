@@ -13,13 +13,13 @@ import {
 // 必须在这层钉死：拼错的协议、被当成站点地址的带路径 URL、少写的 repository，
 // 都要在建站前就报错，而不是等线上出现一个指向别处的 canonical。
 
-const PKG = { repository: 'git+https://github.com/hadesxiong/paste-guard.git' }
+const PKG = { repository: 'git+https://github.com/hadesxiong/context-watchdog.git' }
 
 describe('normalizeRepository', () => {
   it('支持对象与字符串两种写法，并去掉 git+ / .git', () => {
-    expect(normalizeRepository(PKG.repository)).toBe('https://github.com/hadesxiong/paste-guard')
+    expect(normalizeRepository(PKG.repository)).toBe('https://github.com/hadesxiong/context-watchdog')
     expect(normalizeRepository({ type: 'git', url: PKG.repository })).toBe(
-      'https://github.com/hadesxiong/paste-guard'
+      'https://github.com/hadesxiong/context-watchdog'
     )
     expect(normalizeRepository('https://github.com/a/b')).toBe('https://github.com/a/b')
     expect(normalizeRepository('https://github.com/a/b.git')).toBe('https://github.com/a/b')
@@ -74,18 +74,18 @@ describe('resolveSiteLinks', () => {
   it('把 env 映射成页面用的配置；未配置的键为空串', () => {
     const links = resolveSiteLinks(
       {
-        SITE_URL: 'https://pasteguard.example/',
+        SITE_URL: 'https://contextwatchdog.example/',
         EDGE_URL: 'https://microsoftedge.microsoft.com/addons/detail/x/abc',
-        GITEE_URL: 'https://gitee.com/hadesxiong/paste-guard',
+        GITEE_URL: 'https://gitee.com/hadesxiong/context-watchdog',
         ICP_BEIAN: '粤ICP备2026000000号-1',
         DONATE_QR: 'donate/qr.png'
       },
       PKG
     )
 
-    expect(links.siteUrl).toBe('https://pasteguard.example')
-    expect(links.github).toBe('https://github.com/hadesxiong/paste-guard')
-    expect(links.gitee).toBe('https://gitee.com/hadesxiong/paste-guard')
+    expect(links.siteUrl).toBe('https://contextwatchdog.example')
+    expect(links.github).toBe('https://github.com/hadesxiong/context-watchdog')
+    expect(links.gitee).toBe('https://gitee.com/hadesxiong/context-watchdog')
     expect(links.channels.edge).toBe('https://microsoftedge.microsoft.com/addons/detail/x/abc')
     expect(links.channels.cws).toBe('')
     expect(links.channels.amo).toBe('')

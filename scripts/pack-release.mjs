@@ -33,7 +33,7 @@ const pack = (label, sourceDir, suffix) => {
     }
   }
 
-  const file = `${outDir}/pasteguard-${version}-${label}.zip`
+  const file = `${outDir}/contextwatchdog-${version}-${label}.zip`
   rmSync(file, { force: true })
 
   // -r 递归；-X 去掉多余的文件属性（可复现性更好）；在源目录内运行，保证

@@ -34,10 +34,10 @@ export const MODEL_SOURCES = [
 // （缓存是否失效改由 1 字节探测三级比对 ETag / Last-Modified / 长度自动决定，见 probeRemoteVersion）
 export const MODEL_FILE_BYTES = 183403734
 
-export const MODEL_CACHE_NAME = 'pasteguard-models'
+export const MODEL_CACHE_NAME = 'contextwatchdog-models'
 // 缓存 key 固定（合成 URL，.invalid 永不解析、不参与网络请求）；
 // 版本信息（ETag / Last-Modified / 长度 / 时间）存进条目的响应头，由探测结果决定是否作废
-export const MODEL_CACHE_URL = 'https://pasteguard.invalid/models/gliner_small-v2/model_quantized.onnx'
+export const MODEL_CACHE_URL = 'https://contextwatchdog.invalid/models/gliner_small-v2/model_quantized.onnx'
 // 未完成下载的部分文件（跨会话断点续传的落点）
 export const MODEL_PARTIAL_URL = `${MODEL_CACHE_URL}?partial`
 // 旧版缓存 key（带 ?v= 字节数）：命中时一次性搬迁，避免升级用户重下 183MB
@@ -55,10 +55,10 @@ export const PROBE_TIMEOUT_MS = 5_000
 // 离线（navigator.onLine === false）则完全跳过探测，不再白等超时
 export const PROBE_THROTTLE_MS = 24 * 60 * 60 * 1000
 // 探测时间戳的持久化 key（两个标签页/侧栏共享，24h 内只探一次）
-export const PROBE_STAMP_KEY = 'pasteguard.lastModelProbe'
+export const PROBE_STAMP_KEY = 'contextwatchdog.lastModelProbe'
 
 // 多窗口去重：锁键 + 心跳 TTL + 等待方轮询节奏（默认 1.5s × 200 轮 ≈ 5 分钟）
-export const MODEL_LOCK_KEY = 'pasteguard.modelLock'
+export const MODEL_LOCK_KEY = 'contextwatchdog.modelLock'
 export const MODEL_LOCK_TTL_MS = 30_000
 export const LOCK_POLL_MS = 1_500
 export const LOCK_WAIT_ROUNDS = 200
@@ -283,7 +283,7 @@ export const createBrowserModelCache = (): ModelCache | null => {
           source: response.headers.get('x-model-source')
         }
       } catch (error) {
-        console.warn('[PasteGuard] 读取模型缓存失败（改为网络下载）:', error)
+        console.warn('[ContextWatchdog] 读取模型缓存失败（改为网络下载）:', error)
         return null
       }
     },
@@ -296,10 +296,10 @@ export const createBrowserModelCache = (): ModelCache | null => {
             headers: buildModelHeaders(buffer.byteLength, meta?.etag, meta?.source, meta?.lastModified)
           })
         )
-        console.log(`[PasteGuard] 模型已写入缓存（${(buffer.byteLength / 1048576).toFixed(1)} MB），下次启动零下载`)
+        console.log(`[ContextWatchdog] 模型已写入缓存（${(buffer.byteLength / 1048576).toFixed(1)} MB），下次启动零下载`)
       } catch (error) {
         // 缓存失败不影响本次使用（下次再下一遍而已）
-        console.warn('[PasteGuard] 写入模型缓存失败（不影响本次加载）:', error)
+        console.warn('[ContextWatchdog] 写入模型缓存失败（不影响本次加载）:', error)
       }
     },
     clear: async () => {
@@ -307,7 +307,7 @@ export const createBrowserModelCache = (): ModelCache | null => {
         const cache = await caches.open(MODEL_CACHE_NAME)
         await cache.delete(MODEL_CACHE_URL)
       } catch (error) {
-        console.warn('[PasteGuard] 清除模型缓存失败:', error)
+        console.warn('[ContextWatchdog] 清除模型缓存失败:', error)
       }
     },
     migrateLegacy: async () => {
@@ -319,10 +319,10 @@ export const createBrowserModelCache = (): ModelCache | null => {
         await cache.delete(LEGACY_MODEL_CACHE_URL)
         if (buffer.byteLength === 0) return false
         await cache.put(MODEL_CACHE_URL, new Response(buffer, { headers: buildModelHeaders(buffer.byteLength) }))
-        console.log('[PasteGuard] 已将旧版模型缓存迁移到新 key，无需重新下载')
+        console.log('[ContextWatchdog] 已将旧版模型缓存迁移到新 key，无需重新下载')
         return true
       } catch (error) {
-        console.warn('[PasteGuard] 迁移旧版模型缓存失败（将重新下载）:', error)
+        console.warn('[ContextWatchdog] 迁移旧版模型缓存失败（将重新下载）:', error)
         return false
       }
     }
@@ -363,7 +363,7 @@ export const createBrowserPartialStore = (): PartialStore | null => {
           }
         }
       } catch (error) {
-        console.warn('[PasteGuard] 读取未完成的下载进度失败（改为从头下载）:', error)
+        console.warn('[ContextWatchdog] 读取未完成的下载进度失败（改为从头下载）:', error)
         return null
       }
     },
@@ -386,7 +386,7 @@ export const createBrowserPartialStore = (): PartialStore | null => {
         )
       } catch (error) {
         // 部分文件写失败只影响下次续传起点，不影响本次下载
-        console.warn('[PasteGuard] 保存未完成的下载进度失败（不影响本次下载）:', error)
+        console.warn('[ContextWatchdog] 保存未完成的下载进度失败（不影响本次下载）:', error)
       }
     },
     clear: async () => {
@@ -580,7 +580,7 @@ export const downloadModel = async (options: DownloadModelOptions = {}): Promise
 
   // 0) 旧版缓存 key 一次性迁移（升级用户不重下 183MB）
   if (await cache?.migrateLegacy?.()) {
-    console.log('[PasteGuard] 旧版缓存已迁移，无需重新下载')
+    console.log('[ContextWatchdog] 旧版缓存已迁移，无需重新下载')
   }
 
   // 1) 完整缓存命中 → 1 字节探测确认版本（探测失败 = 离线等 → 直接用缓存，离线优先）。
@@ -595,20 +595,20 @@ export const downloadModel = async (options: DownloadModelOptions = {}): Promise
       if (remote) await probeState?.setLastProbeAt(Date.now())
     } else {
       console.log(
-        `[PasteGuard] 跳过版本探测（${isOnline() ? `距上次探测不足 ${Math.round(probeThrottleMs / 3600000)} 小时` : '离线'}），直接沿用缓存`
+        `[ContextWatchdog] 跳过版本探测（${isOnline() ? `距上次探测不足 ${Math.round(probeThrottleMs / 3600000)} 小时` : '离线'}），直接沿用缓存`
       )
     }
     const verdict = compareCachedVersion(cached, remote)
     if (verdict !== 'stale') {
       console.log(
-        `[PasteGuard] 模型命中本地缓存（${(cached.buffer.byteLength / 1048576).toFixed(1)} MB，版本${
+        `[ContextWatchdog] 模型命中本地缓存（${(cached.buffer.byteLength / 1048576).toFixed(1)} MB，版本${
           verdict === 'current' ? '一致' : '未知→离线优先'
         }），跳过下载`
       )
       onProgress?.(100, cached.buffer.byteLength, cached.buffer.byteLength)
       return cached.buffer
     }
-    console.warn('[PasteGuard] 远端模型已更新，本地缓存作废并重新下载')
+    console.warn('[ContextWatchdog] 远端模型已更新，本地缓存作废并重新下载')
     await cache?.clear()
   }
 
@@ -673,7 +673,7 @@ export const downloadModel = async (options: DownloadModelOptions = {}): Promise
     resumeSource = storedPartial.meta.source
     resumeLastModified = storedPartial.meta.lastModified ?? null
     console.log(
-      `[PasteGuard] 命中未完成的下载（${(received / 1048576).toFixed(1)} MB${
+      `[ContextWatchdog] 命中未完成的下载（${(received / 1048576).toFixed(1)} MB${
         total > 0 ? ` / ${(total / 1048576).toFixed(0)} MB` : ''
       }），从断点续传`
     )
@@ -745,7 +745,7 @@ export const downloadModel = async (options: DownloadModelOptions = {}): Promise
           failures.push(`${new URL(url).host}: HTTP ${response.status}`)
           retryAfterSeconds = parseRetryAfter(response.headers.get('retry-after'))
           if (!RETRYABLE_STATUS.has(response.status)) retryAfterSeconds = null
-          console.warn(`[PasteGuard] 模型源返回 ${response.status}:`, url)
+          console.warn(`[ContextWatchdog] 模型源返回 ${response.status}:`, url)
           discardBody(response)
           continue
         }
@@ -773,14 +773,14 @@ export const downloadModel = async (options: DownloadModelOptions = {}): Promise
         // 断点续传语义核对：源站必须真的从我们给的偏移开始
         if (received > 0 && response.status === 200) {
           // 源站忽略 Range（或 If-Range 判定文件已变）→ 从头下载
-          console.warn('[PasteGuard] 源站返回 200（忽略 Range 或文件已更新），重置续传基准从头下载')
+          console.warn('[ContextWatchdog] 源站返回 200（忽略 Range 或文件已更新），重置续传基准从头下载')
           chunks.length = 0
           received = 0
           dropStaleEtag()
         } else if (received > 0 && response.status === 206) {
           const contentRange = parseContentRange(response.headers.get('content-range'))
           if (!contentRange || contentRange.start !== received) {
-            console.warn('[PasteGuard] 续传偏移与响应不一致，重置续传基准', contentRange, received)
+            console.warn('[ContextWatchdog] 续传偏移与响应不一致，重置续传基准', contentRange, received)
             chunks.length = 0
             received = 0
             dropStaleEtag()
@@ -789,7 +789,7 @@ export const downloadModel = async (options: DownloadModelOptions = {}): Promise
           }
           // 跨源续传时用总长兜底：上游换了文件 → 总长变 → 重置，防拼接脏数据
           if (total > 0 && contentRange.total > 0 && contentRange.total !== total) {
-            console.warn('[PasteGuard] 上游文件总长变化，重置续传基准', contentRange.total, total)
+            console.warn('[ContextWatchdog] 上游文件总长变化，重置续传基准', contentRange.total, total)
             chunks.length = 0
             received = 0
             total = contentRange.total
@@ -833,7 +833,7 @@ export const downloadModel = async (options: DownloadModelOptions = {}): Promise
           continue
         }
         if (total > 0 && received > total) {
-          console.warn('[PasteGuard] 收到超出预期的字节数，重置续传基准', received, total)
+          console.warn('[ContextWatchdog] 收到超出预期的字节数，重置续传基准', received, total)
           chunks.length = 0
           received = 0
           total = 0
@@ -858,7 +858,7 @@ export const downloadModel = async (options: DownloadModelOptions = {}): Promise
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         failures.push(`${new URL(url).host}: ${message}`)
-        console.warn(`[PasteGuard] 模型下载第 ${attempt}/${maxAttempts} 次失败:`, message)
+        console.warn(`[ContextWatchdog] 模型下载第 ${attempt}/${maxAttempts} 次失败:`, message)
         await savePartial()
       } finally {
         if (stallTimer) clearTimeout(stallTimer)

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// PasteGuard logo：盾牌 + 四点掩码
+// ContextWatchdog logo：盾牌 + 四点掩码
 // 概念：盾牌 = 防护；四点 = 被遮蔽的敏感信息（••••）
 interface Props {
     size?: number
@@ -17,7 +17,7 @@ withDefaults(defineProps<Props>(), {
         viewBox="0 0 32 32"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
-        aria-label="PasteGuard">
+        aria-label="ContextWatchdog">
         <!-- 盾牌实心主体 -->
         <path
             d="M16 2.5 L5 6.5 V15 C5 22.2 9.8 27.9 16 29.5 C22.2 27.9 27 22.2 27 15 V6.5 Z"

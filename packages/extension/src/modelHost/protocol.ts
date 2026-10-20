@@ -23,7 +23,7 @@ export const MODEL_HOST_PORT = 'pg-model-host'
 export const MODEL_HOST_URL = 'src/offscreen/index.html'
 
 /** 宿主持有的状态写在 storage.session 的这个键下（S2 面板订阅它） */
-export const MODEL_HOST_STATE_KEY = 'pasteguard.modelHost'
+export const MODEL_HOST_STATE_KEY = 'contextwatchdog.modelHost'
 
 export type ModelHostOp = 'PING' | 'ENSURE' | 'DETECT'
 

@@ -1,4 +1,4 @@
-# PasteGuard 产品（技术）说明文档
+# ContextWatchdog 产品（技术）说明文档
 
 > 面向开发者与技术评审。快速开始见 `README.md`，手动验收见 `docs/test-cases.md`，
 > 待办状态见 `TODO.md`，实现轮次与结案沿革见 `CHANGELOG.md`。本文档所有描述以 `src/` 代码为准（版本 1.0.0）。
@@ -118,8 +118,8 @@ npm、GitLab、SendGrid、Postman、Shopify、DigitalOcean、Mailgun、Twilio）
 - **自定义档案**：类别开关、每类别灵敏度、分类型默认策略（replace/keep，UI 为 Switch）、
   `tierLowConfidence`、GLiNER 标签集（预设 个人信息集/密钥集/全部/自定义）、
   值白名单（精确匹配，含传播产生的出现一并豁免）、自定义正则；
-- CRUD 持久化 `chrome.storage.local`（键 `pasteguard.userProfiles`），激活档案
-  `pasteguard.activeProfile`；内置档案用 `builtin: true` 判定，UI 行为差异
+- CRUD 持久化 `chrome.storage.local`（键 `contextwatchdog.userProfiles`），激活档案
+  `contextwatchdog.activeProfile`；内置档案用 `builtin: true` 判定，UI 行为差异
   （无齿轮/不可删除）全部由该标志驱动；
 - **导入导出**：整库 JSON 走剪贴板（避免文件权限）；导入经 schema 校验，坏数据拒绝。
 
@@ -157,7 +157,7 @@ vite 别名把 gliner 静态引用的 `onnxruntime-web/webgpu|webgl` 打桩（EP
 | 重试退避 | 指数退避、尊重 `Retry-After`、封顶 16s |
 | 停滞看门狗 | 30s 无字节中断（下次从断点续）；进度心跳续期，杜绝无 Content-Length 的假超时 |
 | 完整性校验 | 字节数不符不入缓存，绝不拼脏数据 |
-| 多窗口去重 | storage 单键锁 `pasteguard.modelLock`（owner + 30s 心跳 TTL + 进度转发）；抢锁方等待显示「另一窗口下载中」，等待 ≤~5 分钟超时后自行下载；接管前再查缓存 |
+| 多窗口去重 | storage 单键锁 `contextwatchdog.modelLock`（owner + 30s 心跳 TTL + 进度转发）；抢锁方等待显示「另一窗口下载中」，等待 ≤~5 分钟超时后自行下载；接管前再查缓存 |
 | 缓存失效 | 缓存 key 固定（不带版本号）；命中后 1 字节探测（`Range: bytes=0-0`，5s 超时）**三级比对 ETag → Last-Modified → 总长**；⚠️ 浏览器跨源只读得到 CORS 安全列表头（ModelScope CDN 无 `Access-Control-Expose-Headers` → ETag/Content-Range 读不到，206 的 `content-length=1` 绝不当总长，否则 183MB ≠ 1 误判 stale → 每个探测窗重下 183MB，TC-06-9 回归）；离线/信息不可知时优先沿用缓存；旧 `?v=` key 一次性搬迁 |
 | 单飞门闩 | `createSingleFlight`：并发加载复用同一 promise，重试不产生并行下载 |
 | 内存释放 | `initialize()` 后置空对 183MB ArrayBuffer 的引用（ORT session 已持 wasm 堆副本）；前后打 JS 堆快照日志 |
@@ -216,15 +216,15 @@ CSP 收紧后扩展页无任何外部脚本/连接可能。
 
 | 键 | 内容 |
 |----|------|
-| `pasteguard.activeProfile` | 激活档案 id |
-| `pasteguard.aiEnabled` | AI 增强开关 |
-| `pasteguard.aiOnboardingSeen` | 首启引导已看标记 |
-| `pasteguard.userProfiles` | 用户自定义档案全量（CRUD 持久化） |
-| `pasteguard.protectedSites` | 粘贴拦截授权站点列表 |
-| `pasteguard.modelLock` | 多窗口下载锁（owner + 心跳 TTL + 进度） |
-| `pasteguard.lastModelProbe` | 缓存探测节流戳（24h） |
+| `contextwatchdog.activeProfile` | 激活档案 id |
+| `contextwatchdog.aiEnabled` | AI 增强开关 |
+| `contextwatchdog.aiOnboardingSeen` | 首启引导已看标记 |
+| `contextwatchdog.userProfiles` | 用户自定义档案全量（CRUD 持久化） |
+| `contextwatchdog.protectedSites` | 粘贴拦截授权站点列表 |
+| `contextwatchdog.modelLock` | 多窗口下载锁（owner + 心跳 TTL + 进度） |
+| `contextwatchdog.lastModelProbe` | 缓存探测节流戳（24h） |
 | Cache Storage `?partial` 条目 | 模型断点续传分片（元数据在响应头） |
-| Cache Storage `pasteguard.invalid/models/...` | 模型成品缓存（合成 origin，规避扩展页 HTTP 缓存差异） |
+| Cache Storage `contextwatchdog.invalid/models/...` | 模型成品缓存（合成 origin，规避扩展页 HTTP 缓存差异） |
 
 ## 11. 构建与双目标
 
@@ -234,7 +234,7 @@ CSP 收紧后扩展页无任何外部脚本/连接可能。
 - `npm run build:firefox` → `vite build --mode firefox` 仅切 outDir，键转换集中在
   `scripts/postbuild.mjs`：`service_worker → scripts`、`side_panel → sidebar_action`、
   移除 `sidePanel` 权限、补 `browser_specific_settings.gecko`
-  （`pasteguard@pasteguard.dev`，min 121）；
+  （`contextwatchdog@contextwatchdog.invalid`，min 121）；
 - SW 运行时探测 `chrome.sidePanel.open` → 回退 `chrome.sidebarAction.open`，
   同一份 SW 代码服务双浏览器。
 

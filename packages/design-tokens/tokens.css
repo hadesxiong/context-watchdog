@@ -1,5 +1,5 @@
 /* ============================================================
-   PasteGuard 设计 token（唯一来源）
+   ContextWatchdog 设计 token（唯一来源）
 
    这份文件是扩展与落地页共用的**唯一** token 源：
    - 扩展：src/style.css @import 它

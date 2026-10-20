@@ -1,8 +1,8 @@
-# PasteGuard
+# ContextWatchdog
 
 **English** | [简体中文](README.zh-CN.md)
 
-PasteGuard is a Chrome / Firefox extension (Manifest V3) that detects and replaces sensitive information before you send text to an AI. It covers **two tracks at once**: general-text PII (phone numbers, national IDs, bank cards, email, license plates, IP addresses) and developer secrets (API keys, passwords, connection strings, JWTs, private keys). Everything runs locally.
+ContextWatchdog is a Chrome / Firefox extension (Manifest V3) that detects and replaces sensitive information before you send text to an AI. It covers **two tracks at once**: general-text PII (phone numbers, national IDs, bank cards, email, license plates, IP addresses) and developer secrets (API keys, passwords, connection strings, JWTs, private keys). Everything runs locally.
 
 Two ways to use it:
 
@@ -89,7 +89,7 @@ The «＋» in the profile bar clones the current profile into a user profile (e
 - **Custom regex rules**: fill the gaps zero-shot labelling leaves, with two layers of ReDoS defence — static rejection of nested quantifiers (star-height check) plus a 50 ms per-rule runtime budget and a match cap; results go through the full pipeline (dedupe / overlap arbitration / value propagation / whitelist)
 - **JSON import & export**: all custom profiles via the clipboard; on import, ids are regenerated, duplicate names get a numeric suffix, and dangerous regexes are filtered by the sanitiser
 
-Custom profiles live in `chrome.storage.local` (`pasteguard.userProfiles`); built-in profiles cannot be edited or deleted. Stored data is sanitised, and corrupt entries are silently dropped. Implementation details: `docs/spec.md`; test cases: `docs/test-cases.md`.
+Custom profiles live in `chrome.storage.local` (`contextwatchdog.userProfiles`); built-in profiles cannot be edited or deleted. Stored data is sanitised, and corrupt entries are silently dropped. Implementation details: `docs/spec.md`; test cases: `docs/test-cases.md`.
 
 ### Paste interception (optional, per-site opt-in)
 
@@ -97,7 +97,7 @@ Add a site (e.g. `chat.example.com`) in the "Paste interception" card of the sid
 
 - Pasting into an input/textarea on that site **inserts the original text normally first** (input is never blocked), then **replaces it in place** with placeholders once detection finishes
 - Detection runs the existing regex pipeline inside the service worker (the GLiNER model is never loaded in the SW), so no model download is needed
-- The site list is stored in `chrome.storage.local` (`pasteguard.protectedSites`); the SW injects the paste listener on demand via `tabs.onUpdated` — **unauthorised sites are never touched** (the manifest declares no `content_scripts` and does not request `<all_urls>`)
+- The site list is stored in `chrome.storage.local` (`contextwatchdog.protectedSites`); the SW injects the paste listener on demand via `tabs.onUpdated` — **unauthorised sites are never touched** (the manifest declares no `content_scripts` and does not request `<all_urls>`)
 - Safety rails: password fields and hidden inputs are never processed; the rewrite only happens if the inserted text still matches the clipboard character-for-character (if the site rewrote the paste, we back off); if the user keeps typing during detection we back off rather than overwrite new content; if nothing is detected, nothing is touched
 
 v1 limits: only `input[type=text/search]` and `textarea`; `contenteditable` rich-text areas are not handled yet (paste fragments are hard to locate reliably — planned for a later version).
@@ -205,7 +205,7 @@ There is **one** copy of every string: `packages/extension/src/i18n/locales/{en,
 
 Keys are always snake_case: Chrome's `messages.json` only accepts `[a-zA-Z0-9_@]`, so dot-separated hierarchies would make a shared list impossible.
 
-Locale resolution: `pasteguard.locale` (localStorage, explicit choice, synchronously readable) → `chrome.i18n.getUILanguage()` → `navigator.language` → `en`. The switch lives in the side panel's "Detection engine status" panel.
+Locale resolution: `contextwatchdog.locale` (localStorage, explicit choice, synchronously readable) → `chrome.i18n.getUILanguage()` → `navigator.language` → `en`. The switch lives in the side panel's "Detection engine status" panel.
 
 **Placeholders follow the language too**: whether redacted text ends up with `<<手机号>>` or `<<PHONE>>` depends on the current interface language. The engine cannot read browser APIs itself, so the host injects this at startup via `setPlaceholderLocale()`; the parser accepts names from both languages, so mapping tables written before a language switch still round-trip.
 
@@ -294,9 +294,9 @@ Welcome:
 ## Attribution and trademark
 
 - Developed and maintained by **hadesxiong**.
-- **The `PasteGuard` name and icon are the author's trademark** and are not covered by the Apache-2.0 grant (§6 of that licence explicitly excludes trademark rights and preserves only "describing the origin" fair use).
-- Allowed: factual references such as `Based on PasteGuard (https://github.com/hadesxiong/paste-guard)`.
-- Not allowed: using `PasteGuard` as the name, icon, or package name of your derivative; implying that your work is the official version or endorsed by the original author.
+- **The `ContextWatchdog` name and icon are the author's trademark** and are not covered by the Apache-2.0 grant (§6 of that licence explicitly excludes trademark rights and preserves only "describing the origin" fair use).
+- Allowed: factual references such as `Based on ContextWatchdog (https://github.com/hadesxiong/context-watchdog)`.
+- Not allowed: using `ContextWatchdog` as the name, icon, or package name of your derivative; implying that your work is the official version or endorsed by the original author.
 
 See [NOTICE](NOTICE) and [CONTRIBUTING.md](CONTRIBUTING.md).
 

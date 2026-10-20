@@ -57,7 +57,7 @@ AI 应用 / CLI / IDE
    │  OPENAI_BASE_URL=http://127.0.0.1:8787/v1   （或 HTTPS_PROXY，后续）
    ▼
 ┌──────────────────────────────────────────────┐
-│ pasteguard-proxy（本地 Node 进程，127.0.0.1） │
+│ contextwatchdog-proxy（本地 Node 进程，127.0.0.1） │
 │  1) 路由：识别上游（openai/anthropic/自定义） │
 │  2) 抽取：从 JSON 里取出所有 prompt 字符串     │
 │  3) 检测：detect(text, profile)  ← core 复用  │
@@ -126,8 +126,8 @@ onRequest(req)
 
 代码场景下熵规则会频繁命中（长 base64/哈希）。必须提供：
 
-- `pasteguard proxy pause --for 15m`（临时全局放行）
-- 单次放行：审计事件里给出 `eventId`，`pasteguard proxy allow <eventId>` 把该值加入会话级白名单
+- `contextwatchdog proxy pause --for 15m`（临时全局放行）
+- 单次放行：审计事件里给出 `eventId`，`contextwatchdog proxy allow <eventId>` 把该值加入会话级白名单
 - 面板/日志必须能一眼看到"最近被脱敏的值类型分布"，便于快速判断是不是误伤
 
 ---
@@ -169,7 +169,7 @@ interface AuditEvent {
 
 ### 6.3 存储与保留
 
-- 默认 SQLite 单文件（`~/.pasteguard/audit.db`）；`--audit-out file:jsonl` 备选便于企业采集。
+- 默认 SQLite 单文件（`~/.contextwatchdog/audit.db`）；`--audit-out file:jsonl` 备选便于企业采集。
 - 保留期：默认 30 天，`--retention 7d|30d|forever`；启动时清理过期。
 - 企业汇聚：只上传 `AuditEvent`（可聚合），**绝不上传原文/映射**。
 
@@ -178,23 +178,23 @@ interface AuditEvent {
 ## 7. CLI 与集成
 
 ```
-pasteguard proxy start [--port 8787] [--profile universal]
+contextwatchdog proxy start [--port 8787] [--profile universal]
                        [--upstream openai=https://api.openai.com]
                        [--mode sanitize|audit|block] [--fail-closed]
                        [--allow-repo <glob>] [--retention 30d]
-pasteguard proxy status | stop | pause --for 15m
-pasteguard proxy audit [--since 24h] [--type API_KEY] [--json]
-pasteguard proxy allow <eventId>            # 会话级白名单
-pasteguard run -- <cmd>                     # 注入环境变量后运行子进程
+contextwatchdog proxy status | stop | pause --for 15m
+contextwatchdog proxy audit [--since 24h] [--type API_KEY] [--json]
+contextwatchdog proxy allow <eventId>            # 会话级白名单
+contextwatchdog run -- <cmd>                     # 注入环境变量后运行子进程
 ```
 
-`pasteguard run` 的行为（一次性上手的关键）：
+`contextwatchdog run` 的行为（一次性上手的关键）：
 
 ```bash
 OPENAI_BASE_URL=http://127.0.0.1:8787/openai/v1
 ANTHROPIC_BASE_URL=http://127.0.0.1:8787/anthropic
 HTTP_PROXY=http://127.0.0.1:8787        # 可选，后续 MITM 模式
-pasteguard run -- codex
+contextwatchdog run -- codex
 ```
 
 代理内部用**路径前缀**路由上游：`/openai/*` → openai、`/anthropic/*` → anthropic，其余 404（避免变成通用代理）。
@@ -258,7 +258,7 @@ npm run build && npm run probe:layout        # 扩展侧不受影响（本设计
 | **P1 骨架** | `service/` 子包（或 `src/service/`）+ 本地 HTTP server + 路径前缀路由 + 直通/dev 模式 | 不改写时能用代理跑通一次真实对话（字节级透传） |
 | **P2 正则脱敏** | 抽取 + `detect()`（正则档）+ `sanitizeText` 回写 + `audit/sanitize/block` | 集成测试全绿；手工：codex/CLI 请求中的密钥被替换 |
 | **P3 白名单 + 审计** | `profile.whitelist`/规则/域名/仓库路径 + SQLite 事件 + `audit` 子命令 + 红线测试 | 审计库中无原文（自动化断言）；误报逃生通道可用 |
-| **P4 上手体验** | `pasteguard run` 环境注入 + `status/pause/allow` + 文档 | 用户按文档 3 步内跑通 |
+| **P4 上手体验** | `contextwatchdog run` 环境注入 + `status/pause/allow` + 文档 | 用户按文档 3 步内跑通 |
 | **P5 AI 档（可选）** | `NodeDetectionService`（onnxruntime-node）+ 模型本地缓存 | 记录正则 vs AI 的延迟/内存；AI 可独立开关 |
 | **P6 MITM（可选，需评估）** | CA 生成/信任引导 + 仅 LLM 域名白名单 | 明确风险提示；仅作为 base_url 不可用时的兜底 |
 
@@ -268,11 +268,11 @@ npm run build && npm run probe:layout        # 扩展侧不受影响（本设计
 
 | 风险 | 等级 | 处置 |
 |---|---|---|
-| 客户端不读 `OPENAI_BASE_URL` 等环境变量 | 中 | 提供 `pasteguard run` 包装 + 逐应用集成文档；兜底才是 MITM（P6） |
+| 客户端不读 `OPENAI_BASE_URL` 等环境变量 | 中 | 提供 `contextwatchdog run` 包装 + 逐应用集成文档；兜底才是 MITM（P6） |
 | 代码场景误报（熵规则命中哈希/base64） | **高** | 默认 `audit` 观察期 + 逃生通道 + 针对代码场景调 profile；这是本方案最可能的获客阻碍 |
 | 改写破坏 JSON 结构 → 上游 400 | 中 | 改写后 `JSON.parse` 校验；失败即直通 + `degraded` |
 | 审计库变成新的敏感库 | **高** | 红线（§6.1）：默认只存元数据；指纹加盐；映射默认不落盘；TTL + 一键清除 |
 | Node 侧模型后端切换工作量被低估 | 中 | P5 独立成阶段，先交付正则档（可用性已足够） |
-| 代理成为单点故障 | 中 | `fail-open` 默认；`pasteguard proxy stop` 后环境变量回退需文档说明 |
+| 代理成为单点故障 | 中 | `fail-open` 默认；`contextwatchdog proxy stop` 后环境变量回退需文档说明 |
 | 合规：读取"发送出去的代码包" | 高 | 明确同意范围（仅指定域名/字段）、默认不落原文、企业版支持"审计留痕但内容不留" |
 | 托管后端（形态 B）与现有隐私叙事冲突 | 高 | 不作为默认；若做，只接元数据，且在 UI/文档显式声明信任边界 |

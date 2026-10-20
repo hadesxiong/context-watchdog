@@ -1,8 +1,8 @@
-# PasteGuard
+# ContextWatchdog（文本守卫）
 
 [English](README.md) | **简体中文**
 
-PasteGuard 是 Chrome / Firefox 浏览器扩展（Manifest V3），在用户将文本发送给 AI 前，自动检测并替换敏感信息。**双轨检测**：通用文本 PII（手机号/身份证/银行卡/邮箱/车牌/IP）与开发场景密钥（API Key/密码/连接串/JWT/私钥）并重。所有处理在本地完成。
+ContextWatchdog（文本守卫）是 Chrome / Firefox 浏览器扩展（Manifest V3），在用户将文本发送给 AI 前，自动检测并替换敏感信息。**双轨检测**：通用文本 PII（手机号/身份证/银行卡/邮箱/车牌/IP）与开发场景密钥（API Key/密码/连接串/JWT/私钥）并重。所有处理在本地完成。
 
 两种用法：
 
@@ -89,7 +89,7 @@ Tab 栏「＋」基于当前档案克隆出用户自定义档案（⚙ 按钮编
 - **自定义正则规则**（Phase 5）：零样本之外补位，带 ReDoS 双层防护——静态拒绝嵌套量词（星号高度检查）+ 运行时 50ms/条执行预算与匹配上限；结果走完整管线（去重/重叠归并/值传播/白名单）
 - **JSON 导入导出**（Phase 5）：全部自定义档案经剪贴板导入导出；导入时重新生成 id、重名加序号、危险正则被 sanitize 过滤
 
-自定义档案持久化于 `chrome.storage.local`（`pasteguard.userProfiles`），内置档案不可改删；数据经 sanitize 校验，存储损坏自动丢弃。实现细节见 `docs/spec.md`，用例见 `docs/test-cases.md`。
+自定义档案持久化于 `chrome.storage.local`（`contextwatchdog.userProfiles`），内置档案不可改删；数据经 sanitize 校验，存储损坏自动丢弃。实现细节见 `docs/spec.md`，用例见 `docs/test-cases.md`。
 
 ### 粘贴自动拦截（可选，逐站授权）
 
@@ -97,7 +97,7 @@ Tab 栏「＋」基于当前档案克隆出用户自定义档案（⚙ 按钮编
 
 - 在该站点的输入框 / 文本域粘贴时，**先正常插入原文**（不阻塞输入），检测完成后**就地替换**为占位符
 - 检测在 service worker 中跑现有正则管线（GLiNER 模型不会在 SW 加载），无需下载模型
-- 站点列表持久化在 `chrome.storage.local`（`pasteguard.protectedSites`），SW 按 `tabs.onUpdated` 按需注入粘贴监听——**未授权站点零接触**（manifest 不声明 `content_scripts`，也不申请 `<all_urls>`）
+- 站点列表持久化在 `chrome.storage.local`（`contextwatchdog.protectedSites`），SW 按 `tabs.onUpdated` 按需注入粘贴监听——**未授权站点零接触**（manifest 不声明 `content_scripts`，也不申请 `<all_urls>`）
 - 安全护栏：password/隐藏输入框绝不处理；插入文本与剪贴板逐字吻合才改写（站点改写粘贴内容则放弃）；检测期间用户继续输入则放弃改写，绝不覆盖新内容；未检出则完全不动
 
 v1 范围限制：只支持 `input[type=text/search]` 与 `textarea`；`contenteditable` 富文本区域暂不处理（粘贴片段难以可靠定位，待后续版本）。
@@ -205,7 +205,7 @@ docs/design/                       # 设计决策与后续迭代规划（防御�
 
 键名一律 snake_case：Chrome 的 `messages.json` 只接受 `[a-zA-Z0-9_@]`，用点号分层就无法共用一份清单。
 
-语言来源：`pasteguard.locale`（localStorage，显式选择，同步可读）→ `chrome.i18n.getUILanguage()` → `navigator.language` → `en`。设置入口在侧栏的「检测引擎状态」面板里。
+语言来源：`contextwatchdog.locale`（localStorage，显式选择，同步可读）→ `chrome.i18n.getUILanguage()` → `navigator.language` → `en`。设置入口在侧栏的「检测引擎状态」面板里。
 
 **占位符也会跟着语言走**：替换后写进文本的是 `<<手机号>>` 还是 `<<PHONE>>`，取决于当前界面语言。引擎自己读不到浏览器 API，因此由宿主在启动时 `setPlaceholderLocale()` 注入；解析侧同时接受两种语言的名称，所以切换语言后旧映射表仍可还原。
 
@@ -293,9 +293,9 @@ npm run release:pack                # 两个可直接上架的 zip + SHA256SUMS 
 ## 署名与商标
 
 - 本项目由 **hadesxiong** 开发并维护。
-- **`PasteGuard` 名称与图标是作者的商标**，不在 Apache-2.0 的授权范围内（该许可第 6 条明确排除商标授权，只保留"描述来源"的合理使用）。
-- 允许：事实性引用，例如 `Based on PasteGuard (https://github.com/hadesxiong/paste-guard)`。
-- 不允许：把 `PasteGuard` 用作你的衍生作品名称、图标或包名；暗示你的作品是官方版本或获得原作者背书。
+- **`ContextWatchdog` 名称与图标是作者的商标**，不在 Apache-2.0 的授权范围内（该许可第 6 条明确排除商标授权，只保留"描述来源"的合理使用）。
+- 允许：事实性引用，例如 `Based on ContextWatchdog (https://github.com/hadesxiong/context-watchdog)`。
+- 不允许：把 `ContextWatchdog` 用作你的衍生作品名称、图标或包名；暗示你的作品是官方版本或获得原作者背书。
 
 详见 [NOTICE](NOTICE) 与 [CONTRIBUTING.md](CONTRIBUTING.md)。
 

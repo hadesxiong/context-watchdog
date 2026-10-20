@@ -25,7 +25,7 @@ import zhCN from './locales/zh_CN.json'
 export type Locale = 'en' | 'zh_CN'
 
 /** 语言偏好键：'auto' 跟随浏览器，其余为显式指定 */
-export const LOCALE_PREF_KEY = 'pasteguard.locale'
+export const LOCALE_PREF_KEY = 'contextwatchdog.locale'
 
 const CATALOGS: Record<Locale, Record<string, string>> = {
   en: en as Record<string, string>,

@@ -110,7 +110,7 @@ export const validateCustomRule = (
 export const compileCustomRule = (rule: CustomRule): DetectionRule | null => {
   const validation = validateCustomPattern(rule.pattern)
   if (!validation.ok) {
-    console.warn('[PasteGuard] Custom rule rejected:', rule.name, validation.error)
+    console.warn('[ContextWatchdog] Custom rule rejected:', rule.name, validation.error)
     return null
   }
 
@@ -148,7 +148,7 @@ export const scanCustomRules = (text: string, rules: CustomRule[]): CustomScanRe
       // 时间预算：超限中断该规则（静态防护外的运行时兜底）
       if (performance.now() - startTime > CUSTOM_RULE_TIME_BUDGET_MS) {
         warnings.push(`规则「${rule.name}」执行超时（>${CUSTOM_RULE_TIME_BUDGET_MS}ms），已中断`)
-        console.warn('[PasteGuard] Custom rule exceeded time budget:', rule.name)
+        console.warn('[ContextWatchdog] Custom rule exceeded time budget:', rule.name)
         break
       }
       if (++matchCount > CUSTOM_RULE_MAX_MATCHES) {

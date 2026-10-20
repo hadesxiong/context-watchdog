@@ -7,12 +7,12 @@
 //
 // 规则与守卫逻辑的可测版本见 src/content/pasteText.ts（有单测），改动需两边同步；
 // 消息类型常量见 @engine/messages。
-export const pasteGuardEntryPoint = (messages?: { toastRedacted?: string }): void => {
+export const contextWatchdogEntryPoint = (messages?: { toastRedacted?: string }): void => {
   // 语言模板（含 {count} 占位），缺失时退化为「只显示数字」，不至于报错或空白
   const toastTemplate = messages?.toastRedacted ?? '{count}'
   const globalRef = window as unknown as Record<string, unknown>
-  if (globalRef.__pasteGuardInstalled) return
-  globalRef.__pasteGuardInstalled = true
+  if (globalRef.__contextWatchdogInstalled) return
+  globalRef.__contextWatchdogInstalled = true
 
   // 超长粘贴守卫上限（与 service-worker.ts / content/pasteText.ts 的 MAX_PASTE_CHARS
   // 保持一致；注入函数必须自包含，只能内联副本）
@@ -54,9 +54,9 @@ export const pasteGuardEntryPoint = (messages?: { toastRedacted?: string }): voi
   // pointer-events:none 不挡操作）。纯内联样式：注入目标是宿主页面，不能依赖
   // 页面 CSS/主题，也不能引入 class 污染宿主页面
   const showToast = (count: number): void => {
-    document.getElementById('paste-guard-toast')?.remove()
+    document.getElementById('context-watchdog-toast')?.remove()
     const toast = document.createElement('div')
-    toast.id = 'paste-guard-toast'
+    toast.id = 'context-watchdog-toast'
     toast.setAttribute('role', 'status')
     toast.textContent = toastTemplate.split('{count}').join(String(count))
     Object.assign(toast.style, {
@@ -98,7 +98,7 @@ export const pasteGuardEntryPoint = (messages?: { toastRedacted?: string }): voi
     const insert = (text: string, count: number): void => {
       // 选区快照已随 DOM 变更漂出宿主（内容被整块替换/删除）→ 放弃，避免插到别处
       if (snapshot && !host.contains(snapshot.startContainer)) {
-        console.log('[PasteGuard] 放弃插入：选区已脱离编辑区域')
+        console.log('[ContextWatchdog] 放弃插入：选区已脱离编辑区域')
         return
       }
       const sel = window.getSelection()
@@ -106,24 +106,24 @@ export const pasteGuardEntryPoint = (messages?: { toastRedacted?: string }): voi
       sel.removeAllRanges()
       if (snapshot) sel.addRange(snapshot)
       if (!document.execCommand('insertText', false, text)) {
-        console.log('[PasteGuard] 放弃插入：execCommand insertText 失败')
+        console.log('[ContextWatchdog] 放弃插入：execCommand insertText 失败')
         return
       }
       if (count > 0) {
         showToast(count)
-        console.log('[PasteGuard] 富文本粘贴已就地脱敏', count, '处')
+        console.log('[ContextWatchdog] 富文本粘贴已就地脱敏', count, '处')
       }
     }
 
     chrome.runtime.sendMessage({ type: 'PASTE_DETECT', text: pasted }, response => {
       if (chrome.runtime.lastError) {
-        console.log('[PasteGuard] 检测不可用，按原文插入:', chrome.runtime.lastError.message)
+        console.log('[ContextWatchdog] 检测不可用，按原文插入:', chrome.runtime.lastError.message)
         insert(pasted, 0)
         return
       }
       const result = response as { ok?: boolean; sanitized?: string; count?: number } | undefined
       if (!result?.ok || typeof result.sanitized !== 'string') {
-        console.log('[PasteGuard] 检测服务返回异常，按原文插入:', result)
+        console.log('[ContextWatchdog] 检测服务返回异常，按原文插入:', result)
         insert(pasted, 0)
         return
       }
@@ -166,23 +166,23 @@ export const pasteGuardEntryPoint = (messages?: { toastRedacted?: string }): voi
         const start = caret - pasted.length
         // 插入文本必须与剪贴板逐字吻合：站点改写/IME/并发输入都会破坏该前提 → 放弃改写
         if (start < 0 || value.slice(start, caret) !== pasted) {
-          console.log('[PasteGuard] 放弃改写：插入文本与剪贴板不吻合（站点改写/并发输入）')
+          console.log('[ContextWatchdog] 放弃改写：插入文本与剪贴板不吻合（站点改写/并发输入）')
           return
         }
 
         chrome.runtime.sendMessage({ type: 'PASTE_DETECT', text: pasted }, response => {
           if (chrome.runtime.lastError) {
-            console.log('[PasteGuard] 放弃改写：消息发送失败（SW 未响应）:', chrome.runtime.lastError.message)
+            console.log('[ContextWatchdog] 放弃改写：消息发送失败（SW 未响应）:', chrome.runtime.lastError.message)
             return
           }
           const result = response as { ok?: boolean; sanitized?: string; count?: number } | undefined
           if (!result?.ok || typeof result.sanitized !== 'string') {
-            console.log('[PasteGuard] 放弃改写：检测服务返回异常:', result)
+            console.log('[ContextWatchdog] 放弃改写：检测服务返回异常:', result)
             return
           }
           if (result.sanitized === pasted) return // 未检出敏感内容（正常路径，不打日志避免噪音）
           if (el.value !== value) {
-            console.log('[PasteGuard] 放弃改写：用户在检测期间继续输入')
+            console.log('[ContextWatchdog] 放弃改写：用户在检测期间继续输入')
             return
           }
 
@@ -190,7 +190,7 @@ export const pasteGuardEntryPoint = (messages?: { toastRedacted?: string }): voi
           const nextCaret = start + result.sanitized.length
           el.selectionStart = nextCaret
           el.selectionEnd = nextCaret
-          console.log('[PasteGuard] 粘贴已就地脱敏', result.count ?? 0, '处')
+          console.log('[ContextWatchdog] 粘贴已就地脱敏', result.count ?? 0, '处')
           showToast(result.count ?? 1)
         })
       }, 0)

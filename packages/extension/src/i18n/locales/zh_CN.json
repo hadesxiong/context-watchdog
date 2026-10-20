@@ -1,5 +1,5 @@
 {
-  "ext_name": "PasteGuard - AI脱敏助手",
+  "ext_name": "ContextWatchdog（文本守卫）- AI脱敏助手",
   "ext_description": "AI对话前的本地数据脱敏浏览器插件，保护您的敏感信息",
 
   "common_detecting": "检测中...",

@@ -2,11 +2,11 @@
 
 ## 中文
 
-PasteGuard 的全部源代码与设计文档均以公开形式发布，构成可实施的**现有技术**（prior art）。
+ContextWatchdog 的全部源代码与设计文档均以公开形式发布，构成可实施的**现有技术**（prior art）。
 
 作者明确声明：
 
-1. **不申请任何与 PasteGuard 相关的专利**，该声明覆盖本项目及其全部后续迭代内容。
+1. **不申请任何与 ContextWatchdog 相关的专利**，该声明覆盖本项目及其全部后续迭代内容。
 2. **全部设计文档与实现细节均公开可查**：本仓库包含完整的实现代码与 [`docs/`](docs/) 下的设计文档（[`docs/design/`](docs/design/) 为设计决策与后续迭代规划），任何本领域技术人员可据此实现。
 3. **反对任何第三方就本项目已公开的内容申请专利。** 任何抢注专利都可被本仓库的公开记录（代码提交时间、`docs/` 设计文档、CHANGELOG）作为现有技术予以无效。
 
@@ -24,12 +24,12 @@ PasteGuard 的全部源代码与设计文档均以公开形式发布，构成可
 
 ### 英文
 
-All source code and design documentation of PasteGuard are published
+All source code and design documentation of ContextWatchdog are published
 publicly and constitute **enabling prior art**.
 
 The author explicitly declares:
 
-1. **No patent applications will be filed** covering PasteGuard,
+1. **No patent applications will be filed** covering ContextWatchdog,
    including all of its future iterations.
 2. **All design documentation and implementation details are publicly
    available** in this repository.

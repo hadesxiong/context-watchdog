@@ -16,7 +16,7 @@ export const scanRegexRules = (
   const { enableEntropy = true, entropyThresholds } = options
   const items: DetectionItem[] = []
 
-  console.log('[PasteGuard] Scanning regex rules...')
+  console.log('[ContextWatchdog] Scanning regex rules...')
 
   for (const rule of rules) {
     let match
@@ -42,7 +42,7 @@ export const scanRegexRules = (
             }
             if (!existingItem.detectionTypes.includes(rule.type)) {
               existingItem.detectionTypes.push(rule.type)
-              console.log('[PasteGuard] Merged detection types:', existingItem.detectionTypes)
+              console.log('[ContextWatchdog] Merged detection types:', existingItem.detectionTypes)
             }
           } else {
             items.push({
@@ -76,19 +76,19 @@ export const scanRegexRules = (
 
           // 检查是否在白名单中
           if (NON_SENSITIVE_KEYWORDS.some(kw => varName.includes(kw))) {
-            console.log('[PasteGuard] Skipping whitelisted variable:', varName)
+            console.log('[ContextWatchdog] Skipping whitelisted variable:', varName)
             continue
           }
 
           // 检查是否是函数调用
           if (FUNCTION_PATTERNS.some(pattern => pattern.test(varName))) {
-            console.log('[PasteGuard] Skipping function call:', varName)
+            console.log('[ContextWatchdog] Skipping function call:', varName)
             continue
           }
 
           // 检查变量名是否包含点号
           if (varName.includes('.')) {
-            console.log('[PasteGuard] Skipping object property:', varName)
+            console.log('[ContextWatchdog] Skipping object property:', varName)
             continue
           }
 
@@ -109,7 +109,7 @@ export const scanRegexRules = (
             for (const t of newTypes) {
               if (!existingItem.detectionTypes.includes(t)) {
                 existingItem.detectionTypes.push(t)
-                console.log('[PasteGuard] Merged detection types:', existingItem.detectionTypes)
+                console.log('[ContextWatchdog] Merged detection types:', existingItem.detectionTypes)
               }
             }
           } else {
@@ -138,7 +138,7 @@ export const scanRegexRules = (
             }
             if (!existingItem.detectionTypes.includes(rule.type)) {
               existingItem.detectionTypes.push(rule.type)
-              console.log('[PasteGuard] Merged detection types:', existingItem.detectionTypes)
+              console.log('[ContextWatchdog] Merged detection types:', existingItem.detectionTypes)
             }
           } else {
             items.push({
@@ -158,15 +158,15 @@ export const scanRegexRules = (
     }
 
     if (ruleMatchCount > 0) {
-      console.log(`[PasteGuard] Rule ${rule.type} matched ${ruleMatchCount} times`)
+      console.log(`[ContextWatchdog] Rule ${rule.type} matched ${ruleMatchCount} times`)
     }
   }
 
   // 添加高熵字符串检测
   if (enableEntropy) {
-    console.log('[PasteGuard] Detecting high entropy strings...')
+    console.log('[ContextWatchdog] Detecting high entropy strings...')
     const highEntropyItems = detectHighEntropy(text, entropyThresholds)
-    console.log('[PasteGuard] Found', highEntropyItems.length, 'high entropy strings')
+    console.log('[ContextWatchdog] Found', highEntropyItems.length, 'high entropy strings')
     for (const item of highEntropyItems) {
       // 检查是否已有相同位置的检测项
       const existingItem = items.find(
@@ -180,7 +180,7 @@ export const scanRegexRules = (
         }
         if (!existingItem.detectionTypes.includes('HIGH_ENTROPY')) {
           existingItem.detectionTypes.push('HIGH_ENTROPY')
-          console.log('[PasteGuard] Merged detection types:', existingItem.detectionTypes)
+          console.log('[ContextWatchdog] Merged detection types:', existingItem.detectionTypes)
         }
       } else {
         items.push({
@@ -191,6 +191,6 @@ export const scanRegexRules = (
     }
   }
 
-  console.log('[PasteGuard] Total items found:', items.length)
+  console.log('[ContextWatchdog] Total items found:', items.length)
   return items
 }

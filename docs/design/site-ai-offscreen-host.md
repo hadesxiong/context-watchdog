@@ -151,7 +151,7 @@ export interface PasteDetectRequest {
 ### 3.3 侧栏改为客户端
 
 - `useDetectionStore` 的 `initNER()/retryLoadNER()` 改为"请求宿主 ENSURE"，不再 `import preloadModels` 直接调用。
-- 模型状态（`nerStatus/nerLoadProgress/nerLoadBytes/nerIndeterminate/nerWaitingOtherWindow/nerDownloadStarted/nerError`）改为**订阅 `chrome.storage.session['pasteguard.modelHost']`**，字段一一对应，UI 组件零改动。
+- 模型状态（`nerStatus/nerLoadProgress/nerLoadBytes/nerIndeterminate/nerWaitingOtherWindow/nerDownloadStarted/nerError`）改为**订阅 `chrome.storage.session['contextwatchdog.modelHost']`**，字段一一对应，UI 组件零改动。
 - `detectText()` 改为 `runDetection()` 抽象：宿主可用 → 走宿主（拿 `items`）；否则 → 本地 `detect()`（Firefox / 宿主不可用）。宿主的 `items` 与本地完全同构，`replaceConfigs` 初始化逻辑不变。
 - `setAiEnabled(false)` → 通知宿主 UNLOAD（释放内存）+ 关闭 offscreen 文档。
 
@@ -164,7 +164,7 @@ export interface PasteDetectRequest {
 ├─ 展开面板
 │   ├─ 行1：本站 AI 增强  [Switch]   副文案：启用后首段粘贴可能慢 1~2 秒
 │   └─ 行2：在侧边栏中打开 [按钮]     → 发 OPEN_SIDE_PANEL
-└─ 收起/隐藏（×）：写入 pasteguard.siteWidgetHidden[pattern]=true
+└─ 收起/隐藏（×）：写入 contextwatchdog.siteWidgetHidden[pattern]=true
 ```
 
 实现要点（全部内联样式，禁止依赖宿主页面 CSS，同现有 `showToast` 的做法）：
@@ -173,7 +173,7 @@ export interface PasteDetectRequest {
 2. `MutationObserver` 监听自身被移除 → 重挂（节流，仅当 `document.documentElement.contains(node) === false`）。
 3. 状态初始化：注入时发 `SITE_AI_GET`（携带 `location.origin` 规范化后的 pattern）。
 4. 全局 AI 关闭时，Switch 显示为禁用并附文案"需先在侧边栏开启 AI 模型"。
-5. 挂件与粘贴监听共用同一个 `__pasteGuardInstalled` 守卫（同一次注入调用完成两件事）。
+5. 挂件与粘贴监听共用同一个 `__contextWatchdogInstalled` 守卫（同一次注入调用完成两件事）。
 6. **不新增权限**：授权站点本来就有 host permission；挂件不发起网络请求。
 
 ### 3.5 粘贴链路的 AI 二次升级（状态机）
@@ -211,11 +211,11 @@ P6 content script 守卫（全部通过才替换）：
 
 | key | 区域 | 值 | 说明 |
 |---|---|---|---|
-| `pasteguard.aiEnabled` | local | boolean | 既有全局开关，语义变为"允许使用 AI" |
-| `pasteguard.siteAiEnabled` | local | `Record<pattern, boolean>` | 新增，逐站开关 |
-| `pasteguard.siteWidgetHidden` | local | `Record<pattern, boolean>` | 新增，逐站隐藏挂件 |
-| `pasteguard.modelHost` | **session** | `{ state, percent, received, total, waiting, downloadStarted, error, updatedAt }` | 新增，宿主经 Port 上报、**SW 代写**（宿主只有 `chrome.runtime`）；面板订阅 `storage.onChanged` 渲染 |
-| `pasteguard.modelLock` / `lastModelProbe` | local | — | 既有，宿主复用 |
+| `contextwatchdog.aiEnabled` | local | boolean | 既有全局开关，语义变为"允许使用 AI" |
+| `contextwatchdog.siteAiEnabled` | local | `Record<pattern, boolean>` | 新增，逐站开关 |
+| `contextwatchdog.siteWidgetHidden` | local | `Record<pattern, boolean>` | 新增，逐站隐藏挂件 |
+| `contextwatchdog.modelHost` | **session** | `{ state, percent, received, total, waiting, downloadStarted, error, updatedAt }` | 新增，宿主经 Port 上报、**SW 代写**（宿主只有 `chrome.runtime`）；面板订阅 `storage.onChanged` 渲染 |
+| `contextwatchdog.modelLock` / `lastModelProbe` | local | — | 既有，宿主复用 |
 
 有效 AI 判定：`effectiveAI(site) = aiEnabled && siteAiEnabled[site] && hostReady`。
 
