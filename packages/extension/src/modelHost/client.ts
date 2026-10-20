@@ -8,6 +8,7 @@
 // Firefox 上每次开 AI 都会先抛一个异常。
 import type { DetectionItem, ProfileConfig } from '@engine/types'
 import {
+  MODEL_HOST_CLOSED_REASON,
   MODEL_HOST_PORT,
   MODEL_HOST_STATE_KEY,
   MODEL_HOST_URL,
@@ -70,10 +71,15 @@ export const attachModelHostPort = (port: chrome.runtime.Port): void => {
   for (const resolve of portWaiters.splice(0)) resolve(port)
 }
 
+// 主动关闭期间，所有在途请求的失败原因统一标成「已关闭」：
+// 调用方（SW）据此知道这不是故障，不该往 storage.session 写 error 状态。
+let closing = false
+
 const failPending = (error: string): void => {
+  const reason = closing ? MODEL_HOST_CLOSED_REASON : error
   for (const [token, resolve] of pending) {
     pending.delete(token)
-    resolve({ token, ok: false, error })
+    resolve({ token, ok: false, error: reason })
   }
 }
 
@@ -142,6 +148,8 @@ export interface EnsureResult {
 let ensuring: Promise<EnsureResult> | null = null
 
 export const ensureModelHost = (): Promise<EnsureResult> => {
+  // 重新加载 = 关闭意图结束
+  closing = false
   if (!ensuring) {
     ensuring = doEnsure().finally(() => {
       ensuring = null
@@ -223,12 +231,19 @@ export const detectViaModelHost = async (
 
 /** 销毁宿主文档。模型内存随之释放（文档内的引用没有单独的 unload 语义）。 */
 export const closeModelHost = async (): Promise<void> => {
+  closing = true
   const api = offscreen()
   if (!api?.closeDocument) return
   if (!(await api.hasDocument?.())) return
   await api.closeDocument()
   hostPort = null
   failPending('模型宿主已关闭')
+  // 文档已销毁，状态快照不再成立：清掉 session，避免下次开机读到「ready」的幽灵
+  try {
+    await chrome.storage.session.remove(MODEL_HOST_STATE_KEY)
+  } catch {
+    // 清理失败不影响文档已销毁这一事实
+  }
 }
 
 /** 读宿主持久化的状态（S1 用于验收；S2 面板订阅 onChanged） */

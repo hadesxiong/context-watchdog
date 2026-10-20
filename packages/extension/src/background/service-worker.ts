@@ -15,12 +15,22 @@ import type { ProfileConfig } from '@engine/types'
 import { contextWatchdogEntryPoint } from './pasteEntryPoint'
 import {
   attachModelHostPort,
+  closeModelHost,
   detectViaModelHost,
   ensureModelHost,
   isModelHostSupported,
   readModelHostState
 } from '@/modelHost/client'
-import { MODEL_HOST_DETECT, MODEL_HOST_ENSURE, MODEL_HOST_STATUS } from '@/modelHost/protocol'
+import {
+  MODEL_HOST_CLOSED_REASON,
+  MODEL_HOST_CLOSE,
+  MODEL_HOST_DETECT,
+  MODEL_HOST_ENSURE,
+  MODEL_HOST_STATE_KEY,
+  MODEL_HOST_STATUS,
+  type ModelHostDetectResponse
+} from '@/modelHost/protocol'
+import { initialModelHostState, withError } from '@/modelHost/state'
 
 // 占位符语言：SW 里拿不到 localStorage（侧栏的界面语言偏好存在那儿），
 // 只能按浏览器语言定。用户显式改过界面语言时两者可能不同——
@@ -158,14 +168,36 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
   if (!fromExtensionPage) return undefined
 
   if (request?.type === MODEL_HOST_ENSURE) {
-    void ensureModelHost().then(sendResponse)
-    return true
+    // 立即回包：ENSURE 首次可能要下载 183MB，让消息通道挂着几分钟没有意义。
+    // 进度与结果统一经 storage.session 呈现（宿主写，SW 代转）。
+    void ensureModelHost().then(result => {
+      if (!result.supported || result.ok) return
+      // 用户主动关闭 AI：这是在途请求被取消，不是故障，不写 error 状态
+      if (result.error === MODEL_HOST_CLOSED_REASON) return
+      // 文档都没起来（或端口没连上）：写一条错误状态，别让侧栏一直转圈
+      const state = withError(
+        initialModelHostState(Date.now()),
+        result.error ?? '模型宿主启动失败',
+        Date.now()
+      )
+      void chrome.storage.session.set({ [MODEL_HOST_STATE_KEY]: state }).catch(() => undefined)
+    })
+    sendResponse({ ok: true, started: true })
+    return false
   }
 
   if (request?.type === MODEL_HOST_DETECT && typeof request.text === 'string') {
-    void detectViaModelHost(request.text.slice(0, MAX_PASTE_CHARS), request.profile).then(result =>
-      sendResponse(result ?? { ok: false, error: 'model-host-unavailable' })
-    )
+    void detectViaModelHost(request.text.slice(0, MAX_PASTE_CHARS), request.profile).then(result => {
+      const response: ModelHostDetectResponse = result
+        ? { ok: true, sanitized: result.sanitized, count: result.count, items: result.items }
+        : { ok: false, error: 'model-host-unavailable' }
+      sendResponse(response)
+    })
+    return true
+  }
+
+  if (request?.type === MODEL_HOST_CLOSE) {
+    void closeModelHost().then(() => sendResponse({ ok: true }))
     return true
   }
 

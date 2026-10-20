@@ -6,6 +6,16 @@ import { preloadModels, isContentModelReady } from '@/model'
 import { getProfileById, DEFAULT_PROFILE_ID } from '@engine/detector/profiles'
 import { UserProfileManager, createChromeStorage } from '@engine/detector/userProfiles'
 import { getReplacer } from '@engine/replacer'
+import {
+    MODEL_HOST_CLOSE,
+    MODEL_HOST_DETECT,
+    MODEL_HOST_ENSURE,
+    MODEL_HOST_STATE_KEY,
+    MODEL_HOST_STATUS,
+    type ModelHostDetectResponse,
+    type ModelHostStatusResponse
+} from '@/modelHost/protocol'
+import type { ModelHostState } from '@/modelHost/state'
 
 // 模型状态类型
 type ModelStatus = 'idle' | 'loading' | 'success' | 'error' | 'timeout' | 'disabled'
@@ -35,6 +45,26 @@ const resolveDefaultAction = (
     // tierLowConfidence：中低置信度降为仅提示（keep）
     if (profile.tierLowConfidence && confidence !== 'high') return 'keep'
     return 'replace'
+}
+
+// 侧栏 → SW 的单次请求（SW 再转给 offscreen 宿主）。
+// SW 未响应/不可用时返回 null，调用方自行降级——绝不抛异常打断检测。
+const sendRuntimeMessage = <T>(message: unknown): Promise<T | null> => {
+    if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return Promise.resolve(null)
+    return new Promise(resolve => {
+        try {
+            chrome.runtime.sendMessage(message, (response: T) => {
+                // 读 lastError 抑制 "Unchecked runtime.lastError" 噪音
+                if (chrome.runtime.lastError) {
+                    resolve(null)
+                    return
+                }
+                resolve(response ?? null)
+            })
+        } catch {
+            resolve(null)
+        }
+    })
 }
 
 export const useDetectionStore = defineStore('detection', () => {
@@ -131,6 +161,107 @@ export const useDetectionStore = defineStore('detection', () => {
         regexRules: true
     })
 
+    // ---- 模型宿主（Chrome / Edge）----
+    // 侧栏只是客户端：模型跑在唯一的 offscreen 文档里，状态由 SW 代写 storage.session。
+    // Firefox 没有 chrome.offscreen：hostMode=false，继续走本地加载（initLocalNER）。
+    const HOST_STALL_TIMEOUT = 60000
+    let hostCheck: Promise<boolean> | null = null
+    let stallTimer: ReturnType<typeof setTimeout> | null = null
+    const storageApi = typeof chrome !== 'undefined' ? chrome.storage : undefined
+
+    const clearStallTimer = (): void => {
+        if (stallTimer) {
+            clearTimeout(stallTimer)
+            stallTimer = null
+        }
+    }
+
+    // 宿主侧停滞超时：只要还有进度推进就重新计时（与本地路径的 60s 语义一致）
+    const armStallTimer = (): void => {
+        clearStallTimer()
+        stallTimer = setTimeout(() => {
+            if (nerStatus.value !== 'loading') return
+            nerStatus.value = 'timeout'
+            nerWaitingOtherWindow.value = false
+            nerError.value = '模型下载超时（60 秒无进展），请检查网络连接'
+            engineStatus.value.sceneModel = false
+            engineStatus.value.contentModel = false
+        }, HOST_STALL_TIMEOUT)
+    }
+
+    const resetModelUi = (): void => {
+        clearStallTimer()
+        nerLoadProgress.value = 0
+        nerIndeterminate.value = false
+        nerLoadBytes.value = 0
+        nerLoadTotal.value = 0
+        nerWaitingOtherWindow.value = false
+        nerDownloadStarted.value = false
+        nerError.value = null
+    }
+
+    // 把 storage.session 里的宿主状态映射到既有 UI 字段（组件零改动）
+    const applyHostState = (raw: unknown): void => {
+        if (!raw || typeof raw !== 'object') return
+        const state = raw as ModelHostState
+        if (typeof state.phase !== 'string') return
+
+        if (state.phase === 'ready') {
+            clearStallTimer()
+            nerStatus.value = 'success'
+            nerLoadProgress.value = 100
+            nerIndeterminate.value = false
+            nerWaitingOtherWindow.value = false
+            nerError.value = null
+            engineStatus.value.sceneModel = true
+            engineStatus.value.contentModel = true
+            return
+        }
+
+        if (state.phase === 'error') {
+            clearStallTimer()
+            nerStatus.value = 'error'
+            nerWaitingOtherWindow.value = false
+            nerError.value = state.error || '模型加载失败'
+            engineStatus.value.sceneModel = false
+            engineStatus.value.contentModel = false
+            return
+        }
+
+        if (state.phase === 'loading') {
+            nerStatus.value = 'loading'
+            nerWaitingOtherWindow.value = state.waiting === true
+            nerDownloadStarted.value = state.downloadStarted === true
+            if (typeof state.received === 'number') nerLoadBytes.value = state.received
+            if (typeof state.total === 'number') nerLoadTotal.value = state.total
+            if (state.percent < 0) {
+                nerIndeterminate.value = true
+            } else {
+                nerIndeterminate.value = false
+                nerLoadProgress.value = state.percent
+            }
+            if (state.error) nerError.value = state.error
+            armStallTimer()
+        }
+    }
+
+    // 能力探测：Chrome/Edge true，Firefox false。成功结果缓存；失败不缓存（下次再问）
+    const detectHostMode = async (): Promise<boolean> => {
+        if (hostCheck) return hostCheck
+        const result = await sendRuntimeMessage<ModelHostStatusResponse>({ type: MODEL_HOST_STATUS })
+        if (!result) return false
+        hostCheck = Promise.resolve(result.supported === true)
+        return hostCheck
+    }
+
+    // 宿主状态变化 → 立即反映到面板。AI 关闭时忽略，避免"已关闭却显示就绪"。
+    storageApi?.onChanged.addListener((changes, areaName) => {
+        if (areaName !== 'session') return
+        const change = changes[MODEL_HOST_STATE_KEY]
+        if (!change || !aiEnabled.value) return
+        applyHostState(change.newValue)
+    })
+
     // 引擎开关持久化已移除：正则为基础引擎恒开、场景识别并入 AI 分支（pipeline 内部处理）
 
     // 计算属性
@@ -179,15 +310,38 @@ export const useDetectionStore = defineStore('detection', () => {
         console.log('[ContextWatchdog] Starting detection for text:', text.substring(0, 100) + '...')
 
         try {
-        const result = await detect(text, activeProfile.value, {
-            enableContentDetection: aiEnabled.value
-        })
-        detections.value = result.items
+        let items: DetectionItem[] | null = null
 
-        console.log('[ContextWatchdog] Detection completed. Found', result.items.length, 'items:')
+        // Chrome/Edge 且 AI 就绪：走唯一模型宿主（正则 + AI 同一条管线）。
+        // AI 未开 / 未就绪时直接用本地正则，省掉一次消息往返。
+        if (aiEnabled.value && isNERReady.value && (await detectHostMode())) {
+            const hosted = await sendRuntimeMessage<ModelHostDetectResponse>({
+                type: MODEL_HOST_DETECT,
+                text,
+                profile: activeProfile.value
+            })
+            if (hosted?.ok && Array.isArray(hosted.items)) {
+                items = hosted.items
+            } else {
+                console.warn('[ContextWatchdog] 宿主检测不可用，回退本地/正则:', hosted?.error)
+                // 宿主可能被浏览器回收：后台幂等重建（单飞），下一次检测再走宿主
+                void sendRuntimeMessage({ type: MODEL_HOST_ENSURE })
+            }
+        }
+
+        if (!items) {
+            const result = await detect(text, activeProfile.value, {
+                enableContentDetection: aiEnabled.value
+            })
+            items = result.items
+        }
+
+        detections.value = items
+
+        console.log('[ContextWatchdog] Detection completed. Found', items.length, 'items:')
 
         // 初始化替换配置（按 Profile 分类型默认策略 + 置信度分层）
-        replaceConfigs.value = result.items.map(item => ({
+        replaceConfigs.value = items.map(item => ({
             itemId: item.id,
             action: resolveDefaultAction(activeProfile.value, item.type, item.confidence)
         }))
@@ -317,15 +471,26 @@ export const useDetectionStore = defineStore('detection', () => {
     // 后台加载模型（仅在用户显式启用 AI 增强后调用）
     const initNER = async () => {
         console.log('[ContextWatchdog] Initializing models...')
+        resetModelUi()
         nerStatus.value = 'loading'
-        nerLoadProgress.value = 0
-        nerIndeterminate.value = false
-        nerLoadBytes.value = 0
-        nerLoadTotal.value = 0
-        nerWaitingOtherWindow.value = false
-        nerDownloadStarted.value = false
-        nerError.value = null
 
+        if (!(await detectHostMode())) {
+            await initLocalNER()
+            return
+        }
+
+        // 宿主路径：状态完全由 storage.session 驱动，ENSURE 不阻塞 UI。
+        // 先读一次快照（宿主可能已被上一个侧栏会话加载好），再请求幂等加载。
+        void storageApi?.session?.get(MODEL_HOST_STATE_KEY).then((stored: Record<string, unknown>) => {
+            const snapshot = stored?.[MODEL_HOST_STATE_KEY]
+            if (snapshot) applyHostState(snapshot)
+        })
+        armStallTimer()
+        void sendRuntimeMessage({ type: MODEL_HOST_ENSURE })
+    }
+
+    // Firefox 回退：侧栏内加载（与 S2 之前一致）
+    const initLocalNER = async () => {
         try {
             // 停滞超时：只要下载进度还在更新就不算超时（183MB 模型慢网下可能需要数分钟）；
             // 60 秒内无任何进度推进才判定超时
@@ -424,13 +589,12 @@ export const useDetectionStore = defineStore('detection', () => {
         if (enabled) {
             await initNER()
         } else {
+            // Chrome/Edge：销毁 offscreen 文档，模型内存随之释放
+            if (await detectHostMode()) {
+                void sendRuntimeMessage({ type: MODEL_HOST_CLOSE })
+            }
             nerStatus.value = 'disabled'
-            nerLoadProgress.value = 0
-            nerIndeterminate.value = false
-            nerLoadBytes.value = 0
-            nerLoadTotal.value = 0
-            nerWaitingOtherWindow.value = false
-            nerError.value = null
+            resetModelUi()
             engineStatus.value.sceneModel = false
             engineStatus.value.contentModel = false
         }

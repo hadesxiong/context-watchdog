@@ -7,6 +7,18 @@
 
 ## 2026-10-20
 
+### ② S2：侧栏改为模型宿主客户端
+
+Chrome/Edge 下侧栏不再自己加载模型，改为向 SW 请求、订阅宿主状态；Firefox 仍走本地加载：
+
+- `stores/detection.ts`：`initNER()` 先探测宿主能力（`MODEL_HOST_STATUS`），支持则发
+  `MODEL_HOST_ENSURE`，进度/就绪/错误全部由 `storage.session['contextwatchdog.modelHost']`
+  驱动；`detectText()` 在 AI 就绪时经 `MODEL_HOST_DETECT` 走宿主，失败或未就绪回退本地正则。
+- 关闭全局 AI 时发 `MODEL_HOST_CLOSE` 销毁 offscreen 文档，并清掉 session 状态快照。
+- SW 的 ENSURE 改为立即回包（首次下载可能数分钟，占着消息通道没有意义）；
+  文档/端口起不来时写一条 error 状态，避免面板一直转圈。
+- 宿主状态与既有 UI 字段一一映射，组件零改动；60s 停滞超时在宿主路径同样生效。
+
 ### 品牌改名：PasteGuard → ContextWatchdog
 
 项目更名为 **ContextWatchdog**（中文描述语：**文本守卫**）。这是发布前的纯身份调整，

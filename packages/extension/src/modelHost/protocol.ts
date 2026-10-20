@@ -83,6 +83,26 @@ export interface ModelHostReply {
 export const MODEL_HOST_ENSURE = 'MODEL_HOST_ENSURE'
 export const MODEL_HOST_DETECT = 'MODEL_HOST_DETECT'
 export const MODEL_HOST_STATUS = 'MODEL_HOST_STATUS'
+/** 关闭全局 AI：销毁 offscreen 文档，模型内存随之释放 */
+export const MODEL_HOST_CLOSE = 'MODEL_HOST_CLOSE'
+
+/**
+ * 主动关闭宿主时，在途请求的失败原因。
+ * SW 见到这个原因不写 error 状态——否则「用户关掉 AI」会变成面板上的一条报错。
+ */
+export const MODEL_HOST_CLOSED_REASON = '模型宿主已关闭'
+
+/**
+ * MODEL_HOST_DETECT 的回包（SW → 侧栏）。
+ * ok=false 时调用方保留自己的本地/正则结果，绝不把原文当脱敏结果。
+ */
+export interface ModelHostDetectResponse {
+  ok: boolean
+  sanitized?: string
+  count?: number
+  items?: DetectionItem[]
+  error?: string
+}
 
 export interface ModelHostStatusResponse {
   supported: boolean
