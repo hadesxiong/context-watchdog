@@ -9,6 +9,7 @@
 // 消息类型常量见 @engine/messages。
 export const contextWatchdogEntryPoint = (messages?: {
   toastRedacted?: string
+  toastAi?: string
   widget?: {
     ai?: string
     open?: string
@@ -20,6 +21,7 @@ export const contextWatchdogEntryPoint = (messages?: {
 }): void => {
   // 语言模板（含 {count} 占位），缺失时退化为「只显示数字」，不至于报错或空白
   const toastTemplate = messages?.toastRedacted ?? '{count}'
+  const toastAiTemplate = messages?.toastAi ?? '{count}'
   const globalRef = window as unknown as Record<string, unknown>
   if (globalRef.__contextWatchdogInstalled) return
   globalRef.__contextWatchdogInstalled = true
@@ -63,12 +65,12 @@ export const contextWatchdogEntryPoint = (messages?: {
   // 「已脱敏 N 处」轻提示：拦截改写生效时在视口右上角短暂显示（2s 自动消失、
   // pointer-events:none 不挡操作）。纯内联样式：注入目标是宿主页面，不能依赖
   // 页面 CSS/主题，也不能引入 class 污染宿主页面
-  const showToast = (count: number): void => {
+  const showToast = (count: number, template = toastTemplate): void => {
     document.getElementById('context-watchdog-toast')?.remove()
     const toast = document.createElement('div')
     toast.id = 'context-watchdog-toast'
     toast.setAttribute('role', 'status')
-    toast.textContent = toastTemplate.split('{count}').join(String(count))
+    toast.textContent = template.split('{count}').join(String(count))
     Object.assign(toast.style, {
       position: 'fixed',
       top: '16px',
@@ -85,6 +87,67 @@ export const contextWatchdogEntryPoint = (messages?: {
     ;(document.body ?? document.documentElement).appendChild(toast)
     setTimeout(() => toast.remove(), 2000)
   }
+
+  // ---------- AI 二次升级（正则先落地，AI 是增量） ----------
+  // 只对 input/textarea 路径生效；contenteditable 本期保持正则档（见 handleContentEditablePaste）。
+  interface PendingAiUpgrade {
+    token: string
+    el: HTMLInputElement | HTMLTextAreaElement
+    appliedText: string
+    start: number
+    end: number
+    valueAfterApply: string
+    appliedAt: number
+  }
+  let pendingUpgrade: PendingAiUpgrade | null = null
+  // 与 content/pasteText.ts 的 AI_UPGRADE_TTL 一致（注入函数不能 import）
+  const AI_UPGRADE_TTL = 8000
+
+  // 四道守卫全部通过才替换：用户没继续输入 / 正则结果仍在原位 /
+  // AI 确有增量 / 未超时。任何一条不通过都保留正则结果，绝不回退原文。
+  chrome.runtime.onMessage.addListener((message: unknown) => {
+    const result = message as
+      | { type?: string; token?: string; sanitized?: string; count?: number }
+      | null
+    if (result?.type !== 'PASTE_AI_RESULT' || typeof result.token !== 'string') return
+
+    const pending = pendingUpgrade
+    if (!pending || pending.token !== result.token) return
+    pendingUpgrade = null
+
+    const aiSanitized = result.sanitized
+    if (typeof aiSanitized !== 'string') return
+    const el = pending.el
+    if (!el.isConnected) return
+
+    // a) 用户没继续输入
+    if (el.value !== pending.valueAfterApply) return
+    // b) 正则结果仍在原位
+    if (pending.start < 0 || pending.end > el.value.length) return
+    if (el.value.slice(pending.start, pending.end) !== pending.appliedText) return
+    // c) AI 确实有增量
+    if (aiSanitized === pending.appliedText) return
+    // d) 时效
+    if (Date.now() - pending.appliedAt > AI_UPGRADE_TTL) return
+
+    const delta = aiSanitized.length - pending.appliedText.length
+    const caret = el.selectionStart ?? el.value.length
+    const nextValue =
+      el.value.slice(0, pending.start) + aiSanitized + el.value.slice(pending.end)
+    const nextCaret =
+      caret <= pending.start
+        ? caret
+        : caret >= pending.end
+          ? caret + delta
+          : pending.start + aiSanitized.length
+
+    setNativeValue(el, nextValue)
+    const clamped = Math.max(0, Math.min(nextCaret, nextValue.length))
+    el.selectionStart = clamped
+    el.selectionEnd = clamped
+    showToast(result.count ?? 1, toastAiTemplate)
+    console.log('[ContextWatchdog] AI 二次升级完成，共脱敏', result.count ?? 0, '处')
+  })
 
   // contenteditable 改写：富文本区域做不了「先插入后就地替换」的逐字校验——innerText
   // 与 Range.toString() 对 <div>/<br> 的换行建模互不一致，且 Lexical/ProseMirror 类
@@ -180,7 +243,9 @@ export const contextWatchdogEntryPoint = (messages?: {
           return
         }
 
-        chrome.runtime.sendMessage({ type: 'PASTE_DETECT', text: pasted }, response => {
+        // 一次粘贴链路一个 token：AI 结果必须能对上是哪一次粘贴
+        const token = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+        chrome.runtime.sendMessage({ type: 'PASTE_DETECT', text: pasted, token }, response => {
           if (chrome.runtime.lastError) {
             console.log('[ContextWatchdog] 放弃改写：消息发送失败（SW 未响应）:', chrome.runtime.lastError.message)
             return
@@ -190,18 +255,35 @@ export const contextWatchdogEntryPoint = (messages?: {
             console.log('[ContextWatchdog] 放弃改写：检测服务返回异常:', result)
             return
           }
-          if (result.sanitized === pasted) return // 未检出敏感内容（正常路径，不打日志避免噪音）
           if (el.value !== value) {
             console.log('[ContextWatchdog] 放弃改写：用户在检测期间继续输入')
             return
           }
 
-          setNativeValue(el, value.slice(0, start) + result.sanitized + value.slice(caret))
-          const nextCaret = start + result.sanitized.length
-          el.selectionStart = nextCaret
-          el.selectionEnd = nextCaret
-          console.log('[ContextWatchdog] 粘贴已就地脱敏', result.count ?? 0, '处')
-          showToast(result.count ?? 1)
+          const sanitized = result.sanitized
+          if (sanitized !== pasted) {
+            setNativeValue(el, value.slice(0, start) + sanitized + value.slice(caret))
+            const nextCaret = start + sanitized.length
+            el.selectionStart = nextCaret
+            el.selectionEnd = nextCaret
+            console.log('[ContextWatchdog] 粘贴已就地脱敏', result.count ?? 0, '处')
+            showToast(result.count ?? 1)
+          }
+
+          // 无论正则是否命中都记快照：AI 可能补出正则漏掉的实体。
+          // 只保留最近一次粘贴；TTL 过后清掉，避免长期持有元素引用。
+          pendingUpgrade = {
+            token,
+            el,
+            appliedText: sanitized,
+            start,
+            end: start + sanitized.length,
+            valueAfterApply: el.value,
+            appliedAt: Date.now()
+          }
+          setTimeout(() => {
+            if (pendingUpgrade?.token === token) pendingUpgrade = null
+          }, AI_UPGRADE_TTL + 500)
         })
       }, 0)
     },

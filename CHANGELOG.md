@@ -7,6 +7,25 @@
 
 ## 2026-10-20
 
+### ④ S3：粘贴链路 AI 二次升级（数据面）
+
+正则先落地，AI 只做增量；任何失败都保留正则结果：
+
+- `PASTE_DETECT` 新增可选 `token`；content script 对 input/textarea 在正则结果落地后记录
+  `appliedText / range / valueAfterApply / appliedAt` 快照。
+- SW 回包之后按 `effectiveAI = 全局 ∧ 本站 ∧ 宿主就绪` 决定是否 `detectViaModelHost(原文)`，
+  成功后向原 tab/frame 发 `PASTE_AI_RESULT{ token, sanitized, count }`。
+- content script 四道守卫（用户未继续输入 / 正则结果仍在原位 / AI 确有增量 / 8s TTL）
+  全过才二次替换并修正光标，toast 改为「AI 增强后共脱敏 N 处」；否则丢弃。
+- 守卫的可测版本在 `content/pasteText.ts` 的 `planAiUpgrade()`，注入函数内含等价副本；
+  单测覆盖 value-changed / range-moved / no-increment / expired 与三种光标位置。
+- contenteditable 本期仍只走正则档；Firefox 无宿主，粘贴 AI 升级不可用
+  （侧栏手动检测不受影响）。
+
+实测（Chrome for Testing + 真实模型）：正则先脱敏 3 处，AI 补出姓名后共 4 处，
+toast 显示「AI 增强后共脱敏 4 处」。
+基线：typecheck 0 / 360 tests（29 文件）/ 双目标构建通过。
+
 ### ③ S4：页面挂件与逐站 AI 开关（控制面）
 
 授权站点的右下角新增一个自包含挂件，AI 是否生效由「全局 × 本站」两层开关决定：

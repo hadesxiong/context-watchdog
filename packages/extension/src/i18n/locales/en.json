@@ -108,6 +108,7 @@
   "paste_err_grant_failed": "Permission request failed: {error}",
   "paste_ok_removed": "Removed",
   "paste_toast_redacted": "{count} redacted",
+  "paste_toast_ai": "{count} redacted with AI enhancement",
 
   "site_widget_ai": "AI enhancement",
   "site_widget_open": "Open side panel",

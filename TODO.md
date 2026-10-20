@@ -12,7 +12,7 @@
   1. **F8 打 tag**（`1.0.0-ext` / `1.0.0-site`）——`npm run check:versions -- --release` 会先列出还差什么
   2. **F7 互链**：把落地页域名填进 `apps/site/.env` 的 `SITE_URL`，渠道上架后填对应的 `*_URL`（模板见 `apps/site/.env.example`）
   3. **素材**：演示 GIF、打赏收款码、商店截图与 promo tile（清单见 `docs/releasing.md` §6）
-- **1.0.0 之后第①条线（授权站点 AI 增强）：S1–S2、S4 已完成**
+- **1.0.0 之后第①条线（授权站点 AI 增强）：S1–S4 已完成**
   （`docs/design/site-ai-offscreen-host.md` §9）：
   offscreen 文档持有唯一一份模型运行时，SW 经 Port 路由 ENSURE / DETECT；
   Chrome/Edge 有宿主，Firefox 构建不产出该入口也不带 `offscreen` 权限。
@@ -22,12 +22,14 @@
   **S4 已落地**：授权站点右下角挂件（Shadow DOM + 全内联样式，不影响页面布局），
   逐站 AI 开关经 `SITE_AI_GET/SET` 双校验（`sender.url` + 授权列表）；未授权站点零注入，
   删除站点自动清理逐站配置。
-  **S3（粘贴链路 AI 二次升级）尚未开始**。
+  **S3 已落地**：粘贴链路正则先回包并落地，随后按「全局 ∧ 本站 ∧ 宿主就绪」异步补一次
+  AI 检测；四道守卫（未继续输入 / 正则结果仍在原位 / AI 确有增量 / 8s 内）全过才二次替换，
+  失败/超时保留正则结果。**S5（收尾：文案、内存回落验证、探针扩展）尚未开始**。
 - **功能全部实现、验收全绿**：侧栏手动脱敏（正则恒开 + AI 级联可选）、
   自定义档案/正则/白名单与 JSON 导入导出、粘贴自动拦截（逐站授权，含 contenteditable
   富文本与「已脱敏 N 处」轻提示）、GLiNER 推理链路（wasm/模型全本地、断网可用、
   形状门禁拦截幻觉）、Chrome/Firefox 双目标构建、明暗主题、中英双语界面、双语落地页与隐私权政策页。
-- **校验基线**：`npm run typecheck` 0 错误 / `npm test` **352 passed（29 文件）** /
+- **校验基线**：`npm run typecheck` 0 错误 / `npm test` **360 passed（29 文件）** /
   `npm run build` + `npm run build:firefox` 通过 / `npm run probe:layout` 全通过 /
   `npm run site:check` 0 诊断 / `npm run site:build` 通过 / `npm run check:versions` 通过（2 项预期警告：SITE_URL 与渠道未配置）。
 
@@ -36,7 +38,7 @@
 ```bash
 npm run typecheck && npm test && npm run build && npm run build:firefox && npm run probe:layout
 npm run site:check && npm run site:build && npm run check:versions
-# 期望：0 error / 352 passed / 双目标构建通过 / 布局探针全通过 / 站点 0 诊断且构建通过 /
+# 期望：0 error / 360 passed / 双目标构建通过 / 布局探针全通过 / 站点 0 诊断且构建通过 /
 #       check:versions 通过（SITE_URL 与渠道未配置时为 2 项警告）
 ```
 

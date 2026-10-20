@@ -1,6 +1,14 @@
 // 单元用例 - 粘贴「先插入后就地替换」的纯逻辑
 import { describe, it, expect } from 'vitest'
-import { computeInsertionRange, applySanitized, normalizeNewlines, exceedsPasteLimit, MAX_PASTE_CHARS } from '@/content/pasteText'
+import {
+  computeInsertionRange,
+  applySanitized,
+  normalizeNewlines,
+  exceedsPasteLimit,
+  planAiUpgrade,
+  AI_UPGRADE_TTL,
+  MAX_PASTE_CHARS
+} from '@/content/pasteText'
 
 describe('normalizeNewlines', () => {
   it('CRLF → LF（Windows 剪贴板多行文本的常见形态）', () => {
@@ -113,5 +121,109 @@ describe('exceedsPasteLimit（超长粘贴真放行守卫）', () => {
 
   it('超过上限即放行（入口层不发检测消息，防 SW 截断改写吞尾）', () => {
     expect(exceedsPasteLimit('a'.repeat(MAX_PASTE_CHARS + 1))).toBe(true)
+  })
+})
+
+describe('planAiUpgrade（AI 二次升级守卫）', () => {
+  const applied = '<<API_KEY:0>>'
+  const base = 'head ' + applied + ' tail'
+  const snapshot = {
+    token: 't1',
+    appliedText: applied,
+    range: { start: 5, end: 5 + applied.length },
+    valueAfterApply: base,
+    appliedAt: 1000
+  }
+  const input = (overrides: Partial<Parameters<typeof planAiUpgrade>[0]> = {}) => ({
+    snapshot,
+    currentValue: base,
+    currentCaret: base.length,
+    aiSanitized: '<<NAME:0>> ' + applied,
+    aiCount: 2,
+    now: 1500,
+    ...overrides
+  })
+
+  it('四道守卫全过：替换区间、光标随长度修正、返回总处数', () => {
+    const ai = '<<NAME:0>> ' + applied
+    const plan = planAiUpgrade(input({ aiSanitized: ai }))
+    expect(plan.ok).toBe(true)
+    if (!plan.ok) return
+    expect(plan.value).toBe('head ' + ai + ' tail')
+    expect(plan.caret).toBe(('head ' + ai + ' tail').length)
+    expect(plan.count).toBe(2)
+  })
+
+  it('光标在区间前保持不变；落在区间内则移到新结果末尾', () => {
+    const ai = '<<NAME:0>>'
+    const small = { ...snapshot, appliedText: 'sk-abc', range: { start: 5, end: 11 }, valueAfterApply: 'head sk-abc tail' }
+
+    expect(
+      planAiUpgrade(
+        input({ snapshot: small, currentValue: small.valueAfterApply, currentCaret: 2, aiSanitized: ai })
+      )
+    ).toMatchObject({ ok: true, caret: 2 })
+
+    expect(
+      planAiUpgrade(
+        input({ snapshot: small, currentValue: small.valueAfterApply, currentCaret: 7, aiSanitized: ai })
+      )
+    ).toMatchObject({ ok: true, caret: 5 + ai.length })
+  })
+
+  it('AI 结果比正则结果短：后续光标左移', () => {
+    const ai = '<<X:0>>'
+    const plan = planAiUpgrade(input({ aiSanitized: ai }))
+    expect(plan.ok).toBe(true)
+    if (!plan.ok) return
+    expect(plan.value).toBe('head ' + ai + ' tail')
+    expect(plan.caret).toBe(('head ' + ai + ' tail').length)
+  })
+
+  it('a) 用户继续输入 → 丢弃，保留正则结果', () => {
+    expect(
+      planAiUpgrade(input({ currentValue: base + 'x', currentCaret: base.length + 1 }))
+    ).toEqual({ ok: false, reason: 'value-changed' })
+  })
+
+  it('b) 正则结果不在原位 / 区间越界 → 丢弃', () => {
+    const mismatch = { ...snapshot, appliedText: 'sk-XYZ' }
+    expect(
+      planAiUpgrade(input({ snapshot: mismatch, currentValue: mismatch.valueAfterApply }))
+    ).toEqual({ ok: false, reason: 'range-moved' })
+
+    const outOfBounds = { ...snapshot, range: { start: 100, end: 200 } }
+    expect(
+      planAiUpgrade(input({ snapshot: outOfBounds, currentValue: outOfBounds.valueAfterApply }))
+    ).toEqual({ ok: false, reason: 'range-moved' })
+  })
+
+  it('c) AI 结果与正则结果相同 → 丢弃（不做无意义替换）', () => {
+    expect(planAiUpgrade(input({ aiSanitized: applied }))).toEqual({
+      ok: false,
+      reason: 'no-increment'
+    })
+  })
+
+  it('d) 超过 TTL → 丢弃；恰好等于 TTL 仍允许', () => {
+    expect(
+      planAiUpgrade(input({ now: 1000 + AI_UPGRADE_TTL + 1 }))
+    ).toEqual({ ok: false, reason: 'expired' })
+
+    expect(planAiUpgrade(input({ now: 1000 + AI_UPGRADE_TTL })).ok).toBe(true)
+  })
+
+  it('任何失败都不返回可写入的 value（调用方只能保留正则结果）', () => {
+    const cases = [
+      input({ currentValue: base + 'x' }),
+      input({ snapshot: { ...snapshot, appliedText: 'sk-XYZ' }, currentValue: base }),
+      input({ aiSanitized: applied }),
+      input({ now: 1000 + AI_UPGRADE_TTL + 1 })
+    ]
+    for (const candidate of cases) {
+      const plan = planAiUpgrade(candidate)
+      expect(plan.ok).toBe(false)
+      expect('value' in plan).toBe(false)
+    }
   })
 })

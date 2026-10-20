@@ -108,6 +108,7 @@
   "paste_err_grant_failed": "授权失败：{error}",
   "paste_ok_removed": "已移除",
   "paste_toast_redacted": "已脱敏 {count} 处",
+  "paste_toast_ai": "AI 增强后共脱敏 {count} 处",
 
   "site_widget_ai": "本站 AI 增强",
   "site_widget_open": "在侧边栏中打开",

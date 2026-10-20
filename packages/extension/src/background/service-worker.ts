@@ -12,10 +12,12 @@ import { setPlaceholderLocale } from '@engine/replacer/placeholder'
 import { matchSite, readProtectedSites, sitePatternFromUrl, PROTECTED_SITES_KEY } from '@engine/sites'
 import {
   OPEN_SIDE_PANEL,
+  PASTE_AI_RESULT,
   PASTE_DETECT,
   SITE_AI_GET,
   SITE_AI_SET,
   SITE_WIDGET_HIDE,
+  type PasteAiResult,
   type PasteDetectResponse,
   type SiteAiGetResponse,
   type SiteAiSetResponse,
@@ -25,6 +27,7 @@ import {
   AI_ENABLED_KEY,
   SITE_AI_ENABLED_KEY,
   SITE_WIDGET_HIDDEN_KEY,
+  isEffectiveAI,
   readBooleanMap
 } from '@engine/settings'
 import type { ProfileConfig } from '@engine/types'
@@ -123,6 +126,20 @@ const readHostReady = async (): Promise<boolean> => {
   }
 }
 
+// 本站 AI 是否生效：全局允许 ∧ 本站开启 ∧ 宿主就绪（三者缺一即退回正则档）
+const isAiEffectiveForSite = async (pattern: string): Promise<boolean> => {
+  const [globalStore, siteMap, hostReady] = await Promise.all([
+    chrome.storage.local.get(AI_ENABLED_KEY),
+    readBooleanMap(SITE_AI_ENABLED_KEY),
+    readHostReady()
+  ])
+  return isEffectiveAI({
+    globalEnabled: globalStore[AI_ENABLED_KEY] === true,
+    siteEnabled: siteMap[pattern] === true,
+    hostReady
+  })
+}
+
 // 站点移除后清掉它的逐站配置，避免「删了再加回来还是开着」
 const pruneSiteSettings = async (sites: string[]): Promise<void> => {
   const allowed = new Set(sites)
@@ -140,6 +157,7 @@ const injectContextWatchdog = (tabId: number): void => {
   // 而 chrome.i18n 读的正是 postbuild 从同一份 catalog 生成的 _locales。
   // 兜底用英文（default_locale），免得 _locales 缺失时只显示一个数字。
   const toastRedacted = chrome.i18n.getMessage('paste_toast_redacted') || '{count} redacted'
+  const toastAi = chrome.i18n.getMessage('paste_toast_ai') || '{count} redacted with AI'
   const widget = {
     ai: chrome.i18n.getMessage('site_widget_ai') || 'AI enhancement',
     open: chrome.i18n.getMessage('site_widget_open') || 'Open side panel',
@@ -152,7 +170,7 @@ const injectContextWatchdog = (tabId: number): void => {
     .executeScript({
       target: { tabId, allFrames: true },
       func: contextWatchdogEntryPoint,
-      args: [{ toastRedacted, widget }]
+      args: [{ toastRedacted, toastAi, widget }]
     })
     .catch(error => console.warn('[ContextWatchdog] 注入粘贴监听失败:', error))
 }
@@ -194,10 +212,44 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 
 // ---------- 检测服务 ----------
 
+// 正则回包之后的 AI 增量：仅当本站 AI 生效时，向宿主要一份完整结果再回传。
+// 任何失败都只打日志——正则结果已经落地，AI 失败不能影响首答。
+const upgradeWithAI = async (
+  text: string,
+  token: string,
+  sender: chrome.runtime.MessageSender
+): Promise<void> => {
+  const tabId = sender.tab?.id
+  if (typeof tabId !== 'number') return
+  const pattern = sitePatternFromUrl(sender.url)
+  if (!pattern) return
+  if (!(await isAiEffectiveForSite(pattern))) return
+
+  const result = await detectViaModelHost(text)
+  if (!result) {
+    console.log('[ContextWatchdog] AI 二次升级跳过：宿主不可用')
+    return
+  }
+
+  const message: PasteAiResult = {
+    type: PASTE_AI_RESULT,
+    token,
+    sanitized: result.sanitized,
+    count: result.count
+  }
+  try {
+    await chrome.tabs.sendMessage(tabId, message, { frameId: sender.frameId ?? 0 })
+  } catch (error) {
+    // 页面已导航/关闭：丢弃这次升级即可
+    console.log('[ContextWatchdog] AI 结果回传失败:', error)
+  }
+}
+
 chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) => {
   const request = message as {
     type?: string
     text?: string
+    token?: unknown
     profile?: ProfileConfig
     pattern?: unknown
     enabled?: unknown
@@ -207,8 +259,10 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
     if (typeof request.text !== 'string') return undefined
 
     const text = request.text.slice(0, MAX_PASTE_CHARS)
-    // SW 恒走正则档（模型在 offscreen 里，S2 才把 AI 结果补发回来）—— 正则基础引擎恒开，
-    // 无需任何开关配置
+    const token =
+      typeof request.token === 'string' && request.token.length <= 128 ? request.token : undefined
+    // SW 恒走正则档（模型在 offscreen 里，S3 在回包后把 AI 结果补发回来）——
+    // 正则基础引擎恒开，无需任何开关配置
     detect(text)
       .then(result => {
         // sanitizeText 是纯函数（局部 MappingManager），SW 内无状态依赖
@@ -219,6 +273,9 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
           count: result.items.length
         }
         sendResponse(response)
+
+        // 首答已发出：AI 是增量，不阻塞、不影响正则结果
+        if (token) void upgradeWithAI(text, token, sender)
       })
       .catch((error: unknown) => {
         const response: PasteDetectResponse = {

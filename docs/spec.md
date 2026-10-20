@@ -187,7 +187,13 @@ vite 别名把 gliner 静态引用的 `onnxruntime-web/webgpu|webgl` 打桩（EP
   才改写；检测期间用户继续输入（文本发散）即放弃；单次超 20,000 字符在入口层直接
   真放行（此前仅 SW 侧 slice 截断检测范围，入口照单全收会用截断结果整体改写、
   吞掉尾部文本——已修）；
-- **已知限制**：拦截为正则档（模型不进 SW）。
+- **AI 二次升级**（Chrome/Edge）：input/textarea 粘贴时，正则结果先落地并立即回写；
+  SW 在回包之后按「全局 AI ∧ 本站 AI ∧ 宿主就绪」决定是否让 offscreen 宿主重跑一次完整检测。
+  四道守卫（用户未继续输入 / 正则结果仍在原位 / AI 确有增量 / 8s 内）全部通过才二次替换，
+  toast 改为「AI 增强后共脱敏 N 处」；失败或超时一律保留正则结果，绝不回退原文。
+  contenteditable 本期仍只走正则档。
+- **已知限制**：Firefox 无 `chrome.offscreen`，粘贴链路的 AI 升级不可用（侧栏手动检测仍可用）；
+  其他浏览器未授权站点零注入、零接触。
 
 ## 9. 权限与安全模型
 
@@ -200,6 +206,7 @@ vite 别名把 gliner 静态引用的 `onnxruntime-web/webgpu|webgl` 打桩（EP
 | `clipboardWrite` | 脱敏结果与档案 JSON 复制 |
 | `unlimitedStorage` | 183MB 模型缓存配额 |
 | `scripting` | 仅向已授权站点注入粘贴监听 |
+| `offscreen` | 模型宿主（Chrome/Edge；Firefox 构建会移除） |
 | `optional_host_permissions` | 粘贴拦截逐站授权（https + 本地 http，运行时按需申请） |
 
 **CSP**（extension_pages）：`script-src 'self' 'wasm-unsafe-eval'; object-src 'self';
@@ -221,10 +228,16 @@ CSP 收紧后扩展页无任何外部脚本/连接可能。
 | `contextwatchdog.aiOnboardingSeen` | 首启引导已看标记 |
 | `contextwatchdog.userProfiles` | 用户自定义档案全量（CRUD 持久化） |
 | `contextwatchdog.protectedSites` | 粘贴拦截授权站点列表 |
+| `contextwatchdog.siteAiEnabled` | 逐站 AI 开关（`Record<pattern, boolean>`，缺省关闭） |
+| `contextwatchdog.siteWidgetHidden` | 逐站挂件隐藏（`Record<pattern, boolean>`，缺省显示） |
 | `contextwatchdog.modelLock` | 多窗口下载锁（owner + 心跳 TTL + 进度） |
 | `contextwatchdog.lastModelProbe` | 缓存探测节流戳（24h） |
 | Cache Storage `?partial` 条目 | 模型断点续传分片（元数据在响应头） |
 | Cache Storage `contextwatchdog.invalid/models/...` | 模型成品缓存（合成 origin，规避扩展页 HTTP 缓存差异） |
+
+**chrome.storage.session**：`contextwatchdog.modelHost` 保存宿主状态
+（phase / percent / received / total / waiting / downloadStarted / error / updatedAt），
+由 offscreen 宿主经 Port 上报、SW 代写；侧栏订阅 `storage.onChanged` 渲染。
 
 ## 11. 构建与双目标
 
@@ -254,7 +267,8 @@ CSP 收紧后扩展页无任何外部脚本/连接可能。
 
 ## 13. 已知限制
 
-1. 拦截为正则档——GLiNER 推理仅侧栏手动流程可用；
+1. Firefox 无 `chrome.offscreen`：粘贴链路的 AI 二次升级不可用（正则档不受影响），
+   侧栏手动检测仍走 LocalHost；Chrome/Edge 的粘贴 AI 需要全局 AI + 本站 AI + 宿主就绪；
 2. AI 模型 ~183MB 首次下载依赖网络（支持断点续传与多窗口去重）；
 3. GLiNER 对自由文本（无格式姓名/地址）的召回依赖模型能力，中低置信默认仅提示；
    2026-10-18 实机：中文真召回为零，0.25–0.65 区间多为单字幻觉（「户」→姓名 0.456、

@@ -46,3 +46,80 @@ export const applySanitized = (
 export const MAX_PASTE_CHARS = 20000
 
 export const exceedsPasteLimit = (text: string): boolean => text.length > MAX_PASTE_CHARS
+
+// ---------- AI 二次升级守卫（设计 §3.5 P6） ----------
+//
+// 正则结果先落地，AI 是增量：任何一条守卫不通过都**保留正则结果**，
+// 绝不回退成原文，也绝不把 AI 的部分结果拼到已经变化的输入框里。
+// 注入函数里有一份等价的内联副本（无法 import），改动需两边同步。
+
+export const AI_UPGRADE_TTL = 8000
+
+export interface AiUpgradeSnapshot {
+  /** 一次粘贴链路的标识（PASTE_DETECT 带出、PASTE_AI_RESULT 带回） */
+  token: string
+  /** 正则脱敏结果（已写入输入框的内容） */
+  appliedText: string
+  /** 正则结果在 value 中的区间 */
+  range: InsertionRange
+  /** 正则结果落地后的完整 value（用于判断用户是否继续输入） */
+  valueAfterApply: string
+  /** 正则结果落地时间（Date.now()） */
+  appliedAt: number
+}
+
+export interface AiUpgradeInput {
+  snapshot: AiUpgradeSnapshot
+  /** 收到 AI 结果时的 value */
+  currentValue: string
+  /** 收到 AI 结果时的光标位置 */
+  currentCaret: number
+  /** AI（正则 + 模型）重新检测后的脱敏文本 */
+  aiSanitized: string
+  /** AI 结果的总脱敏处数（含正则命中） */
+  aiCount: number
+  now: number
+}
+
+export type AiUpgradePlan =
+  | { ok: true; value: string; caret: number; count: number }
+  | { ok: false; reason: 'value-changed' | 'range-moved' | 'no-increment' | 'expired' }
+
+/**
+ * 判断 AI 结果能否安全替换正则结果。
+ * 返回 ok=true 时给出替换后的完整 value、修正后的光标与总处数。
+ */
+export const planAiUpgrade = (input: AiUpgradeInput): AiUpgradePlan => {
+  const { snapshot, currentValue, currentCaret, aiSanitized, aiCount, now } = input
+  const { range, appliedText } = snapshot
+
+  // a) 用户没继续输入
+  if (currentValue !== snapshot.valueAfterApply) return { ok: false, reason: 'value-changed' }
+  // b) 正则结果仍在原位（区间越界或内容不符都算漂移）
+  if (range.start < 0 || range.end > currentValue.length) return { ok: false, reason: 'range-moved' }
+  if (currentValue.slice(range.start, range.end) !== appliedText) {
+    return { ok: false, reason: 'range-moved' }
+  }
+  // c) AI 确实有增量（结果与正则结果完全相同则不做无意义替换）
+  if (aiSanitized === appliedText) return { ok: false, reason: 'no-increment' }
+  // d) 时效：超过 TTL 的 AI 结果直接丢弃，避免用户已经继续操作后被回写
+  if (now - snapshot.appliedAt > AI_UPGRADE_TTL) return { ok: false, reason: 'expired' }
+
+  const delta = aiSanitized.length - appliedText.length
+  const mappedCaret =
+    currentCaret <= range.start
+      ? currentCaret
+      : currentCaret >= range.end
+        ? currentCaret + delta
+        : range.start + aiSanitized.length
+
+  const value =
+    currentValue.slice(0, range.start) + aiSanitized + currentValue.slice(range.end)
+
+  return {
+    ok: true,
+    value,
+    caret: Math.max(0, Math.min(mappedCaret, value.length)),
+    count: aiCount
+  }
+}

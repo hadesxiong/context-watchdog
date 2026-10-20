@@ -1,6 +1,6 @@
 # ① 授权站点 AI 增强（页面挂件控制面 + 单一模型宿主）
 
-> 状态：**S1–S2、S4 已实现**（offscreen 宿主、侧栏客户端、页面挂件与逐站开关），S3 与 S5 未开始。这是 1.0.0 之后的第一条线。
+> 状态：**S1–S4 已实现**（offscreen 宿主、侧栏客户端、粘贴 AI 升级、页面挂件），S5 收尾未开始。这是 1.0.0 之后的第一条线。
 > 关联现状：`packages/extension/src/background/{service-worker,pasteEntryPoint}.ts`、
 > `packages/engine/src/detector/{pipeline}.ts`、
 > `packages/extension/src/model/{contentDetector,modelDownload}.ts`、
@@ -235,7 +235,7 @@ P6 content script 守卫（全部通过才替换）：
 | SW 被终止重启 | 宿主不受影响；SW 重新 `hasDocument()` 探测 + `PING` 恢复；下载锁/缓存已持久化 |
 | 宿主被浏览器回收 | `hasDocument()` 为 false → 重建文档并 ENSURE（缓存命中，秒级恢复） |
 | 二次升级超时/守卫失败 | 丢弃 AI，保留正则结果 |
-| Firefox | `LocalHost`（侧栏内加载，现状），粘贴 AI 仅当侧栏打开时可用；`siteWidget` 仍可用 |
+| Firefox | `LocalHost`（侧栏内加载，现状），侧栏手动检测可用；粘贴链路的 AI 二次升级不可用（SW 访问不到侧栏模型）；`siteWidget` 仍可用 |
 
 ---
 
