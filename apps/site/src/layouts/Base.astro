@@ -8,7 +8,7 @@ import '@site/styles/global.css'
 import Mark from '@site/components/Mark.astro'
 import { dict, localePath, otherLocale, localeLabel, type SiteLocale } from '@site/i18n'
 import { extensionVersion } from '@site/data/version'
-import { releasesUrlFor, repoUrlFor, blobUrl, treeUrl, siteUrl, hasCanonicalOrigin } from '@site/data/links'
+import { releasesUrlFor, repoUrlFor, blobUrl, treeUrl, siteUrl, hasCanonicalOrigin, icp, police } from '@site/data/links'
 
 interface Props {
   locale: SiteLocale
@@ -104,6 +104,22 @@ const pageTitle = d.meta.title
         <p>
           <span class="pg-footer-version">v{extensionVersion}</span> · {d.footer.static}
         </p>
+        {
+          (icp || police) && (
+            <p class="pg-footer-beian">
+              {icp && (
+                <a href="https://beian.miit.gov.cn/" rel="noopener">
+                  {icp}
+                </a>
+              )}
+              {police && (
+                <a href="https://beian.mps.gov.cn/" rel="noopener">
+                  {police}
+                </a>
+              )}
+            </p>
+          )
+        }
       </div>
     </footer>
   </body>

@@ -7,7 +7,7 @@
 // 两个语言页面共用这一个组件，避免 / 与 /en/ 两处各写一遍结构（结构一旦
 // 分叉，两边迟早会长得不一样）。
 import { dict, format, type SiteLocale } from '@site/i18n'
-import { repoUrlFor } from '@site/data/links'
+import { repoUrlFor, donateQr } from '@site/data/links'
 import { tests, probes, measuredAt, count } from '@site/data/evidence'
 import { supporters } from '@site/data/supporters'
 import { extensionVersion } from '@site/data/version'
@@ -174,7 +174,13 @@ const supporterLabel = supporters.length === 0 ? d.evidence.supportersNone : d.e
     <p class="pg-lead">{d.donate.lead}</p>
 
     <div class="pg-donate">
-      <div class="pg-qr">{d.donate.qrPlaceholder}</div>
+      {
+        donateQr ? (
+          <img class="pg-qr-img" src={donateQr} alt={d.donate.qrAlt} width="220" height="220" />
+        ) : (
+          <div class="pg-qr">{d.donate.qrPlaceholder}</div>
+        )
+      }
       <div class="pg-card">
         <p>{d.donate.body}</p>
       </div>

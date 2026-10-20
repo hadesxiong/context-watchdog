@@ -144,7 +144,8 @@
     "title": "Support the project",
     "lead": "The project is free, serverless and account-free, so it earns nothing to cover the time it takes to maintain. If it ever saved you from one incident, you can buy me a coffee.",
     "body": "Donating unlocks nothing — there is nothing locked. The supporter list and the payment code are maintained locally, with no third-party analytics involved.",
-    "qrPlaceholder": "Payment code to be added"
+    "qrPlaceholder": "Payment code to be added",
+    "qrAlt": "Donation payment QR code"
   },
   "footer": {
     "repo": "Source repository",

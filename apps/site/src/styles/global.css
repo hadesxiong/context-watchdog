@@ -623,6 +623,18 @@ a.pg-channel:hover {
   background: var(--card);
 }
 
+/* 真实收款码：固定白底。二维码靠明暗对比被扫码器识别，深色主题下若透明会扫不出来 */
+.pg-qr-img {
+  display: block;
+  width: 100%;
+  max-width: 15rem;
+  height: auto;
+  padding: 0.75rem;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) + 2px);
+}
+
 .pg-footer {
   border-top: 1px solid var(--border);
   padding: 2.5rem 0 3rem;
@@ -647,6 +659,22 @@ a.pg-channel:hover {
 
 .pg-footer-version {
   font-variant-numeric: tabular-nums;
+}
+
+/* 备案号：中国境内托管站点的法定义务，必须可点（链到工信部 / 公安备案查询）。
+   值来自 .env，留空则整行不渲染 —— fork 不会继承别人的备案号。 */
+.pg-footer-beian {
+  margin-top: 0.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  font-size: 0.8125rem;
+}
+.pg-footer-beian a {
+  text-decoration: none;
+}
+.pg-footer-beian a:hover {
+  color: var(--foreground);
 }
 
 /* ---------- 无障碍 ---------- */

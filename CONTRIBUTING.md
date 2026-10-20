@@ -44,11 +44,26 @@
 
 ```bash
 # fork 后第一步：改名，避免与原项目混淆
-# 1. 改 package.json 的 name
+# 1. 改 package.json 的 name / author / repository
+#    ↳ repository 会驱动落地页的源码 / Release / Issues 链接，以及扩展的 homepage_url
 # 2. 改 manifest.json 的 name / description
 # 3. 换掉 icons/ 下的全部图标
 # 4. 在 README 顶部说明与原项目的关系与分叉点
+# 5. 复制 apps/site/.env.example 为 apps/site/.env，填你自己的部署身份
 ```
+
+第 5 步是这次专门拆分出来的：落地页的**部署身份**不在源码里，包括站点域名、三个商店
+地址、Gitee 镜像、备案号、打赏收款码。不填有明确的降级行为，**不会继承别人的**：
+
+| 键 | 留空时 |
+|---|---|
+| `SITE_URL` | canonical 输出相对路径（不影响本地构建，线上必须先填） |
+| `EDGE_URL` 等渠道 | 该行显示「即将上架」，不渲染链接 |
+| `ICP_BEIAN` | 页脚不渲染备案行 |
+| `DONATE_QR` | 显示「收款码待补充」占位 |
+
+唯一**不会**自动失效的是 `LICENSE` / `NOTICE` 里的原作者署名——那是 Apache-2.0 要求
+保留的，不是配置项。
 
 ---
 
