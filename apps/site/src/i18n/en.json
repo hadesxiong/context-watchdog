@@ -8,7 +8,8 @@
   "nav": {
     "how": "How it works",
     "privacy": "Privacy",
-    "faq": "FAQ"
+    "faq": "FAQ",
+    "changelog": "Changelog"
   },
   "hero": {
     "badge": "Open source · Free · No server · No account",

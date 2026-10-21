@@ -156,6 +156,21 @@ pre {
   color: var(--foreground);
 }
 
+/* 窄屏页头：<768px 隐藏锚点导航，只留品牌与语言切换（页脚保留全部入口）。
+   实测：4 个 tab 时 500px 视口下两语种导航均被挤成竖排单字并溢出 56px 固定
+   页头（英文 414px 更导致整页横向滚动），768px 起两语种均单行干净——768 取
+   实测下界。margin-left:auto 要补给 .pg-lang，否则导航一隐藏，语言切换会
+   紧贴 logo。 */
+@media (max-width: 767px) {
+  .pg-nav {
+    display: none;
+  }
+
+  .pg-lang {
+    margin-left: auto;
+  }
+}
+
 /* ---------- Hero ---------- */
 
 .pg-hero {
