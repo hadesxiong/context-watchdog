@@ -29,7 +29,7 @@
 | 事实 | 出处 | 影响 |
 |---|---|---|
 | 模型宿主是**模块级单例**（`glinerInstance` / `ready`），只在文档上下文存在 | `contentDetector.ts:42-43,224` | 必须有"文档宿主"；SW 内恒未就绪 |
-| SW 明确不加载模型，粘贴拦截自动走正则 | `service-worker.ts:5,102`、`docs/spec.md:47,187` | 现状是**已知限制**，本次要解除 |
+| SW 明确不加载模型，粘贴拦截自动走正则 | `service-worker.ts:5,102`、`docs/spec.md §2/§8` | 现状是**已知限制**，本次要解除 |
 | 推理单线程 CPU wasm、`proxy=false` | `contentDetector.ts:85,100` | 放在页面主线程会卡死宿主页面 |
 | 级联只喂"正则未覆盖片段"，上限 20 段 / 8000 字 | `pipeline.ts:308-313,422` | AI 增量成本有硬上限，可直接复用做"二次升级" |
 | 下载/缓存/多窗口锁已与宿主解耦，storage 为 null 也能跑 | `modelDownload.ts:261,402,575` | 新增宿主**零改动复用**下载与缓存（同一 Cache Storage 条目） |

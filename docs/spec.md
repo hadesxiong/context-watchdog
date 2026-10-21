@@ -1,7 +1,8 @@
 # ContextWatchdog 产品（技术）说明文档
 
 > 面向开发者与技术评审。快速开始见 `README.md`，手动验收见 `docs/test-cases.md`，
-> 待办状态见 `TODO.md`，实现轮次与结案沿革见 `CHANGELOG.md`。本文档所有描述以 `src/` 代码为准（版本 1.0.0）。
+> 待办状态见 `TODO.md`，实现轮次与结案沿革见 `CHANGELOG.md`。本文档所有描述以代码为准
+> （`packages/`、`apps/`、`scripts/`；版本 1.0.0）。
 
 ## 1. 产品定位与功能矩阵
 
@@ -14,7 +15,7 @@
 | 侧栏手动脱敏 | ✅ | 粘贴/输入 → 点「检测」→ 检出列表 → 单条/一键脱敏 → 复制 |
 | 正则基础引擎 | ✅ 恒开 | 14 类检测（密钥 5 + PII 7 + 高熵 + 自定义），SW 亦可用 |
 | AI 增强（GLiNER） | ✅ 可选 | 级联触发，仅处理正则未覆盖片段；首次需下载 ~183MB 模型（ort wasm ~11MB 随包本地加载，推理本身离线可用） |
-| 检测档案 | ✅ | 内置 3 档 + 用户自定义（类别/灵敏度/分类型策略/白名单/GLiNER 标签） |
+| 检测档案 | ✅ | 内置 5 档（universal / text / code / us / eu）+ 用户自定义（类别/灵敏度/分类型策略/白名单/GLiNER 标签） |
 | 自定义正则规则 | ✅ | ReDoS 双层防护；档案 JSON 剪贴板导入导出 |
 | 粘贴自动拦截 | ✅ 可选 | 逐站授权，粘贴时自动就地替换（正则档；input/textarea 与 contenteditable 均支持，命中显示「已脱敏 N 处」提示） |
 | 明暗主题 | ✅ | 跟随系统 `prefers-color-scheme` |
@@ -110,18 +111,37 @@ ID_CARD / BANK_CARD / IP_ADDRESS / PLATE / NAME / ADDRESS`
 npm、GitLab、SendGrid、Postman、Shopify、DigitalOcean、Mailgun、Twilio）按规格精确收录；
 「短但有上下文」由 env/kv 键值规则行锚定兜底。
 
+**区域规则集（`us` / `eu`，`usRules.ts` / `euRules.ts`）**：区域规则**默认全关**，
+只有选了对应档案（或在自定义档案里勾上该类别）才参与扫描。这不是保守，而是误报控制：
+`\d{3}-\d{2}-\d{4}` 这种形状在任何地区的文本里都可能出现，把它塞进通用集会让所有
+非美区用户承担误报代价。每条规则都带校验，裸正则在真实文本里不可用：
+
+| 规则 | 校验方式 |
+|------|---------|
+| SSN（社保号） | 号段校验：排除区号 000/666/9xx、组号 00、序号 0000、三段全同数字 |
+| EIN（税号） | **要求带标签**（EIN/FEIN/TIN/Tax ID）——裸 `\d{2}-\d{7}` 与日期区间无法区分；再校验 IRS 已分配前缀 |
+| 北美电话 | NANP：区号与局号首位必须为 2-9（这一条即挡掉 `2024-01-0100` 这类日期） |
+| IBAN | ISO 13616 mod-97（15~34 位任意串通过率约 1/97），紧凑与分组写法都收 |
+| 增值税号 | 逐国格式表（希腊用 `EL` 而非 `GR`，这是 VIES 的定义） |
+
+增值税号目前**只有格式校验**（无通用校验位），因此置信度为 `medium`；DE/FR 等
+逐国校验位属后续迭代。
+
 ## 5. 档案系统（core/detector/profiles.ts + userProfiles.ts）
 
-- **内置 3 档**（不可删改）：`universal` 不限（全类别，中低置信仅提示）、
-  `text` 通用文本（PII 为主、高熵 strict）、`code` 代码开发（密钥全开、高熵 loose）；
-  三档默认 `EMAIL/HIGH_ENTROPY/IP_ADDRESS = keep`（检出但不替换）；
+- **内置 5 档**（不可删改）：`universal` 不限（全类别，中低置信仅提示）、
+  `text` 通用文本（PII 为主、高熵 strict）、`code` 代码开发（密钥全开、高熵 loose、
+  PII 类默认仅提示）、`us` 美国个人信息 与 `eu` 欧盟个人信息（通用之上追加对应
+  区域类别，`tierLowConfidence: false`——用户显式选区域档，即希望检出的都替换）；
+  五档默认 `EMAIL/HIGH_ENTROPY/IP_ADDRESS = keep`（检出但不替换）；
 - **自定义档案**：类别开关、每类别灵敏度、分类型默认策略（replace/keep，UI 为 Switch）、
   `tierLowConfidence`、GLiNER 标签集（预设 个人信息集/密钥集/全部/自定义）、
   值白名单（精确匹配，含传播产生的出现一并豁免）、自定义正则；
 - CRUD 持久化 `chrome.storage.local`（键 `contextwatchdog.userProfiles`），激活档案
   `contextwatchdog.activeProfile`；内置档案用 `builtin: true` 判定，UI 行为差异
   （无齿轮/不可删除）全部由该标志驱动；
-- **导入导出**：整库 JSON 走剪贴板（避免文件权限）；导入经 schema 校验，坏数据拒绝。
+- **导入导出**：整库 JSON 走剪贴板（避免文件权限）；导入时重新生成 id、重名档案
+  加数字序号、危险正则被 sanitize 过滤，schema 校验不过的坏数据整条拒绝。
 
 **自定义正则 ReDoS 双层防护**（`rules/customRules.ts`）：
 
@@ -252,18 +272,25 @@ CSP 收紧后扩展页无任何外部脚本/连接可能。
   移除 `sidePanel` 权限、补 `browser_specific_settings.gecko`
   （`contextwatchdog@contextwatchdog.invalid`，min 121）；
 - SW 运行时探测 `chrome.sidePanel.open` → 回退 `chrome.sidebarAction.open`，
-  同一份 SW 代码服务双浏览器。
+  同一份 SW 代码服务双浏览器；
+- **vite root 指向 `packages/extension`**（而非仓库根）：manifest 入口路径保持包内
+  相对形式（`src/sidepanel/index.html`），产物布局与重构前逐字节一致，运行时无需改
+  `chrome.runtime.getURL`。副作用：Tailwind 扫描范围恰好收敛在扩展包内（扫仓库根会把
+  `package-lock.json` 里的英文单词当类名）；`scripts/postbuild.mjs` 抽查产物 CSS 的
+  utility 与设计 token，缺任一即构建**硬失败**；
+- 设计 token 经别名 `@tokens/tokens.css` 被 `style.css` 引用，**产物内完整内联**
+  （同样有构建期校验）。
 
 ## 12. 测试体系
 
-`npm test`：**311 tests / 25 文件**（`npm run typecheck` 0 错误为另一道闸）：
+`npm test`：**403 断言 / 32 文件**（`npm run typecheck` 0 错误为另一道闸）：
 
-- `tests/golden/`（4）：内置三档 + 白名单端到端金样例；
-- `tests/unit/`（12）：规则与值过滤、短密钥族、自定义规则 ReDoS、管线配置、store 状态机、
-  模型下载（续传/退避/看门狗/完整性/缓存/锁/单飞）、粘贴改写纯函数、站点匹配、
-  档案 CRUD 与 IO、替换引擎、基础功能；
-- `tests/perf/`（1）：长文本性能护栏；
-- `tests/regression/`（2）：历史缺陷回归、CJK 边界。
+| 目录 | 内容 |
+|------|------|
+| `tests/golden/`（4） | 按档案分组的端到端金样例（universal / text / code / 白名单） |
+| `tests/unit/`（25） | 场景启发式 / 占位符 / 校验算法 / 替换引擎 / 用户档案 CRUD 与 IO / 模型下载器（续传·退避·看门狗·完整性·缓存·锁·单飞）/ 检测 store 状态机 / 站点匹配 / 粘贴就地替换 / i18n 防漂移 / 区域规则集（US·EU）/ 规则与值过滤 / 短密钥族 / 自定义规则 ReDoS / 管线配置 / 引擎边界断言 / 落地页感谢墙分档与双语词典护栏 |
+| `tests/regression/`（2） | 历史缺陷回归（含@密码、重复值、重叠、CJK 偏移、吞值） |
+| `tests/perf/`（1） | 长文本基准（5000 字 < 2s） |
 
 原则：下载器/管线等纯逻辑全部依赖注入，node 环境可单测；真机判定项（视觉/真实下载/
 权限弹窗/真实推理）收敛到 `docs/test-cases.md`，不与自动化重叠。
@@ -290,4 +317,90 @@ CSP 收紧后扩展页无任何外部脚本/连接可能。
   | 初始化完成并释放引用（未 GC 时刻） | **224.5 MB** | 高于前值属正常：ORT 建会话在 JS 侧解析 175MB protobuf 的对象图转为垃圾、`modelBuffer` 局部绑定尚在 `runLoad` 作用域（async 跨 await 保守保活），GC 前均计入 `usedJSHeapSize` |
 
 - 口径说明：模型本体在 ORT wasm 线性内存，**不计入** `usedJSHeapSize`；此组数值仅验证
-  JS 侧引用管理（§7/§15 释放机制），不代表进程总内存。
+  JS 侧引用管理（§7 下载器表「内存释放」行），不代表进程总内存。
+
+## 15. 项目结构与引擎边界
+
+```
+packages/
+├── engine/                  # 检测与替换引擎（纯逻辑，宿主无关）
+│   └── src/
+│       ├── detector/
+│       │   ├── pipeline.ts        # 主管线（级联调度 + 仲裁 + 值传播）
+│       │   ├── backend.ts         # InferenceBackend 抽象 + 单例注入 + 置信度分档
+│       │   ├── profiles.ts        # Profile 注册表（场景配置）
+│       │   ├── sceneDetector.ts   # 场景启发式（纯规则，无模型）
+│       │   ├── entityShape.ts     # 实体形状门禁（拦截模型幻觉）
+│       │   └── rules/             # 规则模块（按类别分组）
+│       │       ├── envPasswordRules / kvRules / dbPasswordRules
+│       │       ├── apiKeyRules / privateKeyRules / emailRules
+│       │       ├── piiRules       # 手机号/身份证/银行卡/IP/车牌
+│       │       ├── usRules        # 社保号/税号/北美电话（号段校验）
+│       │       ├── euRules        # IBAN（mod-97）/增值税号（逐国格式）
+│       │       ├── highEntropyRules / valueFilters / constants
+│       │       └── scanner        # 扫描器（类别开关 + 类型合并）
+│       ├── replacer/              # 替换引擎（纯函数 apply）
+│       │   ├── placeholder.ts     # 语义化占位符（分语言，生成/反解析）
+│       │   └── mapping.ts         # 映射表（同值共享）
+│       ├── sites.ts               # 受保护站点规范化/匹配（粘贴拦截）
+│       ├── messages.ts            # content ↔ SW 消息契约
+│       ├── types/                 # 类型定义（DetectionType/ProfileConfig）
+│       └── utils/id.ts            # 统一 ID 生成
+└── design-tokens/                 # 设计 token 唯一来源（扩展与落地页共用）
+
+packages/extension/                # 扩展（宿主层）
+└── src/
+    ├── model/                     # 模型宿主：GLiNER + onnxruntime-web + 下载器
+    │   ├── contentDetector.ts     #   GLiNER 调用与就绪状态
+    │   ├── modelDownload.ts       #   断点续传 / 多源回退 / 多窗口锁 / Cache Storage
+    │   ├── localBackend.ts        #   把 GLiNER 适配成引擎的 InferenceBackend
+    │   └── index.ts               #   宿主入口（installModelBackend / preloadModels）
+    ├── components/                # Vue 组件（ProfileSelect/DetectionItem/PasteInterceptionSettings/CapabilityDialog…）
+    ├── content/pasteText.ts       # 粘贴就地替换纯逻辑（区间推导与改写守卫）
+    ├── stores/detection.ts        # Pinia（Profile 持久化 + 默认策略分层）
+    ├── i18n/                      # 界面文案：单一 catalog，UI 与 _locales 共用
+    │   ├── locales/{en,zh_CN}.json #   扁平词条（键名用 Chrome messages.json 的合法字符集）
+    │   └── index.ts               #   t() / useI18n / typeLabel / profileLabel
+    ├── sidepanel/                 # Side Panel 主界面
+    ├── background/                # Service Worker（侧栏入口跨浏览器 + 粘贴检测服务 + 站点注入）
+    ├── shims/                     # 构建期打桩（ort GPU 子路径）
+    └── style.css                  # 引入 @tokens/tokens.css + Tailwind theme 映射
+
+apps/site/                         # 落地页（Astro 静态站点，零客户端 JS —— 见 apps/site/README.md）
+public/                            # 仓库级共享静态资源（icons）
+tests/  scripts/  docs/            # 测试 / 构建与探针脚本 / 设计文档
+docs/design/                       # 设计决策与后续迭代规划（防御性公开，详见其 README）
+```
+
+**引擎边界**：引擎通过别名 `@engine/*` 被扩展引用（`tsconfig.json` 与 `vite.config.ts`
+各自声明）。**引擎不依赖任何宿主 API**：不静态 import `chrome` / `node:*` / `vue` /
+`gliner` / `onnxruntime-web` / `@xenova/transformers`，宿主能力一律通过适配器注入。
+这条约束有自动化断言保护（`tests/unit/engineBoundaries.test.ts`）——它是同一份代码能
+同时服务浏览器扩展与后续 Node 代理服务的前提。
+
+模型运行时（`packages/extension/src/model/`）与检测管线（`packages/engine/`）之间
+只有一道接口：`InferenceBackend`。宿主在启动时 `installModelBackend()` 注册自己的实现；
+未注册时 `getInferenceBackend()` 返回 `null`，管线自动退化为纯正则。这也是 `tests/`
+里全部用例能在 Node 下直接跑起来的原因。
+
+## 16. 界面语言（i18n）
+
+词条只有**一份**：`packages/extension/src/i18n/locales/{en,zh_CN}.json`。它同时供两个
+消费方使用——UI 走自带 `t()`（需要运行时切换语言，字典必须进包），manifest 的
+`__MSG_*__` 与 service worker 的 `chrome.i18n.getMessage` 走 `_locales/*/messages.json`
+（Chrome 原生机制，且不必把字典打进 SW 包）。后者由 `scripts/generate-locales.mjs`
+在构建时从前者生成，**不手抄**。
+
+键名一律 snake_case：Chrome 的 `messages.json` 只接受 `[a-zA-Z0-9_@]`，用点号分层
+就无法共用一份清单。
+
+语言来源：`contextwatchdog.locale`（localStorage，显式选择，同步可读）→
+`chrome.i18n.getUILanguage()` → `navigator.language` → `en`。设置入口在侧栏的
+「检测引擎状态」面板里。
+
+**占位符也会跟着语言走**：替换后写进文本的是 `<<手机号>>` 还是 `<<PHONE>>`，取决于
+当前界面语言。引擎自己读不到浏览器 API，因此由宿主在启动时 `setPlaceholderLocale()`
+注入；解析侧同时接受两种语言的名称，所以切换语言后旧映射表仍可还原。
+
+`tests/unit/i18n.test.ts` 兜住四类「构建全绿、界面才露馅」的漂移：新文案只写中文、
+词条只加了一门语言、`t('xxx')` 拼错、manifest 的 `__MSG_*__` 没有对应词条。
