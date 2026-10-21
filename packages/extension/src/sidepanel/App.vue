@@ -7,7 +7,7 @@ import ActionBar from '../components/ActionBar.vue'
 import ProfileSelect from '../components/ProfileSelect.vue'
 import PasteInterceptionSettings from '../components/PasteInterceptionSettings.vue'
 import CapabilityDialog from '../components/CapabilityDialog.vue'
-import { Button, Switch, Logo, LoadingOverlay, Dialog } from '../ui'
+import { Button, Switch, LoadingOverlay, Dialog } from '../ui'
 import { useI18n } from '../i18n'
 import { waitForPaint } from '../lib/paintBarrier'
 
@@ -171,13 +171,18 @@ const loadingCaption = computed(() => {
             <div class="p-3">
                 <div class="flex items-center justify-between">
                     <div class="flex items-center gap-2">
-                        <Logo :size="32" class="shrink-0 drop-shadow-xs" />
-                        <div class="flex items-baseline gap-2">
-                            <h1 class="text-lg font-semibold text-foreground">
-                                ContextWatchdog</h1>
-                            <p class="text-sm text-muted-foreground">
-                                {{ t('app_subtitle') }}</p>
-                        </div>
+                        <!-- 品牌锁标（图形 + 字）：源文件 public/icons/logo-1.svg；
+                             暗色跟随 prefers-color-scheme，与设计 token 同一套切换条件 -->
+                        <h1 class="shrink-0">
+                            <picture class="block">
+                                <source media="(prefers-color-scheme: dark)"
+                                    srcset="/icons/logo-1-dark.svg" />
+                                <img class="block h-9 w-auto" src="/icons/logo-1.svg"
+                                    alt="ContextWatchdog" width="1414" height="400" />
+                            </picture>
+                        </h1>
+                        <p class="text-sm text-muted-foreground">
+                            {{ t('app_subtitle') }}</p>
                     </div>
                     <div class="flex items-center gap-2">
                         <!-- 独立打开按钮：暂时隐藏（见 SHOW_OPEN_IN_NEW_TAB） -->

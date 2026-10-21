@@ -120,6 +120,13 @@ pre {
   letter-spacing: -0.01em;
 }
 
+/* 品牌锁标：固定高 36px，宽按 1414:400 自然比例 —— 尺寸写死避免首屏布局抖动 */
+.pg-brand img {
+  display: block;
+  height: 2.25rem;
+  width: auto;
+}
+
 .pg-nav {
   display: flex;
   gap: 1.25rem;

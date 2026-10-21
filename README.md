@@ -1,5 +1,10 @@
 # ContextWatchdog
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="public/icons/logo-1-dark.svg" />
+  <img src="public/icons/logo-1.svg" alt="ContextWatchdog" width="260" />
+</picture>
+
 **English** | [简体中文](README.zh-CN.md)
 
 ContextWatchdog is local-first detection and redaction for AI workflows: it finds and replaces sensitive information before the text reaches a model. It ships today as a Chrome / Firefox extension (Manifest V3), with desktop, CLI and proxy clients planned. It covers **two tracks at once**: general-text PII (phone numbers, national IDs, bank cards, email, license plates, IP addresses) and developer secrets (API keys, passwords, connection strings, JWTs, private keys). Everything runs locally.

@@ -5,6 +5,24 @@
 > 设计决策与后续迭代规划：`docs/design/`。
 > 单条提交详情见 `git log`；被清退的历史规划文档见 `f35ceae` 之前的 TODO。
 
+## 2026-10-21
+
+### ⑦ 品牌图标换新（新 logo 接入插件 / 落地页 / README）
+
+- `public/icons` 清理改名（保留 `logo` / `logo-1` 两名，作者调整过尺寸与边距的最终稿）：
+  纯看门狗 → `logo.svg`（400×400）、看门狗 + 字标锁标 → `logo-1.svg`（1414×400）；
+  旧盾牌 mark、`public/` 根下未被任何地方引用的 `public/icon.svg`、以及导出过程中的
+  临时文件一并删除。两份源 SVG 补上缺失的 `viewBox`
+  （否则按 CSS 尺寸放缩时图形不跟随）。
+- 新增 `logo-1-dark.svg`（同形、墨色换成暗色主题前景色 #fafafa）。README、站点头、
+  侧栏头部统一用 `<picture>` + `prefers-color-scheme` 切换，与设计 token 同一套条件；
+  favicon 是独立文件读不到页面变量，沿用自带 `<style>` + media query 的做法。
+- 接入：插件 manifest 图标仍由 `npm run icons` 从 `logo.svg` 生成 16/32/48/128；
+  侧栏左上与落地页页头换成 `logo-1` 锁标（高 36px，页头原「图标 + 文字」删除）；
+  落地页 favicon 改用 `logo.svg` 几何；两份 README 各加入 `logo-1`（宽 260px）。
+- 随之失去引用的 `packages/extension/src/ui/Logo.vue` 与 `apps/site/src/components/Mark.astro` 删除。
+- 发布包按新图标重打：`release/contextwatchdog-1.0.0-{chrome,firefox}.zip` + `SHA256SUMS`。
+
 ## 2026-10-20
 
 ### ⑥ 挂件常驻（× = 收起）

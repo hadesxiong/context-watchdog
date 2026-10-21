@@ -5,7 +5,12 @@
 // （/ 与 /en/），互相之间必须有 alternate 声明，否则搜索引擎会把它们
 // 当成重复内容。多语言站点最容易漏掉的一环。
 import '@site/styles/global.css'
-import Mark from '@site/components/Mark.astro'
+// 品牌锁标（图形 + 字）：与扩展共用仓库根 public/icons 里那一份。
+// 站点自己的 public/ 只放 favicon/robots，所以这里按 URL 资源引入，
+// 由构建打进 dist/assets（带内容哈希）；暗色变体走 prefers-color-scheme，
+// 与设计 token 同一套切换条件。
+import brandLogo from '../../../../public/icons/logo-1.svg'
+import brandLogoDark from '../../../../public/icons/logo-1-dark.svg'
 import { dict, localePath, otherLocale, localeLabel, type SiteLocale } from '@site/i18n'
 import { extensionVersion } from '@site/data/version'
 import { releasesUrlFor, repoUrlFor, blobUrl, treeUrl, siteUrl, hasCanonicalOrigin, icp, police } from '@site/data/links'
@@ -70,8 +75,17 @@ const pageTitle = d.meta.title
     <header class="pg-header">
       <div class="pg-shell pg-header-inner">
         <a class="pg-brand" href={localePath(locale)}>
-          <Mark size={26} />
-          <span>ContextWatchdog</span>
+          <picture>
+            {/* Astro 把 .svg 导入解析成 ImageMetadata（含 src / width / height），
+                尺寸直接取自文件本身，不会与源文件漂移 */}
+            <source media="(prefers-color-scheme: dark)" srcset={brandLogoDark.src} />
+            <img
+              src={brandLogo.src}
+              alt="ContextWatchdog"
+              width={brandLogo.width}
+              height={brandLogo.height}
+            />
+          </picture>
         </a>
 
         <nav class="pg-nav" aria-label="Sections">
