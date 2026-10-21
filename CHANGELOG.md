@@ -7,6 +7,85 @@
 
 ## 2026-10-21
 
+### ⑮ 挂件「已打开」状态查询修复（真机验收发现，最后一个已知问题）
+
+- **`panelOpen` 恒 false 的根因：`runtime.getContexts` 的 filter 字段写错**（验收现象：
+  ⑪ 修完推送后按钮仍不实时——别处打开侧栏后挂件按钮仍是可点的「在侧边栏中打开」；
+  点按钮后短暂「已打开」、约 2s 后被状态轮询翻回可点）：`isSidePanelOpen` 的两段查询
+  都写成**单数**字段（`tabId` / `documentUrl`），而该 API 的 filter 只认**复数数组**形态
+  （`tabIds` / `documentUrls`）——单数字段被运行时以 `Unexpected property` 直接**抛错**，
+  外层 catch 吞掉返回 `undefined` ⇒ 挂件侧 `panelOpen = state.panelOpen === true` 恒为
+  false。即这条查询自 ⑩ 落地起就没对过；探针此前只验「点击回包切已打开态」，恰好都在
+  2s 轮询首个 tick 前收起了面板，轮询真值从未被覆盖到。
+- **语义改为「存在即打开」**：实测侧栏 context 的 `tabId: -1`（不绑定标签页），按 tab
+  过滤既不可行也无必要——工具栏图标、侧栏选择器、挂件按钮打开的侧栏一律算开；弹窗
+  降级段同样改用 `documentUrls` 复数字段。代价：别个窗口开着侧栏时本窗口挂件也显示
+  已打开（API 不给窗口关联，注释已写明取舍）。
+- **probe:widget 扩到 20 项**：新增「展开态轮询一个周期后仍保持已打开（不被
+  panelOpen=false 翻回）」与「页面重载后挂件初始即已打开禁用态」两道回归防线——
+  两项都在缺陷态（单数 filter）build 上实测 FAIL、修复态 PASS，确认对症。
+  顺带修掉探针自身的几何缺陷：无头下侧栏是真侧栏、会挤压页面视口，挂件随之移动，
+  原先按打开前视口算死的 fab 坐标会落空（打在 body 上被「外点收起」顺手收起面板，
+  造成假绿/假红）——所有按钮点击改为按节点盒模型取中心。
+- 文档同步：TC-07-8 步骤 6/7 补判据（轮询不翻回、别处打开后初始即已打开）；
+  附录 A / TODO / site-ai-offscreen-host 设计文档的挂件探针基线 18 → 20 项。
+  测试数不变（403 项 / 32 文件）。
+
+### ⑭ 命令行口令直连形态漏检修复（真机验收发现）
+
+- **`mysql -p'<口令>'` 不再漏检**（漏检实例：`-u lantu_app -p'Qy7#mP2!vL9@'` 原样穿过，
+  该段整段唯独这条未被识别）：旧 CLI 口令规则要求旗标后必须有空白（`\s+`），mysql 的
+  直连引号形 `-p'…'`/`-p"…"`、直连裸值形 `-p<口令>`、以及 `--password=<口令>` 等号形
+  全部不命中。规则重写为三形态并存：分隔形（`-p x` / `-password x` / `--password=x`，
+  可引号包裹）、直连引号形、直连裸值形；引号包裹时 span 只锚内层口令本体。
+- **直连裸值的精度锚放进正则**：首字符必须字母数字、体不含 `=`、且必含一个非字母数字
+  下划线的符号位——`-pretty`/`-P3306`/`-pathfile`（纯字母数字短选项变体）、`-port=8080`
+  （等号选项值）、散文 `--passphrase` 全部零误报。开发中修掉一个关键缺陷：符号位判断类
+  必须显式排除空白与引号，否则紧随值后的空格会被当成「符号位」，精度锚整体失效。
+  取舍：直连裸值为纯字母数字的口令不检出（宁缺勿误，与 ⑫ 的纯字母取舍一致）。
+- **span 按组长度精确定位**（替换 `indexOf(value)` 猜位置）：`--password word` 时旧实现
+  把 `word` 在旗标内部命中、span 错位进 `--password` 中段。`naturalPasswordRules` 同步
+  对成对引号的值内缩一层——否则 `--password="…"` 的散文分支 span 含引号且早 1 位，
+  重叠仲裁会赢下 CLI 的精确 span（两规则 span 收敛后由 `deduplicateByPosition` 合并）。
+- 单测扩到 **403 项（32 文件）**：新增 `cliPasswordRules.test.ts` 11 项（检出 7 + 精度
+  防线 4，覆盖 2026-10-21 真机原文与三形态回归）；evidence 同步 403/85。
+
+### ⑬ 粘贴链路执行「保留」判定 + 挂件侧栏状态推送补全（真机验收发现）
+
+- **粘贴拦截不再无条件全替换**（验收现象：识别项判定为「保留」，粘贴出去仍被脱敏）：
+  旧实现两处都直接 `sanitizeText`（replaceAll，忽略档案策略），SW 正则首答还把请求
+  携带的档案丢了（`detect(text)` 走默认档）。现把 keep/replace 判定上收到 engine：
+  `profiles.ts` 新增 `resolveDefaultAction`（原 store 本地实现迁入，侧栏 / SW /
+  offscreen 三链共用），`replacer` 新增 `sanitizeWithProfile(text, items, profile)`——
+  SW 正则首答与 AI 二次升级都改走它，邮箱/高熵/IP 等判定为「保留」的项在粘贴改写与
+  升级结果中保持原文，与设置页默认策略一致。
+- **挂件按钮状态推送补全**（验收现象：侧栏开关状态仍不实时）：⑪ 的推送在
+  `onOpened/onClosed` 事件不带 `tabId`（用户从工具栏图标开关**全局侧栏**）时被直接
+  丢弃——`pushPanelState` 改为无 tabId 时**广播**到所有标签页（未授权站点没有挂件，
+  `sendMessage` reject 静默吞掉，有挂件的授权站点才会更新）。另在 `OPEN_SIDE_PANEL`
+  成功后主动推一次开态，打开路径不再依赖 `onOpened` 是否触发。
+- 单测扩到 **392 项（31 文件）**：新增 `sanitizeWithProfile.test.ts` 4 项（universal
+  档真机场景 keep 生效 / `sanitizeText` 无条件替换对照组 / 显式 `defaultActions` 覆盖 /
+  `tierLowConfidence` 分层）；evidence 同步 392/85。
+
+### ⑫ 散文口令与 sk- 厂商段密钥漏检修复（真机验收发现）
+
+- **自然语言口令检出**（漏检实例：`新密码是 Qy7#mP2!vL9@` 原样穿过）：既有口令规则
+  全部只锚结构化语法（`KEY=value`/YAML/JSON/CLI/连接串），散文声明一条不命中。新增
+  `naturalPasswordRules`：关键词（密码/口令/通行码/password/passwd/pwd/passphrase）
+  + 必需连接词（是/为/is/:/：/=）+ ASCII 值域 `[!-~]{4,}`。三层精度防线——连接词必需、
+  中文谓词落不进值域（「密码不能为空」不匹配）、值必须含数字或非字母（挡
+  `password is required` 纯字母表语），再叠 shouldSkipValue（过短/纯数字/弱口令）。
+  类型 `ENV_PASSWORD`（占位符 `<<密码>>`）、high 置信 ⇒ 各档默认替换。
+- **sk- 厂商段密钥不再只落高熵**（漏检实例：`sk-live-<hex>` 未替换——OpenAI 规则
+  `sk-[alnum]` 被中间的 `-live-` 整段打断，只剩 HIGH_ENTROPY，而 universal 的
+  `HIGH_ENTROPY=keep` 使其原样保留）：新增 `sk-<小写厂商段>-<≥32 位小写十六进制体>`
+  规则并置 high（⇒ 默认替换）；精度锚在「体必须是连续纯小写十六进制」，既有
+  `sk-an-` 混合大小写 FP 防线用例不破。
+- 单测扩到 **388 项（30 文件）**：`naturalPasswordRules.test.ts` 7 项（检出 4 + 精度
+  防线 3，含真机原句与「工单里涉及的密码和 API Key 仅用于测试识别」零误报）+ sk-
+  厂商段 4 项；`engineBoundaries` 按引擎文件数展开自动 +2。evidence 同步 388/85。
+
 ### ⑪ 侧栏开关原生事件实时推送（`onOpened`/`onClosed`）
 
 - **「别处关掉侧栏 → 按钮复位」从轮询压到即时**：⑩ 里关闭靠挂件 2s 轮询发现，

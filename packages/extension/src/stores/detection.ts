@@ -3,7 +3,7 @@ import { ref, computed } from 'vue'
 import type { DetectionItem, ReplaceConfig, MappingTable, ProfileConfig } from '@engine/types'
 import { detect } from '@engine/detector'
 import { preloadModels, isContentModelReady } from '@/model'
-import { getProfileById, DEFAULT_PROFILE_ID } from '@engine/detector/profiles'
+import { getProfileById, DEFAULT_PROFILE_ID, resolveDefaultAction } from '@engine/detector/profiles'
 import { UserProfileManager, createChromeStorage } from '@engine/detector/userProfiles'
 import { getReplacer } from '@engine/replacer'
 import {
@@ -33,19 +33,8 @@ const PROFILE_STORAGE_KEY = 'contextwatchdog.activeProfile'
 // AI 增强首启引导弹窗「已展示」标记（展示过一次后永不再弹，无论用户是否开启）
 const AI_ONBOARDING_KEY = 'contextwatchdog.aiOnboardingSeen'
 
-// 计算某检测项的默认替换动作：Profile 显式配置 > 置信度分层 > 替换
-const resolveDefaultAction = (
-    profile: ProfileConfig,
-    type: DetectionItem['type'],
-    confidence: DetectionItem['confidence']
-): 'replace' | 'keep' => {
-    const explicit = profile.defaultActions[type]
-    if (explicit) return explicit
-    // tierLowConfidence：中低置信度降为仅提示（keep）
-    if (profile.tierLowConfidence && confidence !== 'high') return 'keep'
-    return 'replace'
-}
-
+// 默认替换动作（keep/replace）的判定已上收到 engine 的 profiles.ts：
+// 侧栏、粘贴正则首答、AI 二次升级三条链路共用同一份策略，避免各说各话。
 // 侧栏 → SW 的单次请求（SW 再转给 offscreen 宿主）。
 // SW 未响应/不可用时返回 null，调用方自行降级——绝不抛异常打断检测。
 const sendRuntimeMessage = <T>(message: unknown): Promise<T | null> => {

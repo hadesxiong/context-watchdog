@@ -33,11 +33,12 @@
   自定义档案/正则/白名单与 JSON 导入导出、粘贴自动拦截（逐站授权，含 contenteditable
   富文本与「已脱敏 N 处」轻提示）、GLiNER 推理链路（wasm/模型全本地、断网可用、
   形状门禁拦截幻觉）、Chrome/Firefox 双目标构建、明暗主题、中英双语界面、双语落地页与隐私权政策页。
-- **校验基线**：`npm run typecheck` 0 错误 / `npm test` **375 passed（29 文件）** /
+- **校验基线**：`npm run typecheck` 0 错误 / `npm test` **403 passed（32 文件）** /
   `npm run build` + `npm run build:firefox` 通过 / `npm run probe:layout` 全通过 /
   `npm run probe:widget` 全通过（授权站点挂件 / iframe 不挂 / 未授权零注入 / 删除后重挂 /
   收起态 44×44 / 12px 圆角 / 明暗主题两套配色 / 暗色下面板带边框 /
-  打开侧栏按钮切「已打开」态 / 侧栏开/关实时推送使按钮双向即时翻转，18 项）/
+  打开侧栏按钮切「已打开」态 / 侧栏开/关实时推送使按钮双向即时翻转 /
+  轮询一个周期不把「已打开」翻回 / 页面重载后初始即「已打开」禁用态，20 项）/
   `npm run site:check` 0 诊断 / `npm run site:build` 通过 / `npm run check:versions` 通过（2 项预期警告：SITE_URL 与渠道未配置）。
 
 ## 回归命令
@@ -45,7 +46,7 @@
 ```bash
 npm run typecheck && npm test && npm run build && npm run build:firefox && npm run probe:layout && npm run probe:widget
 npm run site:check && npm run site:build && npm run check:versions
-# 期望：0 error / 375 passed / 双目标构建通过 / 布局与挂件探针全通过 / 站点 0 诊断且构建通过 /
+# 期望：0 error / 403 passed / 双目标构建通过 / 布局与挂件探针全通过 / 站点 0 诊断且构建通过 /
 #       check:versions 通过（SITE_URL 与渠道未配置时为 2 项警告）
 ```
 

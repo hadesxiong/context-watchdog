@@ -66,14 +66,27 @@ export const envPasswordRules: DetectionRule[] = [
     }
   },
   // 命令行密码参数（如 redis-server --requirepass RedisP@ss2024）
+  // 三种形态（2026-10-21 真机漏检 `mysql -p'Qy7#mP2!vL9@'` 后补齐）：
+  //   1) 分隔形：`-p <pwd>` / `--password <pwd>` / `--password=<pwd>`（可引号包裹，span 只锚内层值）
+  //   2) 直连引号形：mysql 风格 `-p'<pwd>'` / `-p"<pwd>"`
+  //   3) 直连裸值形：`-p<pwd>` —— 选项混淆风险最高（-pretty / -P3306 / -port=8080 都长得像），
+  //      精度锚在正则里：首字符必须字母数字、体不含 =、且必含一个非字母数字下划线的符号位
+  //      （真口令几乎都带符号；纯字母数字的直连值一律按短选项变体放弃，宁缺勿误）
   {
     type: 'ENV_PASSWORD',
-    pattern: /(?:--(?:require)?pass(?:word)?|-(?:p|password))\s+([^\s]{3,})/gi,
+    pattern: /((?:--(?:require)?pass(?:word)?|-(?:p|password)))(?:([\t ]*=[\t ]*|[\t ]+)(?:(['"])([^'"\n]{3,})\3|([^\s'"]{3,}))|(?:(['"])([^'"\n]{3,})\6)|([A-Za-z0-9](?=[^\s'"=]*[^A-Za-z0-9_=\s'"])[^\s'"=]{3,}))/gi,
     confidence: 'high',
     extractor: (match) => {
-      const password = match[1]
-      const fullMatch = match[0]
-      const passwordIndex = fullMatch.indexOf(password)
+      const password = match[4] ?? match[7] ?? match[5] ?? match[8]
+      if (!password) return null
+
+      // 值起点 = 旗标 + 分隔符 + 引号的长度。不用 indexOf(value) 猜位置：
+      // 值文本恰好出现在旗标内（如 --password word 的 "word"）时会错位到旗标里
+      const valueStartInMatch =
+        match[1].length +
+        (match[2] ?? '').length +
+        (match[3] ?? '').length +
+        (match[6] ?? '').length
 
       // 值质量校验
       const { skip, reason } = shouldSkipValue(password)
@@ -91,8 +104,8 @@ export const envPasswordRules: DetectionRule[] = [
 
       return {
         original: password,
-        startIndex: match.index! + passwordIndex,
-        endIndex: match.index! + passwordIndex + password.length
+        startIndex: match.index! + valueStartInMatch,
+        endIndex: match.index! + valueStartInMatch + password.length
       }
     }
   }

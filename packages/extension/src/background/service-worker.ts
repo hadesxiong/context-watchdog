@@ -7,7 +7,8 @@
 // 4) 模型宿主的路由：offscreen 文档持有唯一一份模型运行时（Chrome/Edge），
 //    本文件只负责创建/销毁文档并转发 ENSURE / DETECT（见 src/modelHost/client.ts）
 import { detect } from '@engine/detector'
-import { sanitizeText } from '@engine/replacer'
+import { getProfileById, DEFAULT_PROFILE_ID } from '@engine/detector/profiles'
+import { sanitizeWithProfile } from '@engine/replacer'
 import { setPlaceholderLocale } from '@engine/replacer/placeholder'
 import { matchSite, matchedSitePattern, readProtectedSites, PROTECTED_SITES_KEY } from '@engine/sites'
 import {
@@ -130,24 +131,29 @@ const readHostReady = async (): Promise<boolean> => {
   }
 }
 
-// 该标签页的侧边栏是否开着。用 runtime.getContexts 查真实状态（不是猜），
-// 用户在别处关掉侧栏也能同步回按钮；没有这个 API（旧版 / Firefox）就返回
-// undefined = 未知，挂件按「没开」处理，按钮照常可点。
-const isSidePanelOpen = async (tabId: number | undefined): Promise<boolean | undefined> => {
+// 该标签页的侧边栏是否开着。语义是「存在即打开」：侧栏 context 实测不绑定标签页
+// （tabId: -1），按 tab 过滤既不可行也无必要——工具栏图标、侧栏选择器、挂件按钮
+// 打开的侧栏都算开。代价是别个窗口开着侧栏时本窗口挂件也显示已打开（API 不给
+// 窗口关联），可接受：侧栏本来就是「开着就该看到」的东西。
+//
+// 坑（2026-10-21 真机验收）：runtime.getContexts 的 filter 字段是**复数数组**形态
+// （tabIds / documentUrls），单数写法会被运行时以 Unexpected property 拒绝并**抛错**，
+// 而这里历史上包着 catch 返回 undefined ⇒ panelOpen 恒 false：点开侧栏后 2s 轮询
+// 把「已打开」翻回可点、挂件重挂初始即错。两段查询都必须用复数形态。
+// 没有这个 API（旧版 / Firefox）返回 undefined = 未知，挂件按「没开」处理。
+const isSidePanelOpen = async (): Promise<boolean | undefined> => {
   const runtime = chrome.runtime as unknown as {
-    getContexts?: (query: Record<string, unknown>) => Promise<unknown[]>
+    getContexts?: (filter: Record<string, unknown>) => Promise<unknown[]>
   }
   if (typeof runtime.getContexts !== 'function') return undefined
   try {
-    if (typeof tabId === 'number') {
-      const panels = await runtime.getContexts({ contextTypes: ['SIDE_PANEL'], tabId })
-      if (panels.length > 0) return true
-    }
-    // 无侧栏 API 时按钮退回的「弹窗面板」不属于这个 tabId，按文档 URL 认：
+    const panels = await runtime.getContexts({ contextTypes: ['SIDE_PANEL'] })
+    if (panels.length > 0) return true
+    // 无侧栏 API 时按钮退回的「弹窗面板」是 TAB context，按文档 URL 认：
     // 否则弹窗一开按钮又亮回可点，用户会连开好几个窗口
     const popups = await runtime.getContexts({
       contextTypes: ['TAB'],
-      documentUrl: chrome.runtime.getURL('src/sidepanel/index.html')
+      documentUrls: [chrome.runtime.getURL('src/sidepanel/index.html')]
     })
     return popups.length > 0
   } catch {
@@ -155,15 +161,28 @@ const isSidePanelOpen = async (tabId: number | undefined): Promise<boolean | und
   }
 }
 
-// 把侧栏开/关的真实状态推给某个标签页的挂件（顶层文档才有挂件）。
+// 把侧栏开/关的真实状态推给挂件（顶层文档才有挂件）。
 // 这是 onOpened/onClosed 原生事件的落点：外部关掉侧栏时由浏览器主动通知，
-// 不必等挂件的下一次轮询。目标页可能没有挂件（未注入 / 未授权），sendMessage
-// 会 reject，静默吞掉即可——没有挂件就没有按钮要更新。
+// 不必等挂件的下一次轮询。
+// 侧栏绑定在某个标签页上（sidePanel.open({tabId}) 打开的）时精准推给它；用户从
+// 工具栏图标打开的全局侧栏，onOpened/onClosed 的 info.tabId 是 undefined——此时
+// 不能一丢了之（挂件按钮会永远停在旧状态），广播到所有标签页补上：未授权站点
+// 没有挂件，sendMessage reject 静默吞掉即可，有挂件的授权站点才会更新。
 const pushPanelState = (tabId: number | undefined, panelOpen: boolean): void => {
-  if (typeof tabId !== 'number') return
   const message: SiteAiPanelStatePush = { type: SITE_AI_PANEL_STATE, panelOpen }
+  if (typeof tabId === 'number') {
+    chrome.tabs.sendMessage(tabId, message, { frameId: 0 }).catch(() => undefined)
+    return
+  }
   chrome.tabs
-    .sendMessage(tabId, message, { frameId: 0 })
+    .query({})
+    .then(tabs => {
+      for (const tab of tabs) {
+        if (typeof tab.id === 'number') {
+          chrome.tabs.sendMessage(tab.id, message, { frameId: 0 }).catch(() => undefined)
+        }
+      }
+    })
     .catch(() => undefined)
 }
 
@@ -310,12 +329,16 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
     const text = request.text.slice(0, MAX_PASTE_CHARS)
     const token =
       typeof request.token === 'string' && request.token.length <= 128 ? request.token : undefined
+    // 侧栏选中的档案随请求带来，缺省退回「不限」。detect 与脱敏必须用同一份档案，
+    // 否则识别判据（规则/阈值）与替换策略（keep/replace）会各说各话。
+    const profile = request.profile ?? getProfileById(DEFAULT_PROFILE_ID)
     // SW 恒走正则档（模型在 offscreen 里，S3 在回包后把 AI 结果补发回来）——
     // 正则基础引擎恒开，无需任何开关配置
-    detect(text)
+    detect(text, profile)
       .then(result => {
-        // sanitizeText 是纯函数（局部 MappingManager），SW 内无状态依赖
-        const { sanitizedText } = sanitizeText(result.text, result.items)
+        // 按档案默认策略脱敏：判定为「保留」的项（如不限档的邮箱/高熵/IP）原样留下。
+        // 不能用 sanitizeText 无条件替换全部——那会把「保留」也一并脱敏掉。
+        const { sanitizedText } = sanitizeWithProfile(result.text, result.items, profile)
         const response: PasteDetectResponse = {
           ok: true,
           sanitized: sanitizedText,
@@ -365,7 +388,7 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
         globalEnabled,
         siteEnabled,
         hostReady,
-        panelOpen: await isSidePanelOpen(sender.tab?.id)
+        panelOpen: await isSidePanelOpen()
       }
       sendResponse({ ok: true, state } satisfies SiteAiGetResponse)
     })()
@@ -405,6 +428,9 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
     void (async () => {
       try {
         await opened
+        // 主动推一次开态：不依赖 onOpened 是否到达（部分 Chrome 版本不触发、
+        // 全局侧栏不带 tabId），确保「点开按钮 → 所有挂件同步为已打开」必然发生
+        pushPanelState(tabId, true)
         sendResponse({ ok: true } satisfies SiteAiSetResponse)
         return
       } catch (error) {

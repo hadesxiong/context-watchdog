@@ -1,7 +1,7 @@
 // Profile 注册表 - 内置检测配置档案
 // 新增场景 = 新增一个 ProfileConfig 配置项，无新代码路径
 
-import type { ProfileConfig, Sensitivity, RuleCategory } from '../types'
+import type { ProfileConfig, Sensitivity, RuleCategory, DetectionType, Confidence } from '../types'
 
 // GLiNER 标签集
 const PII_LABELS = [
@@ -106,4 +106,19 @@ export const ENTROPY_THRESHOLDS: Record<Sensitivity, { minLength: number; minEnt
   loose: { minLength: 20, minEntropy: 3.0 },
   standard: { minLength: 25, minEntropy: 3.5 },
   strict: { minLength: 30, minEntropy: 4.0 }
+}
+
+// 按 Profile 计算某检测项的默认替换动作：显式配置 > 置信度分层 > 替换。
+// 这是「识别结果的判断结果」的唯一权威来源——侧栏、粘贴正则首答、AI 二次升级
+// 三条链路都必须用它，否则会出现「判定为保留、却仍被脱敏」的策略漂移。
+export const resolveDefaultAction = (
+  profile: ProfileConfig,
+  type: DetectionType,
+  confidence: Confidence
+): 'replace' | 'keep' => {
+  const explicit = profile.defaultActions[type]
+  if (explicit) return explicit
+  // tierLowConfidence：中低置信度降为仅提示（keep）
+  if (profile.tierLowConfidence && confidence !== 'high') return 'keep'
+  return 'replace'
 }

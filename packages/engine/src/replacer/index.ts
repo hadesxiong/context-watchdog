@@ -1,5 +1,6 @@
-import type { DetectionItem, ReplaceConfig, MappingTable } from '../types'
+import type { DetectionItem, ReplaceConfig, MappingTable, ProfileConfig } from '../types'
 import { getMappingManager, MappingManager } from './mapping'
+import { resolveDefaultAction } from '../detector/profiles'
 
 // 替换引擎
 export class Replacer {
@@ -105,4 +106,20 @@ export const sanitizeText = (
   }
 
   return replacer.replaceAll(text, detections)
+}
+
+// 按 Profile 的默认策略脱敏：判定为「保留」的识别项（如不限档的邮箱/高熵/IP，
+// 以及 tierLowConfidence 档下的中低置信项）原样留下，其余替换成占位符。
+// 粘贴拦截的正则首答与 AI 二次升级都必须走这里——直接调 sanitizeText 会无条件
+// 替换全部识别项、绕过 keep 判定，把「保留」项也一并脱敏（2026-10-21 验收发现）。
+export const sanitizeWithProfile = (
+  text: string,
+  detections: DetectionItem[],
+  profile: ProfileConfig
+): { sanitizedText: string; mappingTable: MappingTable } => {
+  const configs: ReplaceConfig[] = detections.map(d => ({
+    itemId: d.id,
+    action: resolveDefaultAction(profile, d.type, d.confidence)
+  }))
+  return getReplacer().apply(text, detections, configs)
 }

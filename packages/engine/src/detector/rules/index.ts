@@ -8,6 +8,7 @@ import { privateKeyRules } from './privateKeyRules'
 import { emailRules } from './emailRules'
 import { piiRules } from './piiRules'
 import { kvPasswordRules } from './kvRules'
+import { naturalPasswordRules } from './naturalPasswordRules'
 import { usRules } from './usRules'
 import { euRules } from './euRules'
 
@@ -15,6 +16,7 @@ import { euRules } from './euRules'
 export const regexRules: DetectionRule[] = [
   ...envPasswordRules,
   ...kvPasswordRules,
+  ...naturalPasswordRules,
   ...dbPasswordRules,
   ...apiKeyRules,
   ...privateKeyRules,
@@ -26,7 +28,7 @@ export const regexRules: DetectionRule[] = [
 
 // 按类别分组的规则集（Profile 按类别启用）
 export const rulesByCategory: Record<RuleCategory, DetectionRule[]> = {
-  secret: [...envPasswordRules, ...kvPasswordRules, ...dbPasswordRules, ...apiKeyRules, ...privateKeyRules],
+  secret: [...envPasswordRules, ...kvPasswordRules, ...naturalPasswordRules, ...dbPasswordRules, ...apiKeyRules, ...privateKeyRules],
   pii: [...piiRules, ...emailRules],
   entropy: [], // 高熵检测独立于 regexRules，由 scanner 特殊处理
   us: usRules,

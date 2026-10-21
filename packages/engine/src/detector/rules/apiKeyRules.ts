@@ -63,6 +63,17 @@ export const apiKeyRules: DetectionRule[] = [
     pattern: /sk-ant-[A-Za-z0-9_-]{20,}/g,
     confidence: 'high'
   },
+  // sk- 品牌前缀 + 小写厂商段 + 长十六进制体（如 sk-live-<32hex>）
+  // 既有 OpenAI 规则只收 sk-[alnum]，中间带 -live- 这类厂商段会整段失配，
+  // 只落到 HIGH_ENTROPY（universal 默认 keep ⇒ 真机漏替换，2026-10-21 实测）。
+  // 精度锚在「体是纯小写十六进制且 ≥32」：随机本征足够强，也守住 FP 防线
+  // （sk-an- + 混合大小写字面量因体非纯 hex 不命中，见 apiKeyRules.test.ts）。
+  // 置 high：sk- 前缀即证据，且 universal tierLowConfidence 下非 high 会被默认 keep。
+  {
+    type: 'API_KEY',
+    pattern: /\bsk-[a-z]{2,12}-[0-9a-f]{32,}\b/g,
+    confidence: 'high'
+  },
   // Hugging Face
   {
     type: 'API_KEY',

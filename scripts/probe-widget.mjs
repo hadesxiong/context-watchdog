@@ -12,7 +12,8 @@
  *   6) 收起态 44×44、12px 圆角矩形（面板 display:none，host 盒子就是按钮）
  *   7) mark 跟随页面明暗主题换色（亮色 #18181b / 暗色 #fafafa）
  *   8) 「在侧边栏中打开」点击后确实打开面板（侧栏不可用时退回弹窗），
- *      且按钮切成「已打开」的禁用态，而不是卡在转圈的灰态
+ *      且按钮切成「已打开」的禁用态，而不是卡在转圈的灰态；
+ *      面板开着的真值在推送、2s 轮询、页面重挂三条路径上都不许走样
  *   9) 暗色下面板有能与背景分开的边框
  *
  * 挂件在 closed Shadow DOM 里，页面 JS 读不到内部，因此 6)~8) 走 CDP 的
@@ -294,6 +295,17 @@ try {
       openButton: buttons.find(node => (attrOf(node).style ?? '').includes('width: 100%'))
     }
   }
+  // 按钮点击一律按节点实际盒模型取中心，不用事先算好的坐标：侧栏（无头下是真侧栏）
+  // 打开会挤压页面视口，挂件随之移动，过期坐标落在视口外被裁到角落打在 body 上
+  // （2026-10-21 实测：「外点收起」顺手把面板收了，fab 再也点不中，探针假绿/假红）
+  const clickNode = async node => {
+    const box = await cdp.send('DOM.getBoxModel', { nodeId: node.nodeId })
+    const quad = box.model.content
+    const x = (quad[0] + quad[4]) / 2
+    const y = (quad[1] + quad[5]) / 2
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 })
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 })
+  }
   const emulateScheme = value =>
     cdp.send('Emulation.setEmulatedMedia', value ? { features: [{ name: 'prefers-color-scheme', value }] } : {})
 
@@ -318,21 +330,11 @@ try {
 
   // ④ 「在侧边栏中打开」必须有反应：无侧栏 API（无头/旧版）或手势失效时退回弹窗面板
   console.log('[4] 打开侧栏按钮')
-  const viewport = JSON.parse(await cdp.eval('JSON.stringify({ w: innerWidth, h: innerHeight })'))
-  const fabX = viewport.w - 16 - 22
-  const fabY = viewport.h - 16 - 22
-  await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: fabX, y: fabY, button: 'left', clickCount: 1 })
-  await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: fabX, y: fabY, button: 'left', clickCount: 1 })
+  widget = await readWidget()
+  await clickNode(widget.fab)
   await sleep(500)
   widget = await readWidget()
-  if (widget.openButton) {
-    const box = await cdp.send('DOM.getBoxModel', { nodeId: widget.openButton.nodeId })
-    const quad = box.model.content
-    const x = (quad[0] + quad[4]) / 2
-    const y = (quad[1] + quad[5]) / 2
-    await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 })
-    await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 })
-  }
+  if (widget.openButton) await clickNode(widget.openButton)
   await sleep(800)
   // 打开后应切到「已打开」态：disabled 由面板真实状态决定，
   // 光标必须复位（上一版成功后无人复位，留下永久的 wait 光标与灰态）
@@ -352,9 +354,9 @@ try {
   // （onOpened/onClosed 走的正是这条）。从扩展上下文向标签页推 SITE_AI_PANEL_STATE，
   // 断言按钮立即双向翻转——证明「别处关掉侧栏 → 按钮复位」不必等下个轮询周期。
   console.log('[4b] 侧栏状态实时推送')
-  // fab 与 ④ 同坐标，点一下收起；收起即 clearInterval(轮询)，状态只剩推送能改
-  await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: fabX, y: fabY, button: 'left', clickCount: 1 })
-  await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: fabX, y: fabY, button: 'left', clickCount: 1 })
+  // 点 fab 收起；收起即 clearInterval(轮询)，状态只剩推送能改
+  widget = await readWidget()
+  await clickNode(widget.fab)
   await sleep(400)
   const panelTarget = targets.find(target =>
     target.type === 'page' && target.url.startsWith(`chrome-extension://${extensionId}/src/sidepanel/index.html`))
@@ -381,6 +383,30 @@ try {
     pushedOn === 'ok' &&
       Object.prototype.hasOwnProperty.call(attrOf(widget.openButton ?? {}), 'disabled'))
   ext.close()
+
+  // ④c 轮询真值：展开后轮询周期（2s）内的 SITE_AI_GET 回包必须报告 panelOpen=true，
+  // 否则「已打开」约 2s 后被 false 翻回可点（2026-10-21 真机验收现象：
+  // getContexts filter 字段写成单数被运行时抛错 → catch → panelOpen 恒 false）
+  console.log('[4c] 轮询真值不翻回')
+  widget = await readWidget()
+  await clickNode(widget.fab)
+  await sleep(2600)
+  widget = await readWidget()
+  check('展开态轮询一个周期后仍保持「已打开」（不被 panelOpen=false 翻回）',
+    // 先钉死「面板确实在展开态」——收起态没有轮询，不加这层会把点击落空造成的假绿当通过
+    attrOf(widget.fab ?? {})['aria-expanded'] === 'true' &&
+      Object.prototype.hasOwnProperty.call(attrOf(widget.openButton ?? {}), 'disabled'))
+
+  // ④d 挂件重挂的初始真值：页面重载 → 挂件重新注入 → mount 首次 syncState，
+  // 侧栏开着时按钮必须出生就是「已打开」禁用态（2026-10-21 真机验收现象：
+  // 别处打开侧栏后，挂件里按钮仍是可点的「在侧边栏中打开」）
+  console.log('[4d] 重挂初始真值')
+  await cdp.send('Page.reload')
+  await sleep(2200)
+  widget = await readWidget()
+  check('页面重载后挂件初始即「已打开」禁用态',
+    Boolean(widget.openButton) &&
+      Object.prototype.hasOwnProperty.call(attrOf(widget.openButton ?? {}), 'disabled'))
 
   // ⑤ 常驻：页面主动删除 host 后，观察器应立即重挂
   await cdp.eval(`document.getElementById('${WIDGET_ID}')?.remove()`)

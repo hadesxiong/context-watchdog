@@ -13,7 +13,8 @@
 // 失败语义：ENSURE 失败只写状态 + 回包，不抛到控制台顶层 —— AI 是可选能力，
 // 正则档必须继续可用。
 import { detect } from '@engine/detector'
-import { sanitizeText } from '@engine/replacer'
+import { getProfileById, DEFAULT_PROFILE_ID } from '@engine/detector/profiles'
+import { sanitizeWithProfile } from '@engine/replacer'
 import { setPlaceholderLocale } from '@engine/replacer/placeholder'
 import { isContentModelReady, preloadModels } from '@/model'
 import {
@@ -136,7 +137,10 @@ const runDetect = async (request: Extract<ModelHostRequest, { op: 'DETECT' }>): 
 
   try {
     const result = await detect(request.text, request.profile, { enableContentDetection: true })
-    const { sanitizedText } = sanitizeText(result.text, result.items)
+    // 按档案默认策略脱敏：判定为「保留」的项（如不限档的邮箱/高熵/IP）原样留下。
+    // 与 SW 正则首答同一规则——不能用 sanitizeText 无条件替换全部识别项。
+    const profile = request.profile ?? getProfileById(DEFAULT_PROFILE_ID)
+    const { sanitizedText } = sanitizeWithProfile(result.text, result.items, profile)
     reply({
       token: request.token,
       ok: true,

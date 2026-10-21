@@ -51,6 +51,27 @@ describe('短密钥族误报防线', () => {
   })
 })
 
+describe('sk- 厂商段规则（sk-<vendor>-<hex> 形态）', () => {
+  // 拼接构造（同上，防 push protection）
+  const key = 'sk-live-' + '7f3a9c2e'.repeat(4) // 32 位小写十六进制体
+
+  it('sk- + 小写厂商段 + 32 位十六进制体被命中', () => {
+    expect(matchAll(`值是 ${key}。`)).toContain(key)
+  })
+
+  it('体非纯小写十六进制不命中（sk-an- 混合大小写防线共存）', () => {
+    expect(matchAll('sk-live-' + 'A1b2'.repeat(8))).toEqual([])
+  })
+
+  it('体不足 32 位不命中', () => {
+    expect(matchAll('sk-live-' + 'ab12'.repeat(4))).toEqual([]) // 16 < 32
+  })
+
+  it('厂商段后的体带连字符不命中（体必须连续十六进制）', () => {
+    expect(matchAll('sk-live-ab12cd34-' + '0f'.repeat(16))).toEqual([])
+  })
+})
+
 describe('既有规则回归（与短密钥族共存）', () => {
   it('OpenAI sk- 规则不受 sk-ant- 分支影响', () => {
     const openai = 'sk-' + 'a1B2'.repeat(5)
