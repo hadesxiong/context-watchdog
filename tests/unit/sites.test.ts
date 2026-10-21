@@ -14,6 +14,13 @@ describe('normalizeSiteInput', () => {
     expect(normalizeSiteInput('localhost')).toBe('https://localhost/*') // 无协议默认 https
   })
 
+  it("'*.' 前缀被抹平（子域本来一并覆盖，星号不入库）", () => {
+    expect(normalizeSiteInput('*.deepseek.com')).toBe('https://deepseek.com/*')
+    expect(normalizeSiteInput('https://*.chat.example.com/docs')).toBe(
+      'https://chat.example.com/docs'
+    )
+  })
+
   it('根路径整站收口成 …/*', () => {
     expect(normalizeSiteInput('https://chat.example.com')).toBe('https://chat.example.com/*')
     expect(normalizeSiteInput('https://chat.example.com/')).toBe('https://chat.example.com/*')
@@ -96,13 +103,35 @@ describe('matchedSitePattern', () => {
     expect(matchedSitePattern('http://chat.example.com/', patterns)).toBeNull()
   })
 
-  it('协议、子域、端口任一不同都不命中', () => {
+  it('子域由域名条目一并覆盖（不必逐个子域去加）', () => {
+    const patterns = ['https://deepseek.com/*']
+    expect(matchedSitePattern('https://deepseek.com/', patterns)).not.toBeNull()
+    expect(matchedSitePattern('https://chat.deepseek.com/app?q=1', patterns)).not.toBeNull()
+    expect(matchedSitePattern('https://www.a.b.deepseek.com/', patterns)).not.toBeNull()
+    // 带路径的条目同样吃子域
+    const withPath = ['https://deepseek.com/docs']
+    expect(matchedSitePattern('https://chat.deepseek.com/docs/x', withPath)).not.toBeNull()
+    expect(matchedSitePattern('https://chat.deepseek.com/other', withPath)).toBeNull()
+    // '*.' 前缀的存量写法与不带前缀是同一条规则
+    expect(matchedSitePattern('https://chat.deepseek.com/', ['https://*.deepseek.com/*'])).not.toBeNull()
+  })
+
+  it('同路径时主机名更长的更具体（chat 归 chat 那条管）', () => {
+    const patterns = ['https://deepseek.com/*', 'https://chat.deepseek.com/*']
+    expect(matchedSitePattern('https://chat.deepseek.com/chat', patterns)).toBe(
+      'https://chat.deepseek.com/*'
+    )
+    expect(matchedSitePattern('https://other.deepseek.com/', patterns)).toBe('https://deepseek.com/*')
+    expect(matchedSitePattern('https://deepseek.com/', patterns)).toBe('https://deepseek.com/*')
+  })
+
+  it('协议与端口不同不命中，前缀伪造不命中', () => {
     const patterns = ['https://chat.example.com/*', 'http://localhost:5173/*']
-    expect(matchedSitePattern('https://www.chat.example.com/', patterns)).toBeNull() // 子域需单独添加
     expect(matchedSitePattern('https://chat.example.com:8443/', patterns)).toBeNull() // 端口不同
     expect(matchedSitePattern('http://localhost:5174/', patterns)).toBeNull()
     expect(matchedSitePattern('https://evil.com/', patterns)).toBeNull()
     expect(matchedSitePattern('https://chat.example.com.evil.com/', patterns)).toBeNull() // 前缀伪造
+    expect(matchedSitePattern('https://evilchat.example.com/', patterns)).toBeNull() // 伪造成子域也吃不到
   })
 
   it('空列表、非法条目与非法 URL 一律不命中', () => {
@@ -135,22 +164,35 @@ describe('matchSite', () => {
 })
 
 describe('sitePermissionOrigins', () => {
-  it('整站条目只需一条 origin', () => {
-    expect(sitePermissionOrigins('https://chat.example.com/*')).toEqual(['https://chat.example.com/*'])
+  it('整站条目 = 本域 + 子域各一条', () => {
+    expect(sitePermissionOrigins('https://chat.example.com/*')).toEqual([
+      'https://chat.example.com/*',
+      'https://*.chat.example.com/*'
+    ])
+    // '*.' 前缀的存量写法归一后同样成对
+    expect(sitePermissionOrigins('https://*.chat.example.com/*')).toEqual([
+      'https://chat.example.com/*',
+      'https://*.chat.example.com/*'
+    ])
   })
 
-  it('带路径的条目同时给出精确路径与子树两条', () => {
+  it('带路径的条目：精确路径与子树 × 本域与子域', () => {
     expect(sitePermissionOrigins('https://chat.example.com/docs')).toEqual([
       'https://chat.example.com/docs',
-      'https://chat.example.com/docs/*'
+      'https://chat.example.com/docs/*',
+      'https://*.chat.example.com/docs',
+      'https://*.chat.example.com/docs/*'
     ])
     expect(sitePermissionOrigins('https://chat.example.com/docs/*')).toEqual([
       'https://chat.example.com/docs',
-      'https://chat.example.com/docs/*'
+      'https://chat.example.com/docs/*',
+      'https://*.chat.example.com/docs',
+      'https://*.chat.example.com/docs/*'
     ])
   })
 
   it('写 http 的条目协议不限，两种协议都要申请', () => {
+    // 带端口的条目没有子域，只有协议两份
     expect(sitePermissionOrigins('http://localhost:5173/*')).toEqual([
       'http://localhost:5173/*',
       'https://localhost:5173/*'
@@ -158,8 +200,21 @@ describe('sitePermissionOrigins', () => {
     expect(sitePermissionOrigins('http://dev.example.com/admin')).toEqual([
       'http://dev.example.com/admin',
       'http://dev.example.com/admin/*',
+      'http://*.dev.example.com/admin',
+      'http://*.dev.example.com/admin/*',
       'https://dev.example.com/admin',
-      'https://dev.example.com/admin/*'
+      'https://dev.example.com/admin/*',
+      'https://*.dev.example.com/admin',
+      'https://*.dev.example.com/admin/*'
+    ])
+  })
+
+  it('IPv4 条目没有子域', () => {
+    expect(sitePermissionOrigins('http://192.168.1.10:8080/admin')).toEqual([
+      'http://192.168.1.10:8080/admin',
+      'http://192.168.1.10:8080/admin/*',
+      'https://192.168.1.10:8080/admin',
+      'https://192.168.1.10:8080/admin/*'
     ])
   })
 

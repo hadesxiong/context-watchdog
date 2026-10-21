@@ -96,10 +96,10 @@
   "profile_eu_desc": "追加 IBAN 与增值税号，含校验位验证",
 
   "paste_section_title": "粘贴自动拦截",
-  "paste_section_desc": "在已授权站点粘贴时自动脱敏（正则档检测，无需模型）；未授权站点完全不受影响",
-  "paste_input_placeholder": "例如 chat.example.com 或 chat.example.com/docs",
+  "paste_section_desc": "在已授权站点（含其子域）粘贴时自动脱敏（正则档，无需模型）；未授权站点完全不受影响",
+  "paste_input_placeholder": "例如 deepseek.com 或 chat.example.com/docs",
   "paste_empty": "未添加站点：粘贴行为保持原样",
-  "paste_err_invalid": "无法识别该站点：请输入域名或网址（可含路径；写 http 则协议不限）",
+  "paste_err_invalid": "无法识别该站点：请输入域名或网址（含子域，可含路径；写 http 则协议不限）",
   "paste_err_exists": "该站点已在列表中",
   "paste_err_denied": "未授权，站点未添加",
   "paste_ok_added": "已添加：该站点已打开的页面立即生效，粘贴即自动脱敏",
@@ -110,9 +110,11 @@
 
   "site_widget_ai": "本站 AI 增强",
   "site_widget_open": "在侧边栏中打开",
+  "site_widget_opened": "侧边栏已打开",
   "site_widget_open_failed": "打开失败，请点扩展图标",
   "site_widget_need_ai": "需先在侧边栏开启 AI 模型",
   "site_widget_loading": "AI 模型尚未就绪",
+  "site_widget_preparing": "AI 模型正在启动…",
   "site_widget_cost": "启用后首段粘贴可能慢 1–2 秒",
   "site_widget_collapse": "收起",
 

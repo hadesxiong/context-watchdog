@@ -15,9 +15,11 @@ export const contextWatchdogEntryPoint = (messages?: {
   widget?: {
     ai?: string
     open?: string
+    opened?: string
     openFailed?: string
     needAi?: string
     loading?: string
+    preparing?: string
     cost?: string
     collapse?: string
   }
@@ -40,13 +42,14 @@ export const contextWatchdogEntryPoint = (messages?: {
           surface: 'rgba(24, 24, 27, 0.96)',
           ink: '#fafafa',
           muted: 'rgba(250, 250, 250, 0.62)',
-          border: 'rgba(250, 250, 250, 0.18)',
+          // 暗色页面上 0.18 的边几乎看不见，面板会和背景连成一片
+          border: 'rgba(250, 250, 250, 0.3)',
           soft: 'rgba(250, 250, 250, 0.08)',
           mark: '#fafafa',
           warning: '#fbbf24',
-          shadow: '0 8px 24px rgba(0, 0, 0, 0.35)',
+          shadow: '0 10px 30px rgba(0, 0, 0, 0.55)',
           fabBg: 'rgba(24, 24, 27, 0.92)',
-          fabShadow: '0 4px 14px rgba(0, 0, 0, 0.35)',
+          fabShadow: '0 6px 18px rgba(0, 0, 0, 0.55)',
           toggleOff: 'rgba(250, 250, 250, 0.22)'
         }
       : {
@@ -336,9 +339,13 @@ export const contextWatchdogEntryPoint = (messages?: {
     const t = {
       ai: messages?.widget?.ai ?? 'AI enhancement',
       open: messages?.widget?.open ?? 'Open side panel',
+      opened: messages?.widget?.opened ?? 'Side panel is open',
       openFailed: messages?.widget?.openFailed ?? 'Could not open the side panel, click the toolbar icon',
       needAi: messages?.widget?.needAi ?? 'Enable AI in the side panel first',
       loading: messages?.widget?.loading ?? 'AI model is still loading',
+      // 本站开关已开、宿主正在预热（模型文件已在本地）：这不是"没就绪"，
+      // 是"马上就好"——文案分开，用户才不会以为检验出错
+      preparing: messages?.widget?.preparing ?? 'AI model is starting…',
       cost: messages?.widget?.cost ?? 'First paste may take 1–2s longer',
       collapse: messages?.widget?.collapse ?? 'Collapse'
     }
@@ -351,6 +358,12 @@ export const contextWatchdogEntryPoint = (messages?: {
     let globalEnabled = false
     let siteEnabled = false
     let hostReady = false
+    // 侧栏当前是否开着（SW 用 runtime.getContexts 查真实状态，别处关掉也能同步回来）
+    let panelOpen = false
+    // 打开侧栏的请求在途、失败提示的 3s 窗口：两者都是局部 UI 态，
+    // 由 render 一起重建，避免"点一次就永久卡在灰态 + 转圈光标"
+    let opening = false
+    let openFailed = false
 
     const host = document.createElement('div')
     host.id = ROOT_ID
@@ -394,7 +407,7 @@ export const contextWatchdogEntryPoint = (messages?: {
     Object.assign(panel.style, {
       width: '280px',
       marginBottom: '10px',
-      padding: '14px',
+      padding: '16px',
       borderRadius: '12px',
       display: 'none'
     })
@@ -425,10 +438,7 @@ export const contextWatchdogEntryPoint = (messages?: {
       else fab.textContent = 'AI'
     }
     paintFab()
-    fab.addEventListener('click', () => {
-      expanded = !expanded
-      render()
-    })
+    fab.addEventListener('click', () => setExpanded(!expanded))
 
     root.append(panel, fab)
     shadow.appendChild(root)
@@ -474,15 +484,13 @@ export const contextWatchdogEntryPoint = (messages?: {
       event => {
         if (!expanded) return
         if (event.composedPath().includes(host)) return
-        expanded = false
-        render()
+        setExpanded(false)
       },
       true
     )
     document.addEventListener('keydown', event => {
       if (event.key !== 'Escape' || !expanded) return
-      expanded = false
-      render()
+      setExpanded(false)
     })
 
     const send = (message: unknown, done?: (response: unknown) => void): void => {
@@ -495,11 +503,64 @@ export const contextWatchdogEntryPoint = (messages?: {
       })
     }
 
+    // 一次状态同步：全局/逐站开关、宿主就绪、侧栏开没开。
+    // 展开期间每 2s 来一次——在别的窗口关掉侧栏、模型宿主刚跑起来，
+    // 都要能立刻反映到面板上；收起就停掉，不空转打扰 SW。
+    const syncState = (): void => {
+      send({ type: 'SITE_AI_GET' }, response => {
+        const result = response as
+          | {
+              ok?: boolean
+              state?: {
+                globalEnabled?: boolean
+                siteEnabled?: boolean
+                hostReady?: boolean
+                panelOpen?: boolean
+              }
+            }
+          | undefined
+        // SW 瞬时不可用（休眠/重启）不卸载挂件：保持禁用态，下一次同步仍可重试
+        if (!result?.ok || !result.state) return
+
+        globalEnabled = result.state.globalEnabled === true
+        siteEnabled = result.state.siteEnabled === true
+        hostReady = result.state.hostReady === true
+        // panelOpen 缺省（浏览器不支持 getContexts）时按「没开」处理，按钮照常可点
+        panelOpen = result.state.panelOpen === true
+        ready = true
+        render()
+        applySyncSchedule()
+      })
+    }
+
+    // 轮询节奏：展开 2s；收起后若「本站已开、宿主还没就绪」仍在收敛（SW 已预热），
+    // 放慢到 4s 继续问到就绪为止。少了这条，模型下载完后的第一屏永远停在
+    // 「尚未就绪」——用户不展开面板就看不到它已经好了。
+    let pollTimer: ReturnType<typeof setInterval> | null = null
+    let pollInterval = 0
+
+    const applySyncSchedule = (): void => {
+      const ms = expanded ? 2000 : ready && globalEnabled && siteEnabled && !hostReady ? 4000 : 0
+      if (ms === pollInterval) return
+      if (pollTimer) clearInterval(pollTimer)
+      pollInterval = ms
+      pollTimer = ms ? setInterval(syncState, ms) : null
+    }
+
+    // 收放统一从这里走：除了渲染，还要起停状态轮询
+    const setExpanded = (next: boolean): void => {
+      expanded = next
+      render()
+      applySyncSchedule()
+    }
+
     function disabledReason(): string {
       // 状态回包前（或 SW 瞬时不可用）一律禁用：宁可晚一点可点，也不能显示错的状态
       if (!ready) return t.loading
       if (!globalEnabled) return t.needAi
-      if (!hostReady) return t.loading
+      // 本站开关开着但宿主还没就绪：SW 已在预热（模型文件已在本地则秒级就绪，
+      // 首次则在下载），说"正在启动"比"尚未就绪"更准确
+      if (!hostReady) return siteEnabled ? t.preparing : t.loading
       return ''
     }
 
@@ -514,7 +575,7 @@ export const contextWatchdogEntryPoint = (messages?: {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginBottom: '8px'
+        marginBottom: '12px'
       })
       const brand = document.createElement('span')
       Object.assign(brand.style, { display: 'flex', alignItems: 'center', gap: '6px' })
@@ -541,8 +602,7 @@ export const contextWatchdogEntryPoint = (messages?: {
       })
       collapseButton.addEventListener('click', event => {
         event.stopPropagation()
-        expanded = false
-        render()
+        setExpanded(false)
       })
       header.append(brand, collapseButton)
 
@@ -551,7 +611,7 @@ export const contextWatchdogEntryPoint = (messages?: {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        gap: '10px'
+        gap: '12px'
       })
       const label = document.createElement('span')
       label.textContent = t.ai
@@ -609,38 +669,49 @@ export const contextWatchdogEntryPoint = (messages?: {
       const hint = document.createElement('p')
       hint.textContent = reason || t.cost
       Object.assign(hint.style, {
-        margin: '6px 0 12px',
+        margin: '10px 0 14px',
         fontSize: '13px',
         lineHeight: '1.5',
         color: reason ? colors.warning : colors.muted
       })
 
+      // 「在侧边栏中打开」：三种态由渲染重建，绝不在 DOM 上留下残留的
+      // 灰态/转圈光标——上一版点成功后没人把 disabled/cursor 复位，
+      // 表现就是"点了就失效、悬浮还转圈"
       const openButton = document.createElement('button')
       openButton.type = 'button'
-      openButton.textContent = t.open
+      openButton.textContent = openFailed ? t.openFailed : panelOpen ? t.opened : t.open
+      openButton.disabled = opening || panelOpen
       Object.assign(openButton.style, {
         width: '100%',
-        padding: '9px 12px',
+        padding: '10px 12px',
         borderRadius: '8px',
         border: `1px solid ${colors.border}`,
         background: colors.soft,
         color: colors.ink,
         font: 'inherit',
-        cursor: 'pointer'
+        cursor: opening ? 'wait' : panelOpen ? 'default' : 'pointer',
+        opacity: opening ? '0.6' : '1'
       })
       openButton.addEventListener('click', () => {
-        // 打开侧栏可能退回弹窗（无侧栏 API / 手势失效），点完要有反馈
-        openButton.disabled = true
-        openButton.style.cursor = 'wait'
-        openButton.style.opacity = '0.6'
+        if (openButton.disabled) return
+        opening = true
+        render()
         send({ type: 'OPEN_SIDE_PANEL' }, response => {
+          opening = false
           const result = response as { ok?: boolean } | undefined
-          if (result?.ok) return
-          openButton.textContent = t.openFailed
-          openButton.style.cursor = 'pointer'
-          openButton.style.opacity = '1'
+          if (result?.ok) {
+            // 打开成功就切成「已打开」态，交给轮询去发现别处的关闭
+            panelOpen = true
+            render()
+            return
+          }
+          // 失败（无侧栏 API / 手势过期且弹窗兜底也失败）：就地提示 3s
+          openFailed = true
+          render()
           setTimeout(() => {
-            openButton.textContent = t.open
+            openFailed = false
+            render()
           }, 3000)
         })
       })
@@ -649,27 +720,7 @@ export const contextWatchdogEntryPoint = (messages?: {
     }
 
     render()
-
-    send({ type: 'SITE_AI_GET' }, response => {
-      const result = response as
-        | {
-            ok?: boolean
-            state?: {
-              globalEnabled?: boolean
-              siteEnabled?: boolean
-              hostReady?: boolean
-            }
-          }
-        | undefined
-      // SW 瞬时不可用（休眠/重启）不卸载挂件：保持禁用态，下一次交互仍可重试
-      if (!result?.ok || !result.state) return
-
-      globalEnabled = result.state.globalEnabled === true
-      siteEnabled = result.state.siteEnabled === true
-      hostReady = result.state.hostReady === true
-      ready = true
-      render()
-    })
+    syncState()
   }
 
   if (window.top === window) {

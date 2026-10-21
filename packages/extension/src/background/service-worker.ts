@@ -124,6 +124,31 @@ const readHostReady = async (): Promise<boolean> => {
   }
 }
 
+// 该标签页的侧边栏是否开着。用 runtime.getContexts 查真实状态（不是猜），
+// 用户在别处关掉侧栏也能同步回按钮；没有这个 API（旧版 / Firefox）就返回
+// undefined = 未知，挂件按「没开」处理，按钮照常可点。
+const isSidePanelOpen = async (tabId: number | undefined): Promise<boolean | undefined> => {
+  const runtime = chrome.runtime as unknown as {
+    getContexts?: (query: Record<string, unknown>) => Promise<unknown[]>
+  }
+  if (typeof runtime.getContexts !== 'function') return undefined
+  try {
+    if (typeof tabId === 'number') {
+      const panels = await runtime.getContexts({ contextTypes: ['SIDE_PANEL'], tabId })
+      if (panels.length > 0) return true
+    }
+    // 无侧栏 API 时按钮退回的「弹窗面板」不属于这个 tabId，按文档 URL 认：
+    // 否则弹窗一开按钮又亮回可点，用户会连开好几个窗口
+    const popups = await runtime.getContexts({
+      contextTypes: ['TAB'],
+      documentUrl: chrome.runtime.getURL('src/sidepanel/index.html')
+    })
+    return popups.length > 0
+  } catch {
+    return undefined
+  }
+}
+
 // 本站 AI 是否生效：全局允许 ∧ 本站开启 ∧ 宿主就绪（三者缺一即退回正则档）
 const isAiEffectiveForSite = async (pattern: string): Promise<boolean> => {
   const [globalStore, siteMap, hostReady] = await Promise.all([
@@ -157,9 +182,11 @@ const injectContextWatchdog = (tabId: number): void => {
   const widget = {
     ai: chrome.i18n.getMessage('site_widget_ai') || 'AI enhancement',
     open: chrome.i18n.getMessage('site_widget_open') || 'Open side panel',
+    opened: chrome.i18n.getMessage('site_widget_opened') || 'Side panel is open',
     openFailed: chrome.i18n.getMessage('site_widget_open_failed') || 'Could not open the side panel',
     needAi: chrome.i18n.getMessage('site_widget_need_ai') || 'Enable AI in the side panel first',
     loading: chrome.i18n.getMessage('site_widget_loading') || 'AI model is still loading',
+    preparing: chrome.i18n.getMessage('site_widget_preparing') || 'AI model is starting…',
     cost: chrome.i18n.getMessage('site_widget_cost') || 'The first paste may take 1–2s longer',
     collapse: chrome.i18n.getMessage('site_widget_collapse') || 'Collapse'
   }
@@ -300,11 +327,20 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
         readBooleanMap(SITE_AI_ENABLED_KEY),
         readHostReady()
       ])
+      const globalEnabled = globalStore[AI_ENABLED_KEY] === true
+      const siteEnabled = siteMap[pattern] === true
+      // 预热：宿主可能已随上次会话收掉（浏览器重启 / 关过面板），而模型文件早在
+      // 本地——页面一开就把它叫起来，几秒后 ready，挂件的轮询会自己翻到可用。
+      // 不预热的话，开关明明是开的却一直显示"尚未就绪"，首段粘贴也拿不到 AI。
+      if (globalEnabled && siteEnabled && !hostReady && isModelHostSupported()) {
+        void ensureModelHost().catch(() => undefined)
+      }
       const state: SiteAiState = {
         pattern,
-        globalEnabled: globalStore[AI_ENABLED_KEY] === true,
-        siteEnabled: siteMap[pattern] === true,
-        hostReady
+        globalEnabled,
+        siteEnabled,
+        hostReady,
+        panelOpen: await isSidePanelOpen(sender.tab?.id)
       }
       sendResponse({ ok: true, state } satisfies SiteAiGetResponse)
     })()

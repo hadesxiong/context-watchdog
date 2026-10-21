@@ -46,6 +46,8 @@ export interface SiteAiState {
   globalEnabled: boolean
   siteEnabled: boolean
   hostReady: boolean
+  /** 该标签页的侧边栏当前是否开着；浏览器查不到（无 getContexts）时缺省 */
+  panelOpen?: boolean
 }
 
 export interface SiteAiGetResponse {

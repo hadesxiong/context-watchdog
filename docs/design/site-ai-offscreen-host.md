@@ -128,10 +128,11 @@ export interface ModelHostDetectResponse {
   error?: string
 }
 
-// 新增：content script ↔ SW（挂件）
-export const SITE_AI_GET = 'SITE_AI_GET'     // { pattern } → { global, site, hostReady }
-export const SITE_AI_SET = 'SITE_AI_SET'     // { pattern, enabled }
-export const OPEN_SIDE_PANEL = 'OPEN_SIDE_PANEL'
+// 新增：content script ↔ SW（挂件；pattern 一律不传——带路径的条目页面算不出来，
+// 也不可信，SW 用 sender.url 在用户列表里解析最具体的条目）
+export const SITE_AI_GET = 'SITE_AI_GET'     // {} → { pattern, globalEnabled, siteEnabled, hostReady, panelOpen? }
+export const SITE_AI_SET = 'SITE_AI_SET'     // { enabled }（站点由 sender.url 推导）
+export const OPEN_SIDE_PANEL = 'OPEN_SIDE_PANEL'   // 同步调 sidePanel.open()（手势），失败退回弹窗
 
 // 新增：SW → tab（AI 二次升级结果）
 export const PASTE_AI_RESULT = 'PASTE_AI_RESULT'
@@ -161,9 +162,10 @@ export interface PasteDetectRequest {
 
 ```
 挂件（默认收起为 44px 圆角矩形按钮 + mark，12px 圆角，右下角，z-index 2147483647）
-├─ 展开面板（宽 280px，头部左侧同款 mark + 字标，正文 14px / 提示 13px）
+├─ 展开面板（宽 280px，内边距 16px，头部/提示/按钮间 12–14px，头部左侧同款 mark + 字标，
+│            正文 14px / 提示 13px，暗色下带 30% 亮度边框不与页面融为一体）
 │   ├─ 行1：本站 AI 增强  [Switch]   副文案：启用后首段粘贴可能慢 1~2 秒
-│   └─ 行2：在侧边栏中打开 [按钮]     → 发 OPEN_SIDE_PANEL（失败时就地提示）
+│   └─ 行2：在侧边栏中打开 / 侧边栏已打开（禁用） / 打开失败（3s）
 └─ 收起（× / Esc / 点击面板外）：仅折叠面板，不写存储，挂件本身常驻
 ```
 
@@ -189,6 +191,19 @@ export interface PasteDetectRequest {
    第一个 `await` 就过期（实测报 `may only be called in response to a user gesture`，
    表现为按钮点了没反应）。授权校验并行进行，只决定回包内容。侧栏 API 不可用或手势
    已失效时，同一份面板页面退回 `windows.create` 弹窗，按钮必须有反应。
+10. 「在侧边栏中打开」是**状态控件**而非一次性按钮：打开成功切到「侧边栏已打开」禁用态，
+    状态来自 SW 的 `runtime.getContexts`（按 tabId 查 SIDE_PANEL；弹窗兜底按 sidepanel
+    页面的 documentUrl 查 TAB）——在别处关掉侧栏也能同步回可点态。展开期间挂件每 2s
+    轮询一次 `SITE_AI_GET`（收起即停），因此开关/宿主/侧栏三者的变化都能即时反映。
+    请求在途用 `disabled + cursor:wait + 0.6 透明度`，回包后由 render 重建整体复位——
+    不在 DOM 上留残留（曾出现「点一次就永久灰态 + 转圈光标」）。
+11. 宿主预热：`SITE_AI_GET` 发现「全局开 ∧ 本站开 ∧ 宿主没跑」时顺手
+    `ensureModelHost()`（单飞、幂等）。不预热的话，重启浏览器后模型明明已下载，
+    首个页面却一直显示「尚未就绪」，首段粘贴也拿不到 AI；预热后靠上一条的轮询
+    在几秒内翻到可用，无需刷新页面。
+12. 暗色下面板/按钮的边框由 18% 提到 30% 亮度并加强投影：0.18 在深色页面上几乎不可见，
+    面板会与背景连成一片（真机反馈）。间距同轮调整：内边距 14→16px、头部下边距 8→12px、
+    提示上下 6/12→10/14px。
 
 ### 3.5 粘贴链路的 AI 二次升级（状态机）
 
@@ -293,7 +308,7 @@ P6 content script 守卫（全部通过才替换）：
 
 **回归**
 
-- `npm run typecheck`、`npx vitest run`（当前基线 371 项）、`npm run build`（零警告）、`npm run probe:layout`（85 项）、`npm run probe:widget`（14 项）必须全绿。
+- `npm run typecheck`、`npx vitest run`（当前基线 375 项）、`npm run build`（零警告）、`npm run probe:layout`（85 项）、`npm run probe:widget`（16 项）必须全绿。
 - 新增探针断言（扩 `scripts/probe-layout.mjs` 或新脚本）：
   - 挂件在授权站点渲染、无授权站点不渲染；
   - 挂件不影响页面布局（不产生滚动条、不遮挡输入框，可用简易碰撞检测）。

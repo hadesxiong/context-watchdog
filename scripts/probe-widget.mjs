@@ -11,7 +11,9 @@
  *   5) 常驻：页面主动删除挂件后自动重挂
  *   6) 收起态 44×44、12px 圆角矩形（面板 display:none，host 盒子就是按钮）
  *   7) mark 跟随页面明暗主题换色（亮色 #18181b / 暗色 #fafafa）
- *   8) 「在侧边栏中打开」点击后确实打开面板（侧栏不可用时退回弹窗）
+ *   8) 「在侧边栏中打开」点击后确实打开面板（侧栏不可用时退回弹窗），
+ *      且按钮切成「已打开」的禁用态，而不是卡在转圈的灰态
+ *   9) 暗色下面板有能与背景分开的边框
  *
  * 挂件在 closed Shadow DOM 里，页面 JS 读不到内部，因此 6)~8) 走 CDP 的
  * DOM.getDocument(pierce) 穿透读取节点树（与 DevTools 元素面板同一机制）。
@@ -222,6 +224,13 @@ try {
     'contextwatchdog.aiEnabled': true
   }).then(() => 'ok')`)
   if (stored !== 'ok') throw new Error(`写入站点配置失败：${stored}`)
+  // 宿主就绪态直接置 ready：探针只关心挂件的展示与交互，
+  // 不能因为一次探针就去下载几百 MB 的模型（预热逻辑会因此跳过）
+  const hostReady = await cdp.eval(`chrome.storage.session.set({
+    'contextwatchdog.modelHost': { phase: 'ready', percent: 100, received: 0, total: 0,
+      waiting: false, downloadStarted: false, error: null, updatedAt: Date.now() }
+  }).then(() => 'ok')`)
+  if (hostReady !== 'ok') throw new Error(`写入宿主就绪态失败：${hostReady}`)
   await sleep(800)
 
   // ① 授权站点
@@ -280,6 +289,7 @@ try {
     return {
       paths: inside.filter(node => node.nodeName === 'path').map(node => attrOf(node)),
       fab: buttons.find(node => (attrOf(node)['aria-controls'] ?? '') === 'cw-panel'),
+      panel: inside.find(node => attrOf(node).id === 'cw-panel'),
       // 「在侧边栏中打开」是整行宽按钮（width:100%），靠样式定位避免依赖文案语言
       openButton: buttons.find(node => (attrOf(node).style ?? '').includes('width: 100%'))
     }
@@ -301,6 +311,8 @@ try {
   widget = await readWidget()
   check('mark 跟随暗色主题换浅色（fill #fafafa）',
     widget.paths.length > 0 && widget.paths.every(attr => attr.fill === '#fafafa'))
+  check('暗色下面板带能与背景区分开的边框',
+    (attrOf(widget.panel ?? {}).style ?? '').includes('rgba(250, 250, 250, 0.3)'))
   await emulateScheme(null)
   await sleep(600)
 
@@ -321,7 +333,16 @@ try {
     await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 })
     await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 })
   }
-  await sleep(1500)
+  await sleep(800)
+  // 打开后应切到「已打开」态：disabled 由面板真实状态决定，
+  // 光标必须复位（上一版成功后无人复位，留下永久的 wait 光标与灰态）
+  widget = await readWidget()
+  const openStyle = attrOf(widget.openButton ?? {}).style ?? ''
+  check('打开后切成「已打开」态（禁用且不留转圈光标）',
+    Boolean(widget.openButton) &&
+      Object.prototype.hasOwnProperty.call(attrOf(widget.openButton ?? {}), 'disabled') &&
+      !openStyle.includes('cursor: wait'))
+  await sleep(900)
   const targets = await (await fetch(`http://127.0.0.1:${debugPort}/json/list`)).json()
   const panelOpened = targets.some(target =>
     target.type === 'page' && target.url.startsWith(`chrome-extension://${extensionId}/src/sidepanel/index.html`))

@@ -167,14 +167,18 @@ vite 别名把 gliner 静态引用的 `onnxruntime-web/webgpu|webgl` 打桩（EP
 
 ## 8. 粘贴自动拦截
 
-- **授权模型**：`optional_host_permissions`（`https://*/*` + `http://localhost/*` +
-  `http://127.0.0.1/*`，不含宽泛的 `http://*/*`）+ 运行时
-  `chrome.permissions.request`（必须用户手势）——**不申请 `<all_urls>`**，
-  未授权站点零接触；
+- **授权模型**：`optional_host_permissions`（`https://*/*` + `http://*/*`，
+  不含宽泛的 `<all_urls>`）+ 运行时 `chrome.permissions.request`（必须用户手势）
+  ——**不申请 `<all_urls>`**，未授权站点零接触；
+- **站点条目语义**（`engine/src/sites.ts`）：裸域名一并覆盖其子域
+  （`deepseek.com` 命中 `chat.deepseek.com`，无需逐个添加）；带路径的条目按目录
+  边界命中（`/docs` 命中 `/docs` 与 `/docs/x`，不命中 `/docspage`）；写 `http` 的
+  条目视为协议不限；多条命中时取最具体的一条（路径最长，再看主机名最长）。
+  授权时一并申请 `*.` 子域 origin，否则子域匹配得到却没有注入权限；
 - **注入时机**：`tabs.onUpdated`（loading 且 URL 匹配）+ 站点列表变化时对已开页面即时注入；
   `chrome.scripting.executeScript({ allFrames: true })`，无 manifest 常驻脚本；
 - **就地替换策略**：input/textarea 走「先插入后就地替换」（不阻塞输入）；站点规范化
-  与匹配在 `core/sites.ts`（单测 11 例）；插入区间推导与改写守卫为纯函数
+  与匹配在 `engine/src/sites.ts`（单测 24 例）；插入区间推导与改写守卫为纯函数
   （`content/pasteText.ts`，单测 6+2 例）；
 - **contenteditable 策略**：富文本区域做不了逐字校验（innerText 与 Range.toString 对
   `<div>/<br>` 的换行建模互不一致、Lexical/ProseMirror 类编辑器会重排 DOM）→
