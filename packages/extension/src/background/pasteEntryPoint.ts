@@ -15,6 +15,7 @@ export const contextWatchdogEntryPoint = (messages?: {
   widget?: {
     ai?: string
     open?: string
+    openFailed?: string
     needAi?: string
     loading?: string
     cost?: string
@@ -27,6 +28,40 @@ export const contextWatchdogEntryPoint = (messages?: {
   const globalRef = window as unknown as Record<string, unknown>
   if (globalRef.__contextWatchdogInstalled) return
   globalRef.__contextWatchdogInstalled = true
+
+  // 主题：跟随宿主页面（OS 级 prefers-color-scheme，与设计 token 同一个开关条件）。
+  // 注入侧不能写 <style>（宿主页面 style-src 会拦），色板只能在 JS 里取值，
+  // 切换时整体重绘。toast 与站点挂件共用这一套。
+  const darkQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null
+  let darkMode = darkQuery?.matches === true
+  const palette = () =>
+    darkMode
+      ? {
+          surface: 'rgba(24, 24, 27, 0.96)',
+          ink: '#fafafa',
+          muted: 'rgba(250, 250, 250, 0.62)',
+          border: 'rgba(250, 250, 250, 0.18)',
+          soft: 'rgba(250, 250, 250, 0.08)',
+          mark: '#fafafa',
+          warning: '#fbbf24',
+          shadow: '0 8px 24px rgba(0, 0, 0, 0.35)',
+          fabBg: 'rgba(24, 24, 27, 0.92)',
+          fabShadow: '0 4px 14px rgba(0, 0, 0, 0.35)',
+          toggleOff: 'rgba(250, 250, 250, 0.22)'
+        }
+      : {
+          surface: 'rgba(255, 255, 255, 0.98)',
+          ink: '#18181b',
+          muted: 'rgba(24, 24, 27, 0.62)',
+          border: 'rgba(24, 24, 27, 0.14)',
+          soft: 'rgba(24, 24, 27, 0.05)',
+          mark: '#18181b',
+          warning: '#b45309',
+          shadow: '0 8px 24px rgba(0, 0, 0, 0.14)',
+          fabBg: 'rgba(255, 255, 255, 0.98)',
+          fabShadow: '0 4px 14px rgba(0, 0, 0, 0.14)',
+          toggleOff: 'rgba(24, 24, 27, 0.18)'
+        }
 
   // 超长粘贴守卫上限（与 service-worker.ts / content/pasteText.ts 的 MAX_PASTE_CHARS
   // 保持一致；注入函数必须自包含，只能内联副本）
@@ -69,6 +104,7 @@ export const contextWatchdogEntryPoint = (messages?: {
   // 页面 CSS/主题，也不能引入 class 污染宿主页面
   const showToast = (count: number, template = toastTemplate): void => {
     document.getElementById('context-watchdog-toast')?.remove()
+    const colors = palette()
     const toast = document.createElement('div')
     toast.id = 'context-watchdog-toast'
     toast.setAttribute('role', 'status')
@@ -78,12 +114,13 @@ export const contextWatchdogEntryPoint = (messages?: {
       top: '16px',
       right: '16px',
       zIndex: '2147483647',
-      padding: '6px 12px',
-      borderRadius: '8px',
-      background: 'rgba(17, 24, 39, 0.92)',
-      color: '#fff',
-      font: '13px/1.4 system-ui, sans-serif',
-      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.25)',
+      padding: '9px 14px',
+      borderRadius: '10px',
+      border: `1px solid ${colors.border}`,
+      background: colors.surface,
+      color: colors.ink,
+      font: '15px/1.45 system-ui, sans-serif',
+      boxShadow: colors.shadow,
       pointerEvents: 'none'
     })
     ;(document.body ?? document.documentElement).appendChild(toast)
@@ -299,6 +336,7 @@ export const contextWatchdogEntryPoint = (messages?: {
     const t = {
       ai: messages?.widget?.ai ?? 'AI enhancement',
       open: messages?.widget?.open ?? 'Open side panel',
+      openFailed: messages?.widget?.openFailed ?? 'Could not open the side panel, click the toolbar icon',
       needAi: messages?.widget?.needAi ?? 'Enable AI in the side panel first',
       loading: messages?.widget?.loading ?? 'AI model is still loading',
       cost: messages?.widget?.cost ?? 'First paste may take 1–2s longer',
@@ -308,8 +346,6 @@ export const contextWatchdogEntryPoint = (messages?: {
     const ROOT_ID = 'context-watchdog-widget'
     if (document.getElementById(ROOT_ID)) return
 
-    // 与 normalizeSiteInput 的输出同构；SW 会拿 sender.url 再算一遍做双校验
-    const pattern = `${location.protocol}//${location.host}/*`
     let expanded = false
     let ready = false
     let globalEnabled = false
@@ -319,13 +355,17 @@ export const contextWatchdogEntryPoint = (messages?: {
     const host = document.createElement('div')
     host.id = ROOT_ID
 
-    // 内嵌看门狗 mark：SW 把 public/icons/logo.svg 原文染白后随 args 递进来。
-    // 既不能用 <img src>（宿主页面 CSP 的 img-src 会拦），也不能 fetch 扩展资源
-    // （要 web_accessible_resources，且多一次请求）；DOMParser 解析字符串零请求。
-    const makeMark = (size: number): Element | null => {
+    // 内嵌看门狗 mark：SW 把 public/icons/logo.svg 原文随 args 递进来，这里按当前
+    // 主题染色（暗色用前景色，亮色用墨色）。既不能用 <img src>（宿主页面 CSP 的
+    // img-src 会拦），也不能 fetch 扩展资源（要 web_accessible_resources，且多一次
+    // 请求）；DOMParser 解析字符串零请求。染色必须整串替换：逐个 path 改 fill 会把
+    // 描边层填成实心，图标就花了。
+    const makeMark = (size: number, color: string): Element | null => {
       const raw = messages?.mark
       if (!raw) return null
-      const svg = new DOMParser().parseFromString(raw, 'image/svg+xml').documentElement
+      const svg = new DOMParser()
+        .parseFromString(raw.replace(/#18181b/g, color), 'image/svg+xml')
+        .documentElement
       if (svg.localName !== 'svg') return null
       svg.setAttribute('width', String(size))
       svg.setAttribute('height', String(size))
@@ -346,8 +386,7 @@ export const contextWatchdogEntryPoint = (messages?: {
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'flex-end',
-      font: '13px/1.4 system-ui, -apple-system, sans-serif',
-      color: '#f9fafb'
+      font: '14px/1.5 system-ui, -apple-system, sans-serif'
     })
 
     const panel = document.createElement('div')
@@ -357,12 +396,10 @@ export const contextWatchdogEntryPoint = (messages?: {
       marginBottom: '10px',
       padding: '14px',
       borderRadius: '12px',
-      background: 'rgba(17, 24, 39, 0.96)',
-      color: '#f9fafb',
-      boxShadow: '0 8px 24px rgba(0, 0, 0, 0.28)',
       display: 'none'
     })
 
+    // 收起态：44px 的圆角矩形（12px 圆角与面板/卡片同一规格），不是圆钮
     const fab = document.createElement('button')
     fab.type = 'button'
     fab.setAttribute('aria-label', 'ContextWatchdog')
@@ -372,22 +409,22 @@ export const contextWatchdogEntryPoint = (messages?: {
       width: '44px',
       height: '44px',
       padding: '0',
-      borderRadius: '50%',
-      border: 'none',
-      background: 'rgba(17, 24, 39, 0.92)',
-      color: '#fff',
+      borderRadius: '12px',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
       font: '600 14px/1 system-ui, -apple-system, sans-serif',
       letterSpacing: '0.02em',
-      cursor: 'pointer',
-      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)'
+      cursor: 'pointer'
     })
-    // 白色 mark 打底；万一 mark 没传进来（构建异常），退回原来的「AI」字样
-    const fabMark = makeMark(24)
-    if (fabMark) fab.append(fabMark)
-    else fab.textContent = 'AI'
+    const paintFab = (): void => {
+      const colors = palette()
+      const mark = makeMark(26, colors.mark)
+      // 万一 mark 没传进来（构建异常），退回原来的「AI」字样
+      if (mark) fab.replaceChildren(mark)
+      else fab.textContent = 'AI'
+    }
+    paintFab()
     fab.addEventListener('click', () => {
       expanded = !expanded
       render()
@@ -396,6 +433,30 @@ export const contextWatchdogEntryPoint = (messages?: {
     root.append(panel, fab)
     shadow.appendChild(root)
     document.documentElement.appendChild(host)
+
+    // 主题变化：色板全量重涂（mark 颜色也在内），面板内容交给 render 重建
+    const paintTheme = (): void => {
+      const colors = palette()
+      Object.assign(root.style, { color: colors.ink })
+      Object.assign(panel.style, {
+        background: colors.surface,
+        color: colors.ink,
+        border: `1px solid ${colors.border}`,
+        boxShadow: colors.shadow
+      })
+      Object.assign(fab.style, {
+        background: colors.fabBg,
+        border: `1px solid ${colors.border}`,
+        boxShadow: colors.fabShadow
+      })
+      paintFab()
+      render()
+    }
+    paintTheme()
+    darkQuery?.addEventListener?.('change', event => {
+      darkMode = event.matches
+      paintTheme()
+    })
 
     // 常驻：挂上就显示，状态回包只更新内容。页面重渲染 / 站点脚本清 DOM 时自动重挂；
     // 3s 心跳兜住 document.open/write 与 documentElement 被整体替换（观察器会随旧节点失效）。
@@ -447,6 +508,7 @@ export const contextWatchdogEntryPoint = (messages?: {
       panel.style.display = expanded ? 'block' : 'none'
       fab.setAttribute('aria-expanded', String(expanded))
 
+      const colors = palette()
       const header = document.createElement('div')
       Object.assign(header.style, {
         display: 'flex',
@@ -456,11 +518,11 @@ export const contextWatchdogEntryPoint = (messages?: {
       })
       const brand = document.createElement('span')
       Object.assign(brand.style, { display: 'flex', alignItems: 'center', gap: '6px' })
-      const headerMark = makeMark(18)
+      const headerMark = makeMark(20, colors.mark)
       if (headerMark) brand.append(headerMark)
       const title = document.createElement('span')
       title.textContent = 'ContextWatchdog'
-      Object.assign(title.style, { fontWeight: '600', fontSize: '13px', opacity: '0.92' })
+      Object.assign(title.style, { fontWeight: '600', fontSize: '14px', opacity: '0.92' })
       brand.append(title)
       const collapseButton = document.createElement('button')
       collapseButton.type = 'button'
@@ -472,7 +534,7 @@ export const contextWatchdogEntryPoint = (messages?: {
         background: 'transparent',
         color: 'inherit',
         cursor: 'pointer',
-        fontSize: '16px',
+        fontSize: '18px',
         lineHeight: '1',
         padding: '0 2px',
         opacity: '0.7'
@@ -493,7 +555,7 @@ export const contextWatchdogEntryPoint = (messages?: {
       })
       const label = document.createElement('span')
       label.textContent = t.ai
-      Object.assign(label.style, { fontSize: '13px' })
+      Object.assign(label.style, { fontSize: '14px' })
 
       const reason = disabledReason()
       const disabled = Boolean(reason)
@@ -512,7 +574,7 @@ export const contextWatchdogEntryPoint = (messages?: {
         borderRadius: '999px',
         border: 'none',
         cursor: disabled ? 'not-allowed' : 'pointer',
-        background: siteEnabled ? '#6366f1' : 'rgba(255, 255, 255, 0.28)',
+        background: siteEnabled ? '#6366f1' : colors.toggleOff,
         opacity: disabled ? '0.5' : '1',
         transition: 'background 0.15s ease'
       })
@@ -525,6 +587,7 @@ export const contextWatchdogEntryPoint = (messages?: {
         height: '16px',
         borderRadius: '50%',
         background: '#fff',
+        boxShadow: '0 1px 2px rgba(0, 0, 0, 0.25)',
         transition: 'left 0.15s ease'
       })
       toggle.appendChild(knob)
@@ -533,7 +596,7 @@ export const contextWatchdogEntryPoint = (messages?: {
         const next = !siteEnabled
         siteEnabled = next
         render()
-        send({ type: 'SITE_AI_SET', pattern, enabled: next }, response => {
+        send({ type: 'SITE_AI_SET', enabled: next }, response => {
           const result = response as { ok?: boolean } | undefined
           if (result?.ok) return
           // 写失败就回滚：不能让 UI 显示一个没落库的开关
@@ -546,10 +609,10 @@ export const contextWatchdogEntryPoint = (messages?: {
       const hint = document.createElement('p')
       hint.textContent = reason || t.cost
       Object.assign(hint.style, {
-        margin: '6px 0 10px',
-        fontSize: '11px',
-        lineHeight: '1.45',
-        color: reason ? '#fbbf24' : 'rgba(249, 250, 251, 0.62)'
+        margin: '6px 0 12px',
+        fontSize: '13px',
+        lineHeight: '1.5',
+        color: reason ? colors.warning : colors.muted
       })
 
       const openButton = document.createElement('button')
@@ -557,16 +620,29 @@ export const contextWatchdogEntryPoint = (messages?: {
       openButton.textContent = t.open
       Object.assign(openButton.style, {
         width: '100%',
-        padding: '7px 10px',
+        padding: '9px 12px',
         borderRadius: '8px',
-        border: '1px solid rgba(255, 255, 255, 0.18)',
-        background: 'rgba(255, 255, 255, 0.06)',
-        color: '#f9fafb',
+        border: `1px solid ${colors.border}`,
+        background: colors.soft,
+        color: colors.ink,
         font: 'inherit',
         cursor: 'pointer'
       })
       openButton.addEventListener('click', () => {
-        send({ type: 'OPEN_SIDE_PANEL' })
+        // 打开侧栏可能退回弹窗（无侧栏 API / 手势失效），点完要有反馈
+        openButton.disabled = true
+        openButton.style.cursor = 'wait'
+        openButton.style.opacity = '0.6'
+        send({ type: 'OPEN_SIDE_PANEL' }, response => {
+          const result = response as { ok?: boolean } | undefined
+          if (result?.ok) return
+          openButton.textContent = t.openFailed
+          openButton.style.cursor = 'pointer'
+          openButton.style.opacity = '1'
+          setTimeout(() => {
+            openButton.textContent = t.open
+          }, 3000)
+        })
       })
 
       panel.append(header, row, hint, openButton)
@@ -574,7 +650,7 @@ export const contextWatchdogEntryPoint = (messages?: {
 
     render()
 
-    send({ type: 'SITE_AI_GET', pattern }, response => {
+    send({ type: 'SITE_AI_GET' }, response => {
       const result = response as
         | {
             ok?: boolean

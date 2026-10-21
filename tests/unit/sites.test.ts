@@ -1,18 +1,40 @@
 // 单元用例 - 受保护站点的规范化与匹配（粘贴自动拦截）
 import { describe, it, expect } from 'vitest'
-import { normalizeSiteInput, matchSite, sitePatternFromUrl } from '@engine/sites'
+import {
+  normalizeSiteInput,
+  matchSite,
+  matchedSitePattern,
+  sitePermissionOrigins
+} from '@engine/sites'
 
 describe('normalizeSiteInput', () => {
   it('裸域名默认按 https 处理', () => {
     expect(normalizeSiteInput('chat.example.com')).toBe('https://chat.example.com/*')
     expect(normalizeSiteInput('  chat.example.com  ')).toBe('https://chat.example.com/*')
+    expect(normalizeSiteInput('localhost')).toBe('https://localhost/*') // 无协议默认 https
   })
 
-  it('显式协议与端口被保留，路径与查询被丢弃', () => {
+  it('根路径整站收口成 …/*', () => {
     expect(normalizeSiteInput('https://chat.example.com')).toBe('https://chat.example.com/*')
-    expect(normalizeSiteInput('https://chat.example.com/path?q=1#x')).toBe('https://chat.example.com/*')
+    expect(normalizeSiteInput('https://chat.example.com/')).toBe('https://chat.example.com/*')
+    expect(normalizeSiteInput('https://chat.example.com/?q=1#x')).toBe('https://chat.example.com/*')
+  })
+
+  it('路径保留到最后一级（查询与锚点丢弃）', () => {
+    expect(normalizeSiteInput('https://chat.example.com/docs')).toBe('https://chat.example.com/docs')
+    expect(normalizeSiteInput('https://chat.example.com/docs/')).toBe('https://chat.example.com/docs')
+    expect(normalizeSiteInput('https://chat.example.com/docs?q=1#x')).toBe('https://chat.example.com/docs')
+    expect(normalizeSiteInput('https://chat.example.com/a/b/c')).toBe('https://chat.example.com/a/b/c')
+  })
+
+  it('手写的子树写法（结尾 /*）被保留', () => {
+    expect(normalizeSiteInput('https://chat.example.com/docs/*')).toBe('https://chat.example.com/docs/*')
+    expect(normalizeSiteInput('https://chat.example.com/*')).toBe('https://chat.example.com/*')
+  })
+
+  it('显式 http 的条目原样保留（匹配时视为协议不限）', () => {
     expect(normalizeSiteInput('http://localhost:5173')).toBe('http://localhost:5173/*')
-    expect(normalizeSiteInput('http://192.168.1.10:8080/admin')).toBe('http://192.168.1.10:8080/*')
+    expect(normalizeSiteInput('http://192.168.1.10:8080/admin')).toBe('http://192.168.1.10:8080/admin')
   })
 
   it('拒绝非 http(s) 协议与无法识别的输入', () => {
@@ -26,22 +48,72 @@ describe('normalizeSiteInput', () => {
 
   it('拒绝没有点且不是 localhost/IPv4 的主机名', () => {
     expect(normalizeSiteInput('intranet')).toBeNull()
-    expect(normalizeSiteInput('localhost')).toBe('https://localhost/*') // 无协议默认 https
   })
 })
 
-describe('sitePatternFromUrl', () => {
-  it('从页面 URL 推导出与 normalizeSiteInput 同构的模式', () => {
-    expect(sitePatternFromUrl('https://chat.example.com/app?q=1')).toBe('https://chat.example.com/*')
-    expect(sitePatternFromUrl('http://localhost:5173/room/1')).toBe('http://localhost:5173/*')
+describe('matchedSitePattern', () => {
+  it('返回用户列表里的原样条目（可直接作为逐站开关的键）', () => {
+    const patterns = ['https://chat.example.com/*', 'http://localhost:5173/*']
+    expect(matchedSitePattern('https://chat.example.com/app?q=1', patterns)).toBe(
+      'https://chat.example.com/*'
+    )
+    expect(matchedSitePattern('http://localhost:5173/room/1', patterns)).toBe(
+      'http://localhost:5173/*'
+    )
   })
 
-  it('非 http(s) / 空值 / 非法 URL 返回 null', () => {
-    expect(sitePatternFromUrl(undefined)).toBeNull()
-    expect(sitePatternFromUrl('')).toBeNull()
-    expect(sitePatternFromUrl('chrome://extensions')).toBeNull()
-    expect(sitePatternFromUrl('file:///etc/passwd')).toBeNull()
-    expect(sitePatternFromUrl('not a url')).toBeNull()
+  it('多条命中时取最具体的那条', () => {
+    const patterns = ['https://chat.example.com/*', 'https://chat.example.com/docs']
+    expect(matchedSitePattern('https://chat.example.com/docs', patterns)).toBe(
+      'https://chat.example.com/docs'
+    )
+    expect(matchedSitePattern('https://chat.example.com/docs/deep/page', patterns)).toBe(
+      'https://chat.example.com/docs'
+    )
+    // 顺序不影响结果
+    expect(matchedSitePattern('https://chat.example.com/docs', [...patterns].reverse())).toBe(
+      'https://chat.example.com/docs'
+    )
+  })
+
+  it('路径按目录边界命中：/docs 不吃 /docspage', () => {
+    const patterns = ['https://chat.example.com/docs']
+    expect(matchedSitePattern('https://chat.example.com/docs', patterns)).not.toBeNull()
+    expect(matchedSitePattern('https://chat.example.com/docs/', patterns)).not.toBeNull()
+    expect(matchedSitePattern('https://chat.example.com/docspage', patterns)).toBeNull()
+    expect(matchedSitePattern('https://chat.example.com/', patterns)).toBeNull()
+  })
+
+  it('写 http 的条目协议不限（站点常从 http 跳 https）', () => {
+    const patterns = ['http://dev.example.com/*']
+    expect(matchedSitePattern('http://dev.example.com/', patterns)).not.toBeNull()
+    expect(matchedSitePattern('https://dev.example.com/anywhere', patterns)).not.toBeNull()
+  })
+
+  it('写 https 的条目只匹配 https', () => {
+    const patterns = ['https://chat.example.com/*']
+    expect(matchedSitePattern('https://chat.example.com/', patterns)).not.toBeNull()
+    expect(matchedSitePattern('http://chat.example.com/', patterns)).toBeNull()
+  })
+
+  it('协议、子域、端口任一不同都不命中', () => {
+    const patterns = ['https://chat.example.com/*', 'http://localhost:5173/*']
+    expect(matchedSitePattern('https://www.chat.example.com/', patterns)).toBeNull() // 子域需单独添加
+    expect(matchedSitePattern('https://chat.example.com:8443/', patterns)).toBeNull() // 端口不同
+    expect(matchedSitePattern('http://localhost:5174/', patterns)).toBeNull()
+    expect(matchedSitePattern('https://evil.com/', patterns)).toBeNull()
+    expect(matchedSitePattern('https://chat.example.com.evil.com/', patterns)).toBeNull() // 前缀伪造
+  })
+
+  it('空列表、非法条目与非法 URL 一律不命中', () => {
+    expect(matchedSitePattern('https://chat.example.com/', [])).toBeNull()
+    expect(matchedSitePattern('not-a-url', ['https://chat.example.com/*'])).toBeNull()
+    expect(matchedSitePattern('chrome://extensions', ['https://chat.example.com/*'])).toBeNull()
+    expect(matchedSitePattern('file:///etc/passwd', ['https://chat.example.com/*'])).toBeNull()
+    // 中间带 * 的条目无法解释，跳过而不是猜
+    expect(
+      matchedSitePattern('https://chat.example.com/a/b', ['https://chat.example.com/*/b'])
+    ).toBeNull()
   })
 })
 
@@ -54,19 +126,45 @@ describe('matchSite', () => {
     expect(matchSite('http://localhost:5173/', patterns)).toBe(true)
   })
 
-  it('协议、子域、端口任一不同都不命中', () => {
-    expect(matchSite('http://chat.example.com/', patterns)).toBe(false) // 协议不同
-    expect(matchSite('https://www.chat.example.com/', patterns)).toBe(false) // 子域需单独添加
-    expect(matchSite('https://chat.example.com:8443/', patterns)).toBe(false) // 端口不同
-    expect(matchSite('http://localhost:5174/', patterns)).toBe(false)
-    expect(matchSite('https://evil.com/', patterns)).toBe(false)
-    expect(matchSite('https://chat.example.com.evil.com/', patterns)).toBe(false) // 前缀伪造
-  })
-
   it('空列表与非法 URL 一律不命中', () => {
     expect(matchSite('https://chat.example.com/', [])).toBe(false)
     expect(matchSite('not-a-url', patterns)).toBe(false)
     expect(matchSite('chrome://extensions', patterns)).toBe(false)
     expect(matchSite('file:///etc/passwd', patterns)).toBe(false)
+  })
+})
+
+describe('sitePermissionOrigins', () => {
+  it('整站条目只需一条 origin', () => {
+    expect(sitePermissionOrigins('https://chat.example.com/*')).toEqual(['https://chat.example.com/*'])
+  })
+
+  it('带路径的条目同时给出精确路径与子树两条', () => {
+    expect(sitePermissionOrigins('https://chat.example.com/docs')).toEqual([
+      'https://chat.example.com/docs',
+      'https://chat.example.com/docs/*'
+    ])
+    expect(sitePermissionOrigins('https://chat.example.com/docs/*')).toEqual([
+      'https://chat.example.com/docs',
+      'https://chat.example.com/docs/*'
+    ])
+  })
+
+  it('写 http 的条目协议不限，两种协议都要申请', () => {
+    expect(sitePermissionOrigins('http://localhost:5173/*')).toEqual([
+      'http://localhost:5173/*',
+      'https://localhost:5173/*'
+    ])
+    expect(sitePermissionOrigins('http://dev.example.com/admin')).toEqual([
+      'http://dev.example.com/admin',
+      'http://dev.example.com/admin/*',
+      'https://dev.example.com/admin',
+      'https://dev.example.com/admin/*'
+    ])
+  })
+
+  it('非法条目返回空列表', () => {
+    expect(sitePermissionOrigins('nonsense')).toEqual([])
+    expect(sitePermissionOrigins('https://chat.example.com/*/x')).toEqual([])
   })
 })

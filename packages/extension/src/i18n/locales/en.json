@@ -13,8 +13,6 @@
   "common_saving": "Saving…",
   "common_collapse": "Collapse",
 
-  "app_subtitle": "AI Redaction",
-
   "engine_tooltip": "Settings",
   "engine_panel_title": "Settings",
   "engine_regex_name": "Pattern rules",
@@ -99,9 +97,9 @@
 
   "paste_section_title": "Paste interception",
   "paste_section_desc": "Auto-redact on paste in sites you authorise (pattern rules only, no model needed). Unauthorised sites are untouched.",
-  "paste_input_placeholder": "e.g. chat.example.com",
+  "paste_input_placeholder": "e.g. chat.example.com or chat.example.com/docs",
   "paste_empty": "No sites added — paste behaviour is unchanged",
-  "paste_err_invalid": "Unrecognised site — enter a domain or an https URL",
+  "paste_err_invalid": "Unrecognised site — enter a domain or URL (a path is fine; http matches both schemes)",
   "paste_err_exists": "That site is already in the list",
   "paste_err_denied": "Permission denied — site not added",
   "paste_ok_added": "Added. Already-open pages take effect immediately; pasting is now auto-redacted.",
@@ -112,6 +110,7 @@
 
   "site_widget_ai": "AI enhancement",
   "site_widget_open": "Open side panel",
+  "site_widget_open_failed": "Could not open it — click the toolbar icon",
   "site_widget_need_ai": "Enable AI in the side panel first",
   "site_widget_loading": "AI model is still loading",
   "site_widget_cost": "First paste may take 1–2s longer",

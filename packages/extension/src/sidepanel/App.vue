@@ -181,8 +181,6 @@ const loadingCaption = computed(() => {
                                     alt="ContextWatchdog" width="1414" height="400" />
                             </picture>
                         </h1>
-                        <p class="text-sm text-muted-foreground">
-                            {{ t('app_subtitle') }}</p>
                     </div>
                     <div class="flex items-center gap-2">
                         <!-- 独立打开按钮：暂时隐藏（见 SHOW_OPEN_IN_NEW_TAB） -->

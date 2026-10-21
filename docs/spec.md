@@ -207,7 +207,7 @@ vite 别名把 gliner 静态引用的 `onnxruntime-web/webgpu|webgl` 打桩（EP
 | `unlimitedStorage` | 183MB 模型缓存配额 |
 | `scripting` | 仅向已授权站点注入粘贴监听 |
 | `offscreen` | 模型宿主（Chrome/Edge；Firefox 构建会移除） |
-| `optional_host_permissions` | 粘贴拦截逐站授权（https + 本地 http，运行时按需申请） |
+| `optional_host_permissions` | 粘贴拦截逐站授权（https + http，运行时按需申请；条目可带路径） |
 
 **CSP**（extension_pages）：`script-src 'self' 'wasm-unsafe-eval'; object-src 'self';
 connect-src 'self' https:`——无 `http:`/`ws:`；`wasm-unsafe-eval` 为 ORT WASM 必需

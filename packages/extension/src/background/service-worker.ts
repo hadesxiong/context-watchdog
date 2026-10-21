@@ -9,7 +9,7 @@
 import { detect } from '@engine/detector'
 import { sanitizeText } from '@engine/replacer'
 import { setPlaceholderLocale } from '@engine/replacer/placeholder'
-import { matchSite, readProtectedSites, sitePatternFromUrl, PROTECTED_SITES_KEY } from '@engine/sites'
+import { matchSite, matchedSitePattern, readProtectedSites, PROTECTED_SITES_KEY } from '@engine/sites'
 import {
   OPEN_SIDE_PANEL,
   PASTE_AI_RESULT,
@@ -31,7 +31,8 @@ import {
 import type { ProfileConfig } from '@engine/types'
 import { contextWatchdogEntryPoint } from './pasteEntryPoint'
 // 挂件内嵌 mark 的唯一来源：注入函数在隔离世界里读不到模块也读不到扩展资源，
-// 由 SW 在构建期把 logo.svg 原文读进来（?raw），运行染白后随 args 递过去。
+// 由 SW 在构建期把 logo.svg 原文读进来（?raw）随 args 递过去；
+// 染色（跟随页面明暗主题）在注入侧做，SW 只管原文。
 import logoMarkSvg from '../../../../public/icons/logo.svg?raw'
 import {
   attachModelHostPort,
@@ -101,17 +102,13 @@ let protectedPatterns: string[] = []
 
 // ---------- 站点挂件的授权与状态 ----------
 
-// 从消息 sender 推导站点模式，并要求：① 与消息里上报的 pattern 一致；
-// ② 在用户的授权列表里。页面隔离世界里的消息内容不可信，只有 sender.url 是浏览器给的。
-const authorizedSitePattern = async (
-  sender: chrome.runtime.MessageSender,
-  claimed: unknown
-): Promise<string | null> => {
-  const actual = sitePatternFromUrl(sender.url)
-  if (!actual) return null
-  if (typeof claimed !== 'string' || claimed !== actual) return null
+// 从消息 sender 推导站点条目：只认 sender.url（浏览器给的，伪造不了），
+// 在用户的授权列表里找出命中的最具体条目。消息内容一律不信——以前要求页面
+// 上报 pattern 做「双校验」，但带路径的条目页面根本算不出来，索性不传了。
+const authorizedSitePattern = async (sender: chrome.runtime.MessageSender): Promise<string | null> => {
+  if (!sender.url) return null
   const sites = await readProtectedSites()
-  return sites.includes(actual) ? actual : null
+  return matchedSitePattern(sender.url, sites)
 }
 
 // 宿主是否就绪：Chrome/Edge 看 session 状态；Firefox 的 LocalHost 在侧栏里，
@@ -160,18 +157,17 @@ const injectContextWatchdog = (tabId: number): void => {
   const widget = {
     ai: chrome.i18n.getMessage('site_widget_ai') || 'AI enhancement',
     open: chrome.i18n.getMessage('site_widget_open') || 'Open side panel',
+    openFailed: chrome.i18n.getMessage('site_widget_open_failed') || 'Could not open the side panel',
     needAi: chrome.i18n.getMessage('site_widget_need_ai') || 'Enable AI in the side panel first',
     loading: chrome.i18n.getMessage('site_widget_loading') || 'AI model is still loading',
     cost: chrome.i18n.getMessage('site_widget_cost') || 'The first paste may take 1–2s longer',
     collapse: chrome.i18n.getMessage('site_widget_collapse') || 'Collapse'
   }
-  // 挂件底色是深色，mark 染白后在收起的圆形按钮与展开面板的头部都能看清
-  const mark = logoMarkSvg.replace(/#18181b/g, '#fff')
   chrome.scripting
     .executeScript({
       target: { tabId, allFrames: true },
       func: contextWatchdogEntryPoint,
-      args: [{ toastRedacted, toastAi, widget, mark }]
+      args: [{ toastRedacted, toastAi, widget, mark: logoMarkSvg }]
     })
     .catch(error => console.warn('[ContextWatchdog] 注入粘贴监听失败:', error))
 }
@@ -221,8 +217,9 @@ const upgradeWithAI = async (
   sender: chrome.runtime.MessageSender
 ): Promise<void> => {
   const tabId = sender.tab?.id
-  if (typeof tabId !== 'number') return
-  const pattern = sitePatternFromUrl(sender.url)
+  if (typeof tabId !== 'number' || !sender.url) return
+  // 逐站开关的键是用户列表里的条目（可能带路径），必须按条目查
+  const pattern = matchedSitePattern(sender.url, await readProtectedSites())
   if (!pattern) return
   if (!(await isAiEffectiveForSite(pattern))) return
 
@@ -252,7 +249,6 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
     text?: string
     token?: unknown
     profile?: ProfileConfig
-    pattern?: unknown
     enabled?: unknown
   } | null
 
@@ -291,10 +287,10 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
   }
 
   // ---------- 站点挂件（控制面） ----------
-  // 一律先双校验 sender.url 与上报的 pattern：页面隔离世界里的消息内容不可信。
+  // 一律以 sender.url 在用户的授权列表里解析条目：页面隔离世界里的消息内容不可信。
   if (request?.type === SITE_AI_GET) {
     void (async () => {
-      const pattern = await authorizedSitePattern(sender, request.pattern)
+      const pattern = await authorizedSitePattern(sender)
       if (!pattern) {
         sendResponse({ ok: false, error: 'unauthorized' } satisfies SiteAiGetResponse)
         return
@@ -317,7 +313,7 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
 
   if (request?.type === SITE_AI_SET) {
     void (async () => {
-      const pattern = await authorizedSitePattern(sender, request.pattern)
+      const pattern = await authorizedSitePattern(sender)
       if (!pattern) {
         sendResponse({ ok: false, error: 'unauthorized' } satisfies SiteAiSetResponse)
         return
@@ -332,23 +328,38 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
   }
 
   if (request?.type === OPEN_SIDE_PANEL) {
+    const tabId = sender.tab?.id
+    const sidePanel = (chrome as unknown as { sidePanel?: SidePanelLike }).sidePanel
+    const sidebarAction = (chrome as unknown as { sidebarAction?: SidebarActionLike }).sidebarAction
+    // 同步发车：sidePanel.open() 只认「用户手势」，而手势在本监听器返回后的第一个
+    // 异步任务就过期了（实测报 "may only be called in response to a user gesture"，
+    // 表现为按钮点了没反应）。授权校验并行进行，只决定回包内容——能触发这条消息的
+    // 只有我们自己注入的内容脚本，打开我们自己的面板不触碰任何站点数据。
+    const opened: Promise<unknown> =
+      typeof sidePanel?.open === 'function' && typeof tabId === 'number'
+        ? sidePanel.open({ tabId })
+        : typeof sidebarAction?.open === 'function'
+          ? Promise.resolve(sidebarAction.open())
+          : Promise.reject(new Error('side panel api unavailable'))
     void (async () => {
-      const authorized = await authorizedSitePattern(sender, sitePatternFromUrl(sender.url))
-      if (!authorized) {
-        sendResponse({ ok: false, error: 'unauthorized' } satisfies SiteAiSetResponse)
-        return
-      }
-      const sidePanel = (chrome as unknown as { sidePanel?: SidePanelLike }).sidePanel
-      const sidebarAction = (chrome as unknown as { sidebarAction?: SidebarActionLike }).sidebarAction
       try {
-        if (typeof sidePanel?.open === 'function' && typeof sender.tab?.id === 'number') {
-          await sidePanel.open({ tabId: sender.tab.id })
-        } else {
-          await sidebarAction?.open?.()
-        }
+        await opened
+        sendResponse({ ok: true } satisfies SiteAiSetResponse)
+        return
+      } catch (error) {
+        console.warn('[ContextWatchdog] 打开侧栏失败，退回弹窗面板:', error)
+      }
+      // 无侧栏 API（无头/旧版浏览器）或手势已失效：同一份面板页面开成弹窗，
+      // 按钮必须有反应
+      try {
+        await chrome.windows.create({
+          url: chrome.runtime.getURL('src/sidepanel/index.html'),
+          type: 'popup',
+          width: 420,
+          height: 640
+        })
         sendResponse({ ok: true } satisfies SiteAiSetResponse)
       } catch (error) {
-        console.warn('[ContextWatchdog] 从挂件打开侧栏失败:', error)
         sendResponse({
           ok: false,
           error: error instanceof Error ? error.message : String(error)

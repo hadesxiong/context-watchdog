@@ -9,10 +9,11 @@
  *   3) 未授权站点完全不注入
  *   4) 不产生横向滚动条，不往 body 里塞节点
  *   5) 常驻：页面主动删除挂件后自动重挂
- *   6) 收起态 44×44（面板 display:none，host 盒子就是圆形按钮）
- *   7) closed Shadow DOM 内嵌两枚白色 mark（按钮 + 面板头部）
+ *   6) 收起态 44×44、12px 圆角矩形（面板 display:none，host 盒子就是按钮）
+ *   7) mark 跟随页面明暗主题换色（亮色 #18181b / 暗色 #fafafa）
+ *   8) 「在侧边栏中打开」点击后确实打开面板（侧栏不可用时退回弹窗）
  *
- * 挂件在 closed Shadow DOM 里，页面 JS 读不到内部，因此 7) 走 CDP 的
+ * 挂件在 closed Shadow DOM 里，页面 JS 读不到内部，因此 6)~8) 走 CDP 的
  * DOM.getDocument(pierce) 穿透读取节点树（与 DevTools 元素面板同一机制）。
  *
  * 为了免去 optional_host_permissions 的交互授权，脚本运行期间会临时给
@@ -249,49 +250,95 @@ try {
   check('不往 body 里塞节点（body 仍为 textarea + iframe）', authorized.bodyChildren === 2)
   check('无横向滚动条', authorized.overflowX === false)
 
-  // ② 收起态尺寸：面板 display:none，host 盒子 = 圆形按钮（44×44）
+  // ② 收起态尺寸：面板 display:none，host 盒子 = 按钮（44×44）
   const size = JSON.parse(await cdp.eval(`(() => {
     const host = document.getElementById('${WIDGET_ID}')
     const r = host ? host.getBoundingClientRect() : null
     return JSON.stringify({ w: r ? Math.round(r.width) : 0, h: r ? Math.round(r.height) : 0 })
   })()`))
   console.log('[2] 收起态尺寸')
-  check('圆形按钮 44×44', size.w === 44 && size.h === 44)
+  check('收起态按钮 44×44', size.w === 44 && size.h === 44)
 
-  // ③ closed Shadow DOM 内的白色 mark（页面 JS 拿不到，走 CDP 穿透）
+  // ③ closed Shadow DOM 内部（页面 JS 拿不到，走 CDP 穿透；与 DevTools 元素面板同机制）
   await cdp.send('DOM.enable')
-  const tree = await cdp.send('DOM.getDocument', { depth: -1, pierce: true })
-  const walk = node => [
-    node,
-    ...(node.children ?? []).flatMap(walk),
-    ...(node.shadowRoots ?? []).flatMap(walk)
-  ]
-  const allNodes = walk(tree.root)
   const attrOf = node => {
     const out = {}
     const flat = node.attributes ?? []
     for (let i = 0; i < flat.length; i += 2) out[flat[i]] = flat[i + 1]
     return out
   }
-  const hostNode = allNodes.find(node => attrOf(node).id === WIDGET_ID)
-  const insideHost = hostNode ? walk(hostNode) : []
-  const svgPaths = insideHost.filter(node => node.nodeName === 'path').map(node => attrOf(node))
-  console.log('[3] Shadow DOM 内部')
-  check('挂件内嵌 mark（svg path）', svgPaths.length >= 2)
-  check('mark 染成白色（fill #fff）', svgPaths.length > 0 && svgPaths.every(attr => attr.fill === '#fff'))
+  const walk = node => [
+    node,
+    ...(node.children ?? []).flatMap(walk),
+    ...(node.shadowRoots ?? []).flatMap(walk)
+  ]
+  const readWidget = async () => {
+    const tree = await cdp.send('DOM.getDocument', { depth: -1, pierce: true })
+    const hostNode = walk(tree.root).find(node => attrOf(node).id === WIDGET_ID)
+    const inside = hostNode ? walk(hostNode) : []
+    const buttons = inside.filter(node => node.nodeName === 'BUTTON')
+    return {
+      paths: inside.filter(node => node.nodeName === 'path').map(node => attrOf(node)),
+      fab: buttons.find(node => (attrOf(node)['aria-controls'] ?? '') === 'cw-panel'),
+      // 「在侧边栏中打开」是整行宽按钮（width:100%），靠样式定位避免依赖文案语言
+      openButton: buttons.find(node => (attrOf(node).style ?? '').includes('width: 100%'))
+    }
+  }
+  const emulateScheme = value =>
+    cdp.send('Emulation.setEmulatedMedia', value ? { features: [{ name: 'prefers-color-scheme', value }] } : {})
 
-  // ④ 常驻：页面主动删除 host 后，观察器应立即重挂
+  console.log('[3] Shadow DOM 内部 / 亮色主题')
+  let widget = await readWidget()
+  check('挂件内嵌两枚 mark（按钮 + 面板头部）', widget.paths.length >= 2)
+  check('mark 跟随亮色主题用墨色（fill #18181b）',
+    widget.paths.length > 0 && widget.paths.every(attr => attr.fill === '#18181b'))
+  check('收起按钮是 12px 圆角矩形',
+    (attrOf(widget.fab ?? {}).style ?? '').includes('border-radius: 12px'))
+
+  console.log('[3b] 暗色主题')
+  await emulateScheme('dark')
+  await sleep(800)
+  widget = await readWidget()
+  check('mark 跟随暗色主题换浅色（fill #fafafa）',
+    widget.paths.length > 0 && widget.paths.every(attr => attr.fill === '#fafafa'))
+  await emulateScheme(null)
+  await sleep(600)
+
+  // ④ 「在侧边栏中打开」必须有反应：无侧栏 API（无头/旧版）或手势失效时退回弹窗面板
+  console.log('[4] 打开侧栏按钮')
+  const viewport = JSON.parse(await cdp.eval('JSON.stringify({ w: innerWidth, h: innerHeight })'))
+  const fabX = viewport.w - 16 - 22
+  const fabY = viewport.h - 16 - 22
+  await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: fabX, y: fabY, button: 'left', clickCount: 1 })
+  await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: fabX, y: fabY, button: 'left', clickCount: 1 })
+  await sleep(500)
+  widget = await readWidget()
+  if (widget.openButton) {
+    const box = await cdp.send('DOM.getBoxModel', { nodeId: widget.openButton.nodeId })
+    const quad = box.model.content
+    const x = (quad[0] + quad[4]) / 2
+    const y = (quad[1] + quad[5]) / 2
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 })
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 })
+  }
+  await sleep(1500)
+  const targets = await (await fetch(`http://127.0.0.1:${debugPort}/json/list`)).json()
+  const panelOpened = targets.some(target =>
+    target.type === 'page' && target.url.startsWith(`chrome-extension://${extensionId}/src/sidepanel/index.html`))
+  check('点击后面板真的打开了（侧栏或弹窗）', Boolean(widget.openButton) && panelOpened)
+
+  // ⑤ 常驻：页面主动删除 host 后，观察器应立即重挂
   await cdp.eval(`document.getElementById('${WIDGET_ID}')?.remove()`)
   await sleep(800)
   const remounted = await cdp.eval(`!!document.getElementById('${WIDGET_ID}')`)
-  console.log('[4] 常驻')
+  console.log('[5] 常驻')
   check('页面删除挂件后自动重挂', remounted === true)
 
-  // ⑤ 未授权站点（host 不同 → pattern 不同）
+  // ⑥ 未授权站点（host 不同 → pattern 不同）
   await cdp.send('Page.navigate', { url: `http://localhost:${httpPort}/` })
   await sleep(1500)
   const unauthorized = await cdp.eval(`!!document.getElementById('${WIDGET_ID}')`)
-  console.log('[5] 未授权站点 http://localhost:' + httpPort)
+  console.log('[6] 未授权站点 http://localhost:' + httpPort)
   check('完全不注入挂件', unauthorized === false)
 
   console.log(failed ? '\n挂件探针失败 ✗' : '\n挂件探针全部通过 ✓')

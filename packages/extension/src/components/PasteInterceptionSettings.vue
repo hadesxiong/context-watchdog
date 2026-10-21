@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { Button, Input } from '../ui'
-import { PROTECTED_SITES_KEY, normalizeSiteInput } from '@engine/sites'
+import { PROTECTED_SITES_KEY, normalizeSiteInput, sitePermissionOrigins } from '@engine/sites'
 import { useI18n } from '../i18n'
 
 const { t } = useI18n()
@@ -43,8 +43,10 @@ const addSite = async () => {
 
     busy.value = true
     try {
-        // 必须由用户手势触发：浏览器会弹出「读取 https://xxx 上的数据」授权框
-        const granted = await chrome.permissions.request({ origins: [pattern] })
+        // 必须由用户手势触发：浏览器会弹出「读取 https://xxx 上的数据」授权框。
+        // 带路径的条目要精确路径 + 子树两条；写 http 的条目协议不限，http/https 都要
+        const origins = sitePermissionOrigins(pattern)
+        const granted = await chrome.permissions.request({ origins })
         if (!granted) {
             setNotice(t('paste_err_denied'), 'error')
             return
@@ -62,7 +64,8 @@ const addSite = async () => {
 const removeSite = async (pattern: string) => {
     await persist(sites.value.filter(site => site !== pattern))
     try {
-        await chrome.permissions.remove({ origins: [pattern] })
+        // 申请时可能给了多条 origin（路径 + 子树、http + https），撤销也要一次给全
+        await chrome.permissions.remove({ origins: sitePermissionOrigins(pattern) })
     } catch {
         // 权限可能仍被列表中其他条目共享，忽略
     }
