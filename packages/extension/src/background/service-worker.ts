@@ -15,10 +15,12 @@ import {
   PASTE_AI_RESULT,
   PASTE_DETECT,
   SITE_AI_GET,
+  SITE_AI_PANEL_STATE,
   SITE_AI_SET,
   type PasteAiResult,
   type PasteDetectResponse,
   type SiteAiGetResponse,
+  type SiteAiPanelStatePush,
   type SiteAiSetResponse,
   type SiteAiState
 } from '@engine/messages'
@@ -69,6 +71,10 @@ const MAX_PASTE_CHARS = 20000
 
 interface SidePanelLike {
   open?: (options: { tabId: number }) => Promise<void>
+  /** Chrome 141+：侧栏打开的原生推送；旧版无此事件，靠挂件轮询兜底 */
+  onOpened?: { addListener: (cb: (info: { tabId?: number }) => void) => void }
+  /** Chrome 142+：侧栏关闭的原生推送；同上 */
+  onClosed?: { addListener: (cb: (info: { tabId?: number }) => void) => void }
 }
 
 interface SidebarActionLike {
@@ -148,6 +154,25 @@ const isSidePanelOpen = async (tabId: number | undefined): Promise<boolean | und
     return undefined
   }
 }
+
+// 把侧栏开/关的真实状态推给某个标签页的挂件（顶层文档才有挂件）。
+// 这是 onOpened/onClosed 原生事件的落点：外部关掉侧栏时由浏览器主动通知，
+// 不必等挂件的下一次轮询。目标页可能没有挂件（未注入 / 未授权），sendMessage
+// 会 reject，静默吞掉即可——没有挂件就没有按钮要更新。
+const pushPanelState = (tabId: number | undefined, panelOpen: boolean): void => {
+  if (typeof tabId !== 'number') return
+  const message: SiteAiPanelStatePush = { type: SITE_AI_PANEL_STATE, panelOpen }
+  chrome.tabs
+    .sendMessage(tabId, message, { frameId: 0 })
+    .catch(() => undefined)
+}
+
+// 原生实时推送（Chrome 141+ onOpened / 142+ onClosed）：叠加在挂件轮询之上，
+// 把「别处关掉侧栏 → 按钮复位」的延迟从最坏一个轮询周期压到即时。
+// 旧版浏览器没有这两个事件，注册处用特性检测跳过，轮询照常兜底。
+const sidePanelApi = (chrome as unknown as { sidePanel?: SidePanelLike }).sidePanel
+sidePanelApi?.onOpened?.addListener?.(info => pushPanelState(info?.tabId, true))
+sidePanelApi?.onClosed?.addListener?.(info => pushPanelState(info?.tabId, false))
 
 // 本站 AI 是否生效：全局允许 ∧ 本站开启 ∧ 宿主就绪（三者缺一即退回正则档）
 const isAiEffectiveForSite = async (pattern: string): Promise<boolean> => {

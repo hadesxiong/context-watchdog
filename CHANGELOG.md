@@ -7,6 +7,20 @@
 
 ## 2026-10-21
 
+### ⑪ 侧栏开关原生事件实时推送（`onOpened`/`onClosed`）
+
+- **「别处关掉侧栏 → 按钮复位」从轮询压到即时**：⑩ 里关闭靠挂件 2s 轮询发现，
+  最坏要等一个周期。现叠加浏览器原生推送——SW 注册 `sidePanel.onOpened`（Chrome 141+）
+  与 `onClosed`（142+），事件一到即经 `tabs.sendMessage` 把 `panelOpen` 推给该标签页
+  顶层的挂件，按钮立即翻转。轮询保留作兜底：旧浏览器无此事件、以及收起态下
+  「宿主仍在收敛」的同步，都仍走原路径。
+- **新增消息契约 `SITE_AI_PANEL_STATE`**（`@engine/messages`）：只带 `panelOpen` 一个
+  字段的 SW → 挂件单向推送；挂件端新增 `onMessage` 监听，收到即重画。推送不动
+  `opening`/`openFailed`——那是本页「打开请求」自己的生命周期，仍由 `OPEN_SIDE_PANEL`
+  回包收尾。旧浏览器注册处用特性检测跳过，零副作用。
+- `probe:widget` 扩到 **18 项**：新增「推送关闭 → 按钮立即复位为可点」「推送打开 →
+  按钮立即置回已打开态」，从扩展上下文按 `tabs.sendMessage` 同款投递驱动。
+
 ### ⑩ 挂件交互与站点匹配打磨（子域、按钮态、实时性、间距）
 
 - **站点匹配支持子域**（`@engine/sites`）：裸域名一并覆盖其所有子域——`deepseek.com`

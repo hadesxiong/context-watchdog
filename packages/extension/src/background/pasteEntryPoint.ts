@@ -554,6 +554,20 @@ export const contextWatchdogEntryPoint = (messages?: {
       applySyncSchedule()
     }
 
+    // 侧栏开/关的实时推送（SW 转发 Chrome 141+ 的 onOpened / 142+ 的 onClosed）。
+    // 「别处关掉侧栏 → 按钮复位」不再等下一个轮询周期，事件一到立即生效。
+    // 旧版浏览器没有原生事件，这条通道收不到消息，2s 轮询照常兜底。
+    // 推送只带 panelOpen 一个字段，且不动 opening/openFailed——那是本页
+    // 「打开请求」自己的生命周期，由 OPEN_SIDE_PANEL 的回包负责收尾。
+    chrome.runtime.onMessage.addListener((message: unknown) => {
+      const push = message as { type?: string; panelOpen?: boolean } | null
+      if (push?.type !== 'SITE_AI_PANEL_STATE') return
+      if (typeof push.panelOpen !== 'boolean') return
+      if (panelOpen === push.panelOpen) return
+      panelOpen = push.panelOpen
+      render()
+    })
+
     function disabledReason(): string {
       // 状态回包前（或 SW 瞬时不可用）一律禁用：宁可晚一点可点，也不能显示错的状态
       if (!ready) return t.loading

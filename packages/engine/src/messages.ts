@@ -39,6 +39,15 @@ export const SITE_AI_GET = 'SITE_AI_GET'
 export const SITE_AI_SET = 'SITE_AI_SET'
 // 从页面打开侧边栏
 export const OPEN_SIDE_PANEL = 'OPEN_SIDE_PANEL'
+// SW → 注入挂件：侧栏开/关的实时推送（SW 转发 Chrome 141+ 的 sidePanel.onOpened /
+// 142+ 的 onClosed）。只带 panelOpen 一个字段——挂件其余状态由轮询负责，
+// 旧浏览器没有这两个事件时，2s 轮询照常兜底。
+export const SITE_AI_PANEL_STATE = 'SITE_AI_PANEL_STATE'
+
+export interface SiteAiPanelStatePush {
+  type: typeof SITE_AI_PANEL_STATE
+  panelOpen: boolean
+}
 
 export interface SiteAiState {
   /** 站点模式（https://host/*），由 SW 从 sender.url 推导并回传 */

@@ -37,7 +37,7 @@
   `npm run build` + `npm run build:firefox` 通过 / `npm run probe:layout` 全通过 /
   `npm run probe:widget` 全通过（授权站点挂件 / iframe 不挂 / 未授权零注入 / 删除后重挂 /
   收起态 44×44 / 12px 圆角 / 明暗主题两套配色 / 暗色下面板带边框 /
-  打开侧栏按钮切「已打开」态，16 项）/
+  打开侧栏按钮切「已打开」态 / 侧栏开/关实时推送使按钮双向即时翻转，18 项）/
   `npm run site:check` 0 诊断 / `npm run site:build` 通过 / `npm run check:versions` 通过（2 项预期警告：SITE_URL 与渠道未配置）。
 
 ## 回归命令

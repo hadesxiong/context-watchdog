@@ -348,6 +348,40 @@ try {
     target.type === 'page' && target.url.startsWith(`chrome-extension://${extensionId}/src/sidepanel/index.html`))
   check('点击后面板真的打开了（侧栏或弹窗）', Boolean(widget.openButton) && panelOpened)
 
+  // ④b 实时推送：收起挂件后轮询已停，按钮状态只可能来自 SW 的推送通道
+  // （onOpened/onClosed 走的正是这条）。从扩展上下文向标签页推 SITE_AI_PANEL_STATE，
+  // 断言按钮立即双向翻转——证明「别处关掉侧栏 → 按钮复位」不必等下个轮询周期。
+  console.log('[4b] 侧栏状态实时推送')
+  // fab 与 ④ 同坐标，点一下收起；收起即 clearInterval(轮询)，状态只剩推送能改
+  await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: fabX, y: fabY, button: 'left', clickCount: 1 })
+  await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: fabX, y: fabY, button: 'left', clickCount: 1 })
+  await sleep(400)
+  const panelTarget = targets.find(target =>
+    target.type === 'page' && target.url.startsWith(`chrome-extension://${extensionId}/src/sidepanel/index.html`))
+  if (!panelTarget?.webSocketDebuggerUrl) throw new Error('找不到侧栏页 target，无法从扩展上下文推送')
+  const ext = new CDP(panelTarget.webSocketDebuggerUrl)
+  await ext.connect()
+  // 与 SW 的 pushPanelState 同一投递方式：tabs.sendMessage + frameId 0（挂件只在顶层）
+  const pushPanelState = value => ext.eval(
+    `chrome.tabs.query({ url: ${JSON.stringify(`http://127.0.0.1:${httpPort}/*`)} })` +
+      `.then(tabs => chrome.tabs.sendMessage(tabs[0].id,` +
+      ` { type: 'SITE_AI_PANEL_STATE', panelOpen: ${value} }, { frameId: 0 }))` +
+      `.then(() => 'ok').catch(error => 'err: ' + error.message)`
+  )
+  const pushedOff = await pushPanelState(false)
+  await sleep(300)
+  widget = await readWidget()
+  check('推送「关闭」→ 按钮立即复位为可点',
+    pushedOff === 'ok' &&
+      !Object.prototype.hasOwnProperty.call(attrOf(widget.openButton ?? {}), 'disabled'))
+  const pushedOn = await pushPanelState(true)
+  await sleep(300)
+  widget = await readWidget()
+  check('推送「打开」→ 按钮立即置回「已打开」态',
+    pushedOn === 'ok' &&
+      Object.prototype.hasOwnProperty.call(attrOf(widget.openButton ?? {}), 'disabled'))
+  ext.close()
+
   // ⑤ 常驻：页面主动删除 host 后，观察器应立即重挂
   await cdp.eval(`document.getElementById('${WIDGET_ID}')?.remove()`)
   await sleep(800)
