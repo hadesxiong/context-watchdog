@@ -19,7 +19,8 @@
 
 技术规格与验收判据不在这里：见 [`../spec.md`](../spec.md)（实现说明）与
 [`../test-cases.md`](../test-cases.md)（手动验收用例）。实现轮次沿革见
-[`../../CHANGELOG.md`](../../CHANGELOG.md)。
+[`../../CHANGELOG.md`](../../CHANGELOG.md)。本目录（含每份文档的定位与更新触发
+条件）登记在 [`../README.md`](../README.md) 的文档索引里。
 
 ## 关于「未实现」的文档
 
