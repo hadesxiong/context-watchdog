@@ -155,6 +155,7 @@
     "patents": "Patent notice",
     "designDocs": "Design docs",
     "privacy": "Privacy policy",
+    "changelog": "Changelog",
     "static": "This site is static: no client-side scripts (bar one copy button), no CDN, no third-party analytics, no web fonts."
   },
   "privacyPage": {
@@ -175,5 +176,24 @@
     "contactTitle": "Contact",
     "contact": "Open an issue for anything privacy-related.",
     "updated": "Last updated: 2026-10-19"
+  },
+  "changelogPage": {
+    "title": "Changelog",
+    "lead": "One entry per official release, describing the changes users can actually perceive.",
+    "fullNote": "Finer-grained implementation rounds and close-out records live in the repository's",
+    "entries": [
+      {
+        "version": "1.0.0",
+        "date": "2026-10-21",
+        "title": "First public release",
+        "bullets": [
+          "Two detection tiers: the always-on regex tier (14 categories plus algorithmic validation) and the opt-in AI tier (a local GLiNER model), sharing one dedupe and arbitration pass",
+          "Per-site paste interception: pasted text is redacted in place with placeholders and an 'N redacted' toast, across input/textarea and contenteditable",
+          "Page widget: toggle AI for the current site or open the side panel on authorised sites, with local post-paste AI upgrades",
+          "Import/exportable detection profiles, custom regex rules and allowlists, with light and dark themes following your system",
+          "Chrome and Firefox builds, bilingual UI (Simplified Chinese and English), with no account, no telemetry and no server"
+        ]
+      }
+    ]
   }
 }

@@ -610,6 +610,55 @@ a.pg-channel:hover {
   color: var(--muted-foreground);
 }
 
+/* ---------- 更新记录 ---------- */
+
+/* 单列版本条目：卡片沿用 pg-card 的描边与弧度，头部一行「版本号 + 日期」
+   （等宽数字防跳动），要点列表跟在标题后。条目少时不引入时间线竖轴——
+   一根线只有在 ≥3 个节点时才读得出顺序，两个版本时纯属装饰。 */
+.pg-log {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1.75rem;
+}
+
+.pg-log-entry {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) + 4px);
+  padding: 1.25rem;
+}
+
+.pg-log-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+}
+
+.pg-log-version {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.pg-log-date {
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.pg-log-entry h2 {
+  font-size: 1rem;
+  margin-top: 0.375rem;
+}
+
+.pg-log-list {
+  margin: 0.625rem 0 0;
+  padding-left: 1.125rem;
+  display: grid;
+  gap: 0.375rem;
+  font-size: 0.9375rem;
+  color: var(--muted-foreground);
+}
+
 /* ---------- 打赏 + 页脚 ---------- */
 
 .pg-donate {

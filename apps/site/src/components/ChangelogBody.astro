@@ -1,0 +1,52 @@
+---
+// 更新记录正文（/changelog 与 /en/changelog 共用）
+//
+// 为什么单独成页：用户与商店审核都需要一个「这个扩展改了什么」的可指向 URL
+// （审核员也会顺手看发布历史是否活跃、是否在偷偷改行为）。
+//
+// 与仓库 CHANGELOG.md 的分工：本页只列**用户可感知的已发布版本**（双语、
+// 每版一段要点），完整实现轮次与结案记录留在仓库那份单语长文档里——
+// 若把 15 轮历史搬上站，就要中英各维护一份，且其中大半内容用户并不关心。
+// 两份内容以文末链接衔接，不重复维护。
+import { dict, type SiteLocale } from '@site/i18n'
+import { blobUrl } from '@site/data/links'
+
+interface Props {
+  locale: SiteLocale
+}
+const { locale } = Astro.props
+const d = dict(locale)
+---
+
+<section class="pg-section">
+  <div class="pg-shell">
+    <h1 class="pg-section-title">{d.changelogPage.title}</h1>
+    <p class="pg-lead">{d.changelogPage.lead}</p>
+
+    <div class="pg-log">
+      {
+        d.changelogPage.entries.map((entry) => (
+          <article class="pg-log-entry">
+            <div class="pg-log-head">
+              <span class="pg-log-version">{entry.version}</span>
+              <time class="pg-log-date" datetime={entry.date}>
+                {entry.date}
+              </time>
+            </div>
+            <h2>{entry.title}</h2>
+            <ul class="pg-log-list">
+              {entry.bullets.map((bullet) => (
+                <li>{bullet}</li>
+              ))}
+            </ul>
+          </article>
+        ))
+      }
+    </div>
+
+    <p class="pg-note" style="margin-top: 1.5rem;">
+      {d.changelogPage.fullNote}
+      <a href={blobUrl('CHANGELOG.md')} rel="noopener">CHANGELOG.md</a>
+    </p>
+  </div>
+</section>
