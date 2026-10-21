@@ -44,15 +44,15 @@
     "steps": [
       {
         "title": "Regex tier (always on)",
-        "body": "Targets with a fixed shape — secrets, connection strings, phone numbers, national IDs, bank cards, email, IPs, plates — are matched by regex plus algorithmic validation: ISO 7064 for Chinese ID numbers, Luhn for bank cards, mod-97 for IBANs, area-segment rules for US SSNs. Zero latency, works offline."
+        "body": "Targets with a fixed shape — secrets, connection strings, phone numbers, national IDs, bank cards, email, IPs, plates — are matched by regex plus algorithmic validation: ISO 7064 for Chinese ID numbers, Luhn for bank cards, mod-97 for IBANs, area-segment rules for US SSNs. A match is trusted: zero latency, fully offline."
       },
       {
         "title": "AI tier (optional)",
-        "body": "Entities with no fixed shape — names, addresses — go to a local GLiNER model (WASM). It only sees the spans the regex tier did not already cover, and it must be explicitly enabled and downloaded by you (a quantised model, ~180 MB, once). If the model is unavailable the pipeline degrades to pure regex: no errors, no blocking."
+        "body": "Entities with no fixed shape — names, addresses — go to a local GLiNER model (WASM), which only looks at spans the regex tier left uncovered and never redoes its work; you must enable it explicitly and download the quantised model once (~180 MB). If the model is unavailable, the pipeline degrades to pure regex: no errors, no blocking."
       },
       {
         "title": "Placeholder sharing",
-        "body": "A value appearing N times becomes the same placeholder everywhere; overlapping spans are merged by type priority (secrets > personal data > high entropy), so replacements never cut into each other. Placeholders stay semantic, so the redacted text remains readable and inferable for the AI."
+        "body": "A value repeated N times and spans that overlap follow one sharing pass: every occurrence becomes the same placeholder, and overlapping spans are merged by type priority (secrets > personal data > high entropy). Placeholders stay semantic and replacements never cut into each other, so redacted text stays readable and inferable for the AI."
       }
     ]
   },
@@ -62,27 +62,27 @@
     "items": [
       {
         "claim": "The extension never sends your text to a server",
-        "how": "Exactly two fetch calls exist in the repository, both in modelDownload.ts, both used only to download the model. No XHR, sendBeacon or WebSocket anywhere."
+        "how": "Exactly two fetch calls exist in the repository, both in modelDownload.ts, both used only to download the model — no request ever carries your text. No XHR, sendBeacon, WebSocket or EventSource anywhere; storage is chrome.storage.local only with no cloud sync, and your text stays in on-device memory throughout."
       },
       {
         "claim": "The only network activity is the model download, and only if you enable it",
-        "how": "The AI tier is off by default. Once you enable it, model files are fetched from whitelisted sources (a ModelScope mirror, falling back to huggingface.co)."
+        "how": "The AI tier is off by default. Once you enable it, model files are fetched from whitelisted sources (a ModelScope mirror, falling back to huggingface.co); only those two addresses are whitelisted, and only model files are downloaded, never anything about you. Caching and inference stay on-device, so the tier works offline."
       },
       {
         "claim": "Zero contact with unauthorised sites",
-        "how": "The manifest declares no content_scripts and does not request <all_urls>, only optional_host_permissions. The paste listener is injected only after your approval."
+        "how": "The manifest declares no content_scripts and no <all_urls>, only optional_host_permissions: injection is on demand, so only sites on your authorised list receive the paste listener and widget. Unauthorised sites get zero listeners and zero DOM probing. Removing a site clears its settings, and the widget mounts only in the top document."
       },
       {
         "claim": "No telemetry, no analytics, no crash reporting",
-        "how": "There is no analytics or reporting SDK in the repository. Run npm run build yourself and inspect the bundle for suspicious requests or remote domains."
+        "how": "There is no analytics, reporting or telemetry SDK in the repository, and no remote switches or config delivery — behaviour is decided by local code and local settings alone. Run npm run build yourself and inspect the bundle for suspicious requests or remote domains; you never have to take our word for it."
       },
       {
         "claim": "Password fields are never processed",
-        "how": "type=password inputs and hidden fields are skipped at isTextEditable, and that guard sits on both the paste-injection and the side-panel paths, with no exceptions."
+        "how": "type=password inputs and hidden fields are skipped at isTextEditable, and that check is a whitelist: only textarea, text/search inputs and contenteditable regions are ever processed, nothing else. Both the paste-injection and the side-panel paths keep that guard in code, with no exceptions and nothing configurable around it."
       },
       {
         "claim": "Releases are verifiable",
-        "how": "Every Release ships sha256 checksums, and LICENSE and THIRD-PARTY-NOTICES.txt travel with the bundle, so any change to the source code alters them."
+        "how": "Every Release ships sha256 checksums in a SHA256SUMS manifest — download it and run shasum -a 256 -c to verify the zips yourself — together with LICENSE and THIRD-PARTY-NOTICES.txt; any change to the source code alters the checksum, and the Firefox submission carries a source zip cut straight from that tag."
       }
     ]
   },
