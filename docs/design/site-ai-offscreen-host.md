@@ -160,8 +160,8 @@ export interface PasteDetectRequest {
 在 `src/background/pasteEntryPoint.ts` 中新增（或拆出 `siteWidget.ts`，保持"自包含、无 import"约束，与 `pasteText.ts` 同步维护可测逻辑）：
 
 ```
-挂件（默认收起为 28px 圆形按钮，右下角，z-index 2147483647）
-├─ 展开面板
+挂件（默认收起为 44px 圆形按钮 + 白色 mark，右下角，z-index 2147483647）
+├─ 展开面板（宽 280px，头部左侧同款白色 mark + 字标）
 │   ├─ 行1：本站 AI 增强  [Switch]   副文案：启用后首段粘贴可能慢 1~2 秒
 │   └─ 行2：在侧边栏中打开 [按钮]     → 发 OPEN_SIDE_PANEL
 └─ 收起（× / Esc / 点击面板外）：仅折叠面板，不写存储，挂件本身常驻
@@ -177,6 +177,10 @@ export interface PasteDetectRequest {
 4. 全局 AI 关闭时，Switch 显示为禁用并附文案"需先在侧边栏开启 AI 模型"。
 5. 挂件与粘贴监听共用同一个 `__contextWatchdogInstalled` 守卫（同一次注入调用完成两件事）。
 6. **不新增权限**：授权站点本来就有 host permission；挂件不发起网络请求。
+7. 品牌 mark 随 `args` 传入：SW 用 `?raw` 读 `public/icons/logo.svg`、把墨色换成白色
+   （挂件底色是深色），注入侧用 `DOMParser` 解析落地。不走 `<img src>`/`fetch`——
+   宿主页面 CSP 的 `img-src` 可能直接拦，扩展资源还得进 `web_accessible_resources`。
+   换 logo 只改资产一处，挂件与工具栏图标一起更新。
 
 ### 3.5 粘贴链路的 AI 二次升级（状态机）
 
@@ -281,7 +285,7 @@ P6 content script 守卫（全部通过才替换）：
 
 **回归**
 
-- `npm run typecheck`、`npx vitest run`（当前基线 360 项）、`npm run build`（零警告）、`npm run probe:layout`（85 项）、`npm run probe:widget`（8 项）必须全绿。
+- `npm run typecheck`、`npx vitest run`（当前基线 360 项）、`npm run build`（零警告）、`npm run probe:layout`（85 项）、`npm run probe:widget`（11 项）必须全绿。
 - 新增探针断言（扩 `scripts/probe-layout.mjs` 或新脚本）：
   - 挂件在授权站点渲染、无授权站点不渲染；
   - 挂件不影响页面布局（不产生滚动条、不遮挡输入框，可用简易碰撞检测）。

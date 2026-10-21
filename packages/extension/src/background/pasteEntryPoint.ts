@@ -10,6 +10,8 @@
 export const contextWatchdogEntryPoint = (messages?: {
   toastRedacted?: string
   toastAi?: string
+  /** 看门狗 mark 的 SVG 原文（SW 侧已染白）：注入函数读不到模块，只能随 args 传 */
+  mark?: string
   widget?: {
     ai?: string
     open?: string
@@ -316,6 +318,20 @@ export const contextWatchdogEntryPoint = (messages?: {
 
     const host = document.createElement('div')
     host.id = ROOT_ID
+
+    // 内嵌看门狗 mark：SW 把 public/icons/logo.svg 原文染白后随 args 递进来。
+    // 既不能用 <img src>（宿主页面 CSP 的 img-src 会拦），也不能 fetch 扩展资源
+    // （要 web_accessible_resources，且多一次请求）；DOMParser 解析字符串零请求。
+    const makeMark = (size: number): Element | null => {
+      const raw = messages?.mark
+      if (!raw) return null
+      const svg = new DOMParser().parseFromString(raw, 'image/svg+xml').documentElement
+      if (svg.localName !== 'svg') return null
+      svg.setAttribute('width', String(size))
+      svg.setAttribute('height', String(size))
+      return svg
+    }
+
     Object.assign(host.style, {
       position: 'fixed',
       right: '16px',
@@ -337,9 +353,9 @@ export const contextWatchdogEntryPoint = (messages?: {
     const panel = document.createElement('div')
     panel.id = 'cw-panel'
     Object.assign(panel.style, {
-      width: '248px',
-      marginBottom: '8px',
-      padding: '12px',
+      width: '280px',
+      marginBottom: '10px',
+      padding: '14px',
       borderRadius: '12px',
       background: 'rgba(17, 24, 39, 0.96)',
       color: '#f9fafb',
@@ -349,23 +365,29 @@ export const contextWatchdogEntryPoint = (messages?: {
 
     const fab = document.createElement('button')
     fab.type = 'button'
-    fab.textContent = 'AI'
     fab.setAttribute('aria-label', 'ContextWatchdog')
     fab.setAttribute('aria-controls', 'cw-panel')
     fab.title = 'ContextWatchdog'
     Object.assign(fab.style, {
-      width: '28px',
-      height: '28px',
+      width: '44px',
+      height: '44px',
       padding: '0',
       borderRadius: '50%',
       border: 'none',
       background: 'rgba(17, 24, 39, 0.92)',
       color: '#fff',
-      font: '600 10px/1 system-ui, -apple-system, sans-serif',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      font: '600 14px/1 system-ui, -apple-system, sans-serif',
       letterSpacing: '0.02em',
       cursor: 'pointer',
-      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.25)'
+      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)'
     })
+    // 白色 mark 打底；万一 mark 没传进来（构建异常），退回原来的「AI」字样
+    const fabMark = makeMark(24)
+    if (fabMark) fab.append(fabMark)
+    else fab.textContent = 'AI'
     fab.addEventListener('click', () => {
       expanded = !expanded
       render()
@@ -432,9 +454,14 @@ export const contextWatchdogEntryPoint = (messages?: {
         justifyContent: 'space-between',
         marginBottom: '8px'
       })
+      const brand = document.createElement('span')
+      Object.assign(brand.style, { display: 'flex', alignItems: 'center', gap: '6px' })
+      const headerMark = makeMark(18)
+      if (headerMark) brand.append(headerMark)
       const title = document.createElement('span')
       title.textContent = 'ContextWatchdog'
-      Object.assign(title.style, { fontWeight: '600', fontSize: '12px', opacity: '0.92' })
+      Object.assign(title.style, { fontWeight: '600', fontSize: '13px', opacity: '0.92' })
+      brand.append(title)
       const collapseButton = document.createElement('button')
       collapseButton.type = 'button'
       collapseButton.textContent = '×'
@@ -455,7 +482,7 @@ export const contextWatchdogEntryPoint = (messages?: {
         expanded = false
         render()
       })
-      header.append(title, collapseButton)
+      header.append(brand, collapseButton)
 
       const row = document.createElement('div')
       Object.assign(row.style, {

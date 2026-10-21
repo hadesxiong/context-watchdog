@@ -7,6 +7,17 @@
 
 ## 2026-10-21
 
+### ⑧ 页面挂件放大并换上白色 logo
+
+- 收起态圆形按钮 **28 → 44px**（触控目标下限），展开面板 **248 → 280px**、内边距 12 → 14px、
+  标题 12 → 13px；按钮里的「AI」字样换成看门狗 mark，面板头部左侧加同款 mark。
+- mark 染成白色（挂件底色恒为深色）。取图方式：SW 用 `?raw` 读 `public/icons/logo.svg`
+  并换色，随 `args` 传进注入函数，`DOMParser` 落地——不用 `<img src>` / `fetch`，
+  既不看宿主页面 `img-src` 的脸色，也不用往 `web_accessible_resources` 加条目。
+  换 logo 只改资产一处，工具栏图标与挂件同步。
+- `probe:widget` 扩到 **11 项**：新增收起态 44×44，以及穿透 closed Shadow DOM 断言
+  两枚 `svg path` 的 `fill === '#fff'`（端到端验证 ?raw → args → 解析 → 染色）。
+
 ### ⑦ 品牌图标换新（新 logo 接入插件 / 落地页 / README）
 
 - `public/icons` 清理改名（保留 `logo` / `logo-1` 两名，作者调整过尺寸与边距的最终稿）：

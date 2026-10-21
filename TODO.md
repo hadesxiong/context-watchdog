@@ -35,7 +35,8 @@
   形状门禁拦截幻觉）、Chrome/Firefox 双目标构建、明暗主题、中英双语界面、双语落地页与隐私权政策页。
 - **校验基线**：`npm run typecheck` 0 错误 / `npm test` **360 passed（29 文件）** /
   `npm run build` + `npm run build:firefox` 通过 / `npm run probe:layout` 全通过 /
-  `npm run probe:widget` 全通过（授权站点挂件 / iframe 不挂 / 未授权零注入 / 删除后重挂）/
+  `npm run probe:widget` 全通过（授权站点挂件 / iframe 不挂 / 未授权零注入 / 删除后重挂 /
+  收起态 44×44 / 白色 mark，11 项）/
   `npm run site:check` 0 诊断 / `npm run site:build` 通过 / `npm run check:versions` 通过（2 项预期警告：SITE_URL 与渠道未配置）。
 
 ## 回归命令

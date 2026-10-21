@@ -9,6 +9,11 @@
  *   3) 未授权站点完全不注入
  *   4) 不产生横向滚动条，不往 body 里塞节点
  *   5) 常驻：页面主动删除挂件后自动重挂
+ *   6) 收起态 44×44（面板 display:none，host 盒子就是圆形按钮）
+ *   7) closed Shadow DOM 内嵌两枚白色 mark（按钮 + 面板头部）
+ *
+ * 挂件在 closed Shadow DOM 里，页面 JS 读不到内部，因此 7) 走 CDP 的
+ * DOM.getDocument(pierce) 穿透读取节点树（与 DevTools 元素面板同一机制）。
  *
  * 为了免去 optional_host_permissions 的交互授权，脚本运行期间会临时给
  * dist/manifest.json 加上测试站的 host_permissions，结束后**原样恢复**。
@@ -244,18 +249,49 @@ try {
   check('不往 body 里塞节点（body 仍为 textarea + iframe）', authorized.bodyChildren === 2)
   check('无横向滚动条', authorized.overflowX === false)
 
-  // ② 常驻：页面主动删除 host 后，观察器应立即重挂
+  // ② 收起态尺寸：面板 display:none，host 盒子 = 圆形按钮（44×44）
+  const size = JSON.parse(await cdp.eval(`(() => {
+    const host = document.getElementById('${WIDGET_ID}')
+    const r = host ? host.getBoundingClientRect() : null
+    return JSON.stringify({ w: r ? Math.round(r.width) : 0, h: r ? Math.round(r.height) : 0 })
+  })()`))
+  console.log('[2] 收起态尺寸')
+  check('圆形按钮 44×44', size.w === 44 && size.h === 44)
+
+  // ③ closed Shadow DOM 内的白色 mark（页面 JS 拿不到，走 CDP 穿透）
+  await cdp.send('DOM.enable')
+  const tree = await cdp.send('DOM.getDocument', { depth: -1, pierce: true })
+  const walk = node => [
+    node,
+    ...(node.children ?? []).flatMap(walk),
+    ...(node.shadowRoots ?? []).flatMap(walk)
+  ]
+  const allNodes = walk(tree.root)
+  const attrOf = node => {
+    const out = {}
+    const flat = node.attributes ?? []
+    for (let i = 0; i < flat.length; i += 2) out[flat[i]] = flat[i + 1]
+    return out
+  }
+  const hostNode = allNodes.find(node => attrOf(node).id === WIDGET_ID)
+  const insideHost = hostNode ? walk(hostNode) : []
+  const svgPaths = insideHost.filter(node => node.nodeName === 'path').map(node => attrOf(node))
+  console.log('[3] Shadow DOM 内部')
+  check('挂件内嵌 mark（svg path）', svgPaths.length >= 2)
+  check('mark 染成白色（fill #fff）', svgPaths.length > 0 && svgPaths.every(attr => attr.fill === '#fff'))
+
+  // ④ 常驻：页面主动删除 host 后，观察器应立即重挂
   await cdp.eval(`document.getElementById('${WIDGET_ID}')?.remove()`)
   await sleep(800)
   const remounted = await cdp.eval(`!!document.getElementById('${WIDGET_ID}')`)
-  console.log('[2] 常驻')
+  console.log('[4] 常驻')
   check('页面删除挂件后自动重挂', remounted === true)
 
-  // ③ 未授权站点（host 不同 → pattern 不同）
+  // ⑤ 未授权站点（host 不同 → pattern 不同）
   await cdp.send('Page.navigate', { url: `http://localhost:${httpPort}/` })
   await sleep(1500)
   const unauthorized = await cdp.eval(`!!document.getElementById('${WIDGET_ID}')`)
-  console.log('[3] 未授权站点 http://localhost:' + httpPort)
+  console.log('[5] 未授权站点 http://localhost:' + httpPort)
   check('完全不注入挂件', unauthorized === false)
 
   console.log(failed ? '\n挂件探针失败 ✗' : '\n挂件探针全部通过 ✓')

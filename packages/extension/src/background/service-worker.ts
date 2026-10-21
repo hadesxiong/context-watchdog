@@ -30,6 +30,9 @@ import {
 } from '@engine/settings'
 import type { ProfileConfig } from '@engine/types'
 import { contextWatchdogEntryPoint } from './pasteEntryPoint'
+// 挂件内嵌 mark 的唯一来源：注入函数在隔离世界里读不到模块也读不到扩展资源，
+// 由 SW 在构建期把 logo.svg 原文读进来（?raw），运行染白后随 args 递过去。
+import logoMarkSvg from '../../../../public/icons/logo.svg?raw'
 import {
   attachModelHostPort,
   closeModelHost,
@@ -162,11 +165,13 @@ const injectContextWatchdog = (tabId: number): void => {
     cost: chrome.i18n.getMessage('site_widget_cost') || 'The first paste may take 1–2s longer',
     collapse: chrome.i18n.getMessage('site_widget_collapse') || 'Collapse'
   }
+  // 挂件底色是深色，mark 染白后在收起的圆形按钮与展开面板的头部都能看清
+  const mark = logoMarkSvg.replace(/#18181b/g, '#fff')
   chrome.scripting
     .executeScript({
       target: { tabId, allFrames: true },
       func: contextWatchdogEntryPoint,
-      args: [{ toastRedacted, toastAi, widget }]
+      args: [{ toastRedacted, toastAi, widget, mark }]
     })
     .catch(error => console.warn('[ContextWatchdog] 注入粘贴监听失败:', error))
 }
