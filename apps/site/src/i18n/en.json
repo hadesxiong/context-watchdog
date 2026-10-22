@@ -41,19 +41,33 @@
   },
   "how": {
     "title": "How it works",
-    "lead": "Two detection tiers — one always on, one optional — sharing a single dedupe and arbitration pass.",
+    "lead": "Three steps from detection to destination — all on-device: offline, silent, and every change reversible.",
     "steps": [
       {
-        "title": "Regex tier (always on)",
-        "body": "Targets with a fixed shape — secrets, connection strings, phone numbers, national IDs, bank cards, email, IPs, plates — are matched by regex plus algorithmic validation: ISO 7064 for Chinese ID numbers, Luhn for bank cards, mod-97 for IBANs, area-segment rules for US SSNs. A match is trusted: zero latency, fully offline."
+        "title": "Heuristic recognition",
+        "body": "Targets with a fixed shape — secrets, phone numbers, national IDs, bank cards, emails, IPs, plates — are found by shape heuristics plus algorithmic validation (checksums, area segments, character distributions); a hit is trusted. Recognition runs on your device: no network, no text goes to any service."
+      },
+      {
+        "title": "In-place replacement",
+        "body": "A value repeated N times, or spans that overlap, are merged by one sharing pass: every occurrence becomes the same placeholder, and overlaps are arbitrated by type priority. Placeholders stay semantic — <<PHONE>> still reads as what it is, so the redacted text stays readable and inferable."
+      },
+      {
+        "title": "Silent, wherever you paste",
+        "body": "The redacted text lands directly in your paste target: the chat window receives the redacted version. The whole pass is otherwise silent, with only one brief “N redactions” toast; any row can be switched on the spot from “replace” to “keep” — whether to let that item through unchanged remains your call."
+      }
+    ]
+  },
+  "engine": {
+    "title": "Detection engine",
+    "lead": "Two tiers share one dedupe and arbitration pass: the regex tier handles fixed shapes, the AI tier covers shapeless entities; both are extensible through your custom profiles.",
+    "tiers": [
+      {
+        "title": "Regex tier (always on, extensible)",
+        "body": "Secrets, phone numbers, national IDs, bank cards, emails, IPs and plates — targets with a fixed shape — are matched by regex plus algorithmic validation. A match is trusted: zero latency, fully offline. Beyond the built-in 14 categories, a custom profile lets you add regex rules, adjust defaults and keep an allowlist — coverage is yours."
       },
       {
         "title": "AI tier (optional)",
         "body": "Entities with no fixed shape — names, addresses — go to a local GLiNER model (WASM), which only looks at spans the regex tier left uncovered and never redoes its work; you must enable it explicitly and download the quantised model once (~180 MB). If the model is unavailable, the pipeline degrades to pure regex: no errors, no blocking."
-      },
-      {
-        "title": "Placeholder sharing",
-        "body": "A value repeated N times and spans that overlap follow one sharing pass: every occurrence becomes the same placeholder, and overlapping spans are merged by type priority (secrets > personal data > high entropy). Placeholders stay semantic and replacements never cut into each other, so redacted text stays readable and inferable for the AI."
       }
     ]
   },
@@ -66,8 +80,8 @@
         "how": "Exactly two fetch calls exist in the repository, both in modelDownload.ts, both used only to download the model — no request ever carries your text. No XHR, sendBeacon, WebSocket or EventSource anywhere; storage is chrome.storage.local only with no cloud sync, and your text stays in on-device memory throughout."
       },
       {
-        "claim": "The only network activity is the model download, and only if you enable it",
-        "how": "The AI tier is off by default. Once you enable it, model files are fetched from whitelisted sources (a ModelScope mirror, falling back to huggingface.co); only those two addresses are whitelisted, and only model files are downloaded, never anything about you. Caching and inference stay on-device, so the tier works offline."
+        "claim": "The only network activity: optional model download",
+        "how": "The AI tier is off by default; only when you enable it are model files downloaded and cached from whitelisted hosts (a ModelScope mirror, falling back to huggingface.co). Only those two addresses are whitelisted; only model files are downloaded, never any of your data. Caching and inference stay on-device, so it still works offline."
       },
       {
         "claim": "Zero contact with unauthorised sites",
@@ -75,7 +89,7 @@
       },
       {
         "claim": "No telemetry, no analytics, no crash reporting",
-        "how": "There is no analytics, reporting or telemetry SDK in the repository, and no remote switches or config delivery — behaviour is decided by local code and local settings alone. Run npm run build yourself and inspect the bundle for suspicious requests or remote domains; you never have to take our word for it."
+        "how": "There is no analytics, reporting or telemetry SDK in the repository, and no remote switches or config delivery — behaviour is decided by local code and local settings alone. There is no backend server and nowhere to report to; you can build it yourself and inspect the output for any abnormal behaviour, without taking our word for it."
       },
       {
         "claim": "Password fields are never processed",
@@ -86,17 +100,6 @@
         "how": "Every Release ships sha256 checksums in a SHA256SUMS manifest — download it and run shasum -a 256 -c to verify the zips yourself — together with LICENSE and THIRD-PARTY-NOTICES.txt; any change to the source code alters the checksum, and the Firefox submission carries a source zip cut straight from that tag."
       }
     ]
-  },
-  "evidence": {
-    "title": "Evidence",
-    "lead": "Not promises — the actual numbers in this repository today.",
-    "version": "Current version",
-    "tests": "Automated assertions",
-    "probes": "Layout probes",
-    "license": "Licence",
-    "supporters": "Supporters",
-    "supportersNone": "None yet (be the first)",
-    "measured": "measured {date}"
   },
   "thanks": {
     "title": "Thank-you wall",
@@ -143,9 +146,9 @@
   },
   "donate": {
     "title": "Support the project",
-    "lead": "The project is free, serverless and account-free, so it earns nothing to cover the time it takes to maintain. If it ever saved you from one incident, you can buy me a coffee.",
-    "body": "Donating unlocks nothing — there is nothing locked. The supporter list and the payment code are maintained locally, with no third-party analytics involved.",
-    "qrPlaceholder": "Payment code to be added",
+    "body": "The project is free, serverless and account-free, so it earns nothing to cover the time it takes to maintain it, answer issues and ship releases. Donating unlocks nothing — there is nothing locked; it is a thank-you for time rather than a purchase, and the supporter list and payment code are maintained locally. If it ever saved you from one incident, or spared you an hour of sleep, you can buy me a coffee.",
+    "alipay": "Alipay",
+    "wechat": "WeChat",
     "qrAlt": "Donation payment QR code"
   },
   "footer": {

@@ -78,7 +78,8 @@ describe('resolveSiteLinks', () => {
         EDGE_URL: 'https://microsoftedge.microsoft.com/addons/detail/x/abc',
         GITEE_URL: 'https://gitee.com/hadesxiong/context-watchdog',
         ICP_BEIAN: '粤ICP备2026000000号-1',
-        DONATE_QR: 'donate/qr.png'
+        DONATE_QR_ALIPAY: 'donate/alipay.png',
+        DONATE_QR_WECHAT: 'donate/wechat.png'
       },
       PKG
     )
@@ -93,7 +94,8 @@ describe('resolveSiteLinks', () => {
     expect(links.channels.mac).toBe('')
     expect(links.icp).toBe('粤ICP备2026000000号-1')
     expect(links.police).toBe('')
-    expect(links.donateQr).toBe('donate/qr.png')
+    expect(links.donateQrAlipay).toBe('donate/alipay.png')
+    expect(links.donateQrWechat).toBe('donate/wechat.png')
   })
 
   it('渠道键与环境变量名的映射是唯一的', () => {

@@ -1,16 +1,13 @@
 ---
 // 单页 9 区块（E3）
 //
-// 顺序即叙事：是什么 → 看一眼 → 怎么做到的 → 凭什么信 →
-// 现在什么样 → 谁在支持 → 还有疑问 → 怎么支持。
+// 顺序即叙事：是什么 → 看一眼 → 怎么做到的 → 用什么识别 →
+// 凭什么信 → 谁在支持 → 还有疑问 → 怎么支持。
 //
 // 两个语言页面共用这一个组件，避免 / 与 /en/ 两处各写一遍结构（结构一旦
 // 分叉，两边迟早会长得不一样）。
-import { dict, format, type SiteLocale } from '@site/i18n'
-import { repoUrlFor, donateQr } from '@site/data/links'
-import { tests, probes, measuredAt, count } from '@site/data/evidence'
-import { supporters } from '@site/data/supporters'
-import { extensionVersion } from '@site/data/version'
+import { dict, type SiteLocale } from '@site/i18n'
+import { repoUrlFor, donateQrAlipay, donateQrWechat } from '@site/data/links'
 import Rich from '@site/components/Rich.astro'
 import Download from '@site/components/Download.astro'
 import Thanks from '@site/components/Thanks.astro'
@@ -21,10 +18,6 @@ interface Props {
 
 const { locale } = Astro.props
 const d = dict(locale)
-
-// 支持者数量：0 人时显示一句话而不是一个「0」（0 看起来像失败，而它只是还没开始）
-const supporterValue = supporters.length === 0 ? '—' : count(supporters.length)
-const supporterLabel = supporters.length === 0 ? d.evidence.supportersNone : d.evidence.supporters
 ---
 
 <!-- 1. Hero -->
@@ -84,8 +77,10 @@ const supporterLabel = supporters.length === 0 ? d.evidence.supportersNone : d.e
       {
         d.how.steps.map((step, index) => (
           <div class="pg-card">
-            <div class="pg-step-index">{index + 1}</div>
-            <h3>{step.title}</h3>
+            <div class="pg-step-head">
+              <div class="pg-step-index">{index + 1}</div>
+              <h3>{step.title}</h3>
+            </div>
             <p>{step.body}</p>
           </div>
         ))
@@ -94,7 +89,26 @@ const supporterLabel = supporters.length === 0 ? d.evidence.supportersNone : d.e
   </div>
 </section>
 
-<!-- 5. 可核验的隐私承诺 -->
+<!-- 5. 识别引擎（正则/AI 两档的实现层：工作原理只讲场景流程，实现细节收在这里） -->
+<section class="pg-section" id="engine">
+  <div class="pg-shell">
+    <h2 class="pg-section-title">{d.engine.title}</h2>
+    <p class="pg-lead">{d.engine.lead}</p>
+
+    <div class="pg-grid pg-grid-2">
+      {
+        d.engine.tiers.map((tier) => (
+          <div class="pg-card">
+            <h3>{tier.title}</h3>
+            <p>{tier.body}</p>
+          </div>
+        ))
+      }
+    </div>
+  </div>
+</section>
+
+<!-- 6. 可核验的隐私承诺 -->
 <section class="pg-section" id="privacy">
   <div class="pg-shell">
     <h2 class="pg-section-title">{d.privacy.title}</h2>
@@ -113,43 +127,10 @@ const supporterLabel = supporters.length === 0 ? d.evidence.supportersNone : d.e
   </div>
 </section>
 
-<!-- 6. 证据 -->
-<section class="pg-section" id="evidence">
-  <div class="pg-shell">
-    <h2 class="pg-section-title">{d.evidence.title}</h2>
-    <p class="pg-lead">{d.evidence.lead}</p>
-
-    <div class="pg-stats">
-      <div class="pg-stat">
-        <div class="pg-stat-value">{count(tests)}</div>
-        <div class="pg-stat-label">{d.evidence.tests}</div>
-      </div>
-      <div class="pg-stat">
-        <div class="pg-stat-value">{probes}</div>
-        <div class="pg-stat-label">{d.evidence.probes}</div>
-      </div>
-      <div class="pg-stat">
-        <div class="pg-stat-value">{extensionVersion}</div>
-        <div class="pg-stat-label">{d.evidence.version}</div>
-      </div>
-      <div class="pg-stat">
-        <div class="pg-stat-value">Apache-2.0</div>
-        <div class="pg-stat-label">{d.evidence.license}</div>
-      </div>
-      <div class="pg-stat">
-        <div class="pg-stat-value">{supporterValue}</div>
-        <div class="pg-stat-label">{supporterLabel}</div>
-      </div>
-    </div>
-
-    <p class="pg-note">{format(d.evidence.measured, { date: measuredAt })}</p>
-  </div>
-</section>
-
-<!-- 8. 感谢墙（0 人时整个区块不渲染） -->
+<!-- 7. 感谢墙（0 人时整个区块不渲染） -->
 <Thanks locale={locale} />
 
-<!-- 9. FAQ -->
+<!-- 8. FAQ -->
 <section class="pg-section" id="faq">
   <div class="pg-shell">
     <h2 class="pg-section-title">{d.faq.title}</h2>
@@ -167,21 +148,39 @@ const supporterLabel = supporters.length === 0 ? d.evidence.supportersNone : d.e
   </div>
 </section>
 
-<!-- 10. 打赏 -->
+<!-- 9. 打赏：单卡——左两张收款码（支付宝 / 微信），右整段说明（含免费声明与「不解锁任何内容」） -->
 <section class="pg-section" id="donate">
   <div class="pg-shell">
     <h2 class="pg-section-title">{d.donate.title}</h2>
-    <p class="pg-lead">{d.donate.lead}</p>
 
-    <div class="pg-donate">
-      {
-        donateQr ? (
-          <img class="pg-qr-img" src={donateQr} alt={d.donate.qrAlt} width="220" height="220" />
-        ) : (
-          <div class="pg-qr">{d.donate.qrPlaceholder}</div>
-        )
-      }
-      <div class="pg-card">
+    <div class="pg-card pg-donate">
+      <div class="pg-donate-codes">
+        {
+          [
+            { label: d.donate.alipay, src: donateQrAlipay },
+            { label: d.donate.wechat, src: donateQrWechat }
+          ].map((code) => (
+            <figure class="pg-qr">
+              {code.src ? (
+                <>
+                  <img
+                    class="pg-qr-img"
+                    src={code.src}
+                    alt={`${code.label} ${d.donate.qrAlt}`}
+                    width="180"
+                    height="180"
+                  />
+                  <figcaption class="pg-qr-label">{code.label}</figcaption>
+                </>
+              ) : (
+                <div class="pg-qr-missing">{code.label}</div>
+              )}
+            </figure>
+          ))
+        }
+      </div>
+
+      <div class="pg-donate-body">
         <p>{d.donate.body}</p>
       </div>
     </div>

@@ -32,8 +32,8 @@ const d = dict(locale)
               <time class="pg-log-date" datetime={entry.date}>
                 {entry.date}
               </time>
+              <h2 class="pg-tag pg-log-tag">{entry.title}</h2>
             </div>
-            <h2>{entry.title}</h2>
             <ul class="pg-log-list">
               {entry.bullets.map((bullet) => (
                 <li>{bullet}</li>

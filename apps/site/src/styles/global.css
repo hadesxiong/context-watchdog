@@ -256,9 +256,12 @@ pre {
 }
 
 .pg-card p {
-  margin-top: 0.5rem;
+  margin-top: 0.75rem;
   font-size: 0.9375rem;
   color: var(--muted-foreground);
+  /* 两端对齐：卡片列里长段落左右边缘都齐（CJK 按字对齐、拉丁拉伸词距），
+     与隐私承诺 / FAQ 的描述同一口径 */
+  text-align: justify;
 }
 
 .pg-grid {
@@ -275,11 +278,24 @@ pre {
   grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
 }
 
+/* 步骤头：序号徽章 + 标题同行一条基线，正文另起一行；
+   头行与正文的间距 = 0.75rem，与全站卡片「标题→内容」口径一致 */
+.pg-step-head {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.pg-step-head + p {
+  margin-top: 0.75rem;
+}
+
 /* 步骤序号：既是装饰也是顺序信息 */
 .pg-step-index {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: none;
   width: 1.5rem;
   height: 1.5rem;
   border-radius: 999px;
@@ -287,7 +303,6 @@ pre {
   color: var(--muted-foreground);
   font-size: 0.8125rem;
   font-weight: 600;
-  margin-bottom: 0.6rem;
 }
 
 /* ---------- 安装：下载按钮 + 下拉面板 ---------- */
@@ -341,6 +356,16 @@ pre {
   align-items: center;
   gap: 0.5rem;
   padding: 0.55rem 1rem;
+}
+
+/* 主按钮图标：复合含义 SVG（拼图+↓ = 插件；显示器+↓ = 应用），currentColor 随文字 */
+.pg-dl-icon {
+  display: inline-flex;
+  flex: none;
+}
+
+.pg-dl-icon svg {
+  display: block;
 }
 
 /* caret 区：以左细线与动作区分隔（VS Code 分体按钮的签名细节）；开合时转 180° */
@@ -404,6 +429,25 @@ a.pg-channel:hover {
 .pg-channel-name {
   font-weight: 550;
   font-size: 0.9375rem;
+}
+
+/* 渠道行：图标 + 名称同组靠左（space-between 只分隔「名称组 | 状态标签」两块）；
+   文字类徽记（Octocat / Apple）走 currentColor 灰阶，几何徽记自带品牌主色 */
+.pg-channel-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
+.pg-channel-icon {
+  display: inline-flex;
+  flex: none;
+  color: var(--muted-foreground);
+}
+
+.pg-channel-icon svg {
+  display: block;
 }
 
 .pg-tag {
@@ -491,38 +535,10 @@ a.pg-channel:hover {
 }
 
 .pg-how {
-  margin-top: 0.5rem;
+  margin-top: 0.75rem;
   font-size: 0.875rem;
   color: var(--muted-foreground);
-}
-
-/* ---------- 数字证据 ---------- */
-
-.pg-stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
-  gap: 1rem;
-  margin-top: 1.75rem;
-}
-
-.pg-stat {
-  text-align: center;
-  padding: 1.1rem 0.5rem;
-  border: 1px solid var(--border);
-  border-radius: calc(var(--radius) + 2px);
-  background: var(--card);
-}
-
-.pg-stat-value {
-  font-size: 1.5rem;
-  font-weight: 650;
-  font-variant-numeric: tabular-nums;
-}
-
-.pg-stat-label {
-  font-size: 0.8125rem;
-  color: var(--muted-foreground);
-  margin-top: 0.15rem;
+  text-align: justify;
 }
 
 /* ---------- 感谢墙 ---------- */
@@ -594,7 +610,8 @@ a.pg-channel:hover {
 }
 
 .pg-faq summary {
-  padding: 0.9rem 1.1rem;
+  /* 下内边距即「标题→内容」间距，与全站卡片的 0.75rem 口径一致 */
+  padding: 0.9rem 1.1rem 0.75rem;
   cursor: pointer;
   font-weight: 550;
   font-size: 0.9375rem;
@@ -623,6 +640,7 @@ a.pg-channel:hover {
   padding: 0 1.1rem 1rem;
   font-size: 0.9375rem;
   color: var(--muted-foreground);
+  text-align: justify;
 }
 
 /* ---------- 更新记录 ---------- */
@@ -660,9 +678,12 @@ a.pg-channel:hover {
   font-variant-numeric: tabular-nums;
 }
 
-.pg-log-entry h2 {
-  font-size: 1rem;
-  margin-top: 0.375rem;
+/* 入口标题做成右端 tag（复用 .pg-tag 的胶囊外观）：
+   版本+日期钉左、标题钉右，同一条基线上两端对齐 */
+.pg-log-tag {
+  margin-left: auto;
+  /* 比通用 .pg-tag 略松一点：它要与版本号在同一行平起平坐，块感需要更明确 */
+  padding: 0.2rem 0.7rem;
 }
 
 .pg-log-list {
@@ -676,34 +697,73 @@ a.pg-channel:hover {
 
 /* ---------- 打赏 + 页脚 ---------- */
 
+/* 打赏：单卡双栏——左侧并排两张收款码（支付宝 / 微信各一位），右侧「不解锁任何内容」
+   的说明。窄到放不下双栏时 flex-wrap 自然换行成上下两块。 */
 .pg-donate {
-  display: grid;
-  gap: 1.25rem;
-  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem 2.5rem;
   margin-top: 1.75rem;
-  align-items: start;
+  align-items: center;
+}
+
+/* 左栏：两张收款码并排，各自带小字标注 */
+.pg-donate-codes {
+  display: flex;
+  flex: none;
+  gap: 1rem;
 }
 
 .pg-qr {
+  margin: 0;
+  display: grid;
+  gap: 0.45rem;
+  justify-items: center;
+}
+
+/* 占位（未配置）：与真实收款码同尺寸的虚线框，框内直接标注渠道名（不另设底部标注） */
+.pg-qr-missing {
+  width: 9.5rem;
+  height: 9.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.6rem;
   border: 1px dashed var(--border);
   border-radius: calc(var(--radius) + 2px);
-  padding: 2rem 1rem;
-  text-align: center;
   color: var(--muted-foreground);
   font-size: 0.875rem;
-  background: var(--card);
+  text-align: center;
 }
 
 /* 真实收款码：固定白底。二维码靠明暗对比被扫码器识别，深色主题下若透明会扫不出来 */
 .pg-qr-img {
   display: block;
-  width: 100%;
-  max-width: 15rem;
-  height: auto;
-  padding: 0.75rem;
+  width: 9.5rem;
+  height: 9.5rem;
+  padding: 0.5rem;
   background: #fff;
   border: 1px solid var(--border);
   border-radius: calc(var(--radius) + 2px);
+}
+
+.pg-qr-label {
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
+}
+
+/* 右栏：说明文字占满余宽，首段不吃卡片通用的「标题→内容」间距（卡内没有标题行） */
+.pg-donate-body {
+  flex: 1;
+  min-width: 15rem;
+}
+
+.pg-donate-body p {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: var(--muted-foreground);
+  /* 两端对齐：与其它卡片描述同一口径 */
+  text-align: justify;
 }
 
 .pg-footer {

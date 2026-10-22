@@ -1,7 +1,7 @@
 {
   "extends": "astro/tsconfigs/strict",
+  // 不写 baseUrl：TS 6 已弃用、TS 7 将移除；省略时 paths 按本文件所在目录解析，与写 "." 语义相同
   "compilerOptions": {
-    "baseUrl": ".",
     "paths": {
       "@site/*": ["./src/*"],
       "@tokens/*": ["../../packages/design-tokens/*"]

@@ -112,7 +112,8 @@ export function resolveSiteLinks(env, pkg = {}) {
     channels,
     icp: read(env, 'ICP_BEIAN'),
     police: read(env, 'POLICE_BEIAN'),
-    donateQr: read(env, 'DONATE_QR')
+    donateQrAlipay: read(env, 'DONATE_QR_ALIPAY'),
+    donateQrWechat: read(env, 'DONATE_QR_WECHAT')
   }
 }
 

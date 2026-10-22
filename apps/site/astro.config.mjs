@@ -84,13 +84,13 @@ const IMAGE_MIME = {
   '.svg': 'image/svg+xml'
 }
 
-const inlineDonateQr = (value) => {
+const inlineDonateQr = (value, label) => {
   if (!value) return ''
   const file = resolve(siteRoot, value)
-  if (!existsSync(file)) throw new Error(`[site] DONATE_QR 指向的文件不存在：${file}`)
+  if (!existsSync(file)) throw new Error(`[site] ${label} 指向的文件不存在：${file}`)
   const mime = IMAGE_MIME[extname(file).toLowerCase()]
   if (!mime) {
-    throw new Error(`[site] DONATE_QR 只支持 ${Object.keys(IMAGE_MIME).join(' / ')}：${file}`)
+    throw new Error(`[site] ${label} 只支持 ${Object.keys(IMAGE_MIME).join(' / ')}：${file}`)
   }
   return `data:${mime};base64,${readFileSync(file).toString('base64')}`
 }
@@ -105,7 +105,11 @@ export default defineConfig({
   vite: {
     define: {
       __EXTENSION_VERSION__: JSON.stringify(extensionVersion),
-      __SITE_LINKS__: JSON.stringify({ ...links, donateQr: inlineDonateQr(links.donateQr) })
+      __SITE_LINKS__: JSON.stringify({
+        ...links,
+        donateQrAlipay: inlineDonateQr(links.donateQrAlipay, 'DONATE_QR_ALIPAY'),
+        donateQrWechat: inlineDonateQr(links.donateQrWechat, 'DONATE_QR_WECHAT')
+      })
     },
     resolve: {
       alias: {

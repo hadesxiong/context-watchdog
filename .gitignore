@@ -30,7 +30,7 @@ apps/site/.astro/
 .env.*.local
 
 # 打赏收款码（本地文件，构建期由 DONATE_QR 内联成 data URI；个人收款信息不进仓库）
-apps/site/donate-qr.*
+apps/site/donate-qr*
 
 # Logs
 logs/

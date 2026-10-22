@@ -30,8 +30,9 @@ interface SiteLinksConfig {
   icp: string
   /** 公安网备（可选） */
   police: string
-  /** 收款码的 data URI（构建期内联；为空则保留占位文案） */
-  donateQr: string
+  /** 收款码的 data URI（构建期内联；支付宝 / 微信各一张，为空则该位保留占位文案） */
+  donateQrAlipay: string
+  donateQrWechat: string
 }
 
 declare const __SITE_LINKS__: SiteLinksConfig
