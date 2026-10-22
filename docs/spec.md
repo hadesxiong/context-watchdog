@@ -281,6 +281,32 @@ CSP 收紧后扩展页无任何外部脚本/连接可能。
 - 设计 token 经别名 `@tokens/tokens.css` 被 `style.css` 引用，**产物内完整内联**
   （同样有构建期校验）。
 
+### 11.1 落地页（`apps/site`）
+
+Astro 静态站点（`output: 'static'`），产物是纯 HTML + 一个 CSS 文件，**零客户端 JS**
+（`dist` 下不会出现 `.js`）。命令（仓库根执行）：`site:dev` / `site:build` /
+`site:preview` / `site:check` / `site:evidence`。
+
+> **不要**在 `apps/site` 里单独 `npm install`：仓库未启用 npm workspaces（留到本地代理
+> 阶段），Astro 装在仓库根 `devDependencies`，脚本用 `astro --root apps/site` 调用。
+
+三条不改的原则：
+
+1. **视觉来自 `packages/design-tokens/tokens.css`**（经 `@tokens` 别名 `@import`），
+   与扩展同一个源——两边配色/圆角结构上不可能漂移。站点不引 Tailwind。
+2. **版本号与测试数不手写**。版本号构建期从 `packages/extension/src/manifest.json` 注入
+   （`vite.define` → `__EXTENSION_VERSION__`）；测试数与探针数由
+   `npm run site:evidence` 跑一遍真实套件后写入 `evidence.json`。
+3. **未上架的渠道不渲染成链接**。渠道 URL 为空时页面显示「即将上架」，而不是一个点了
+   打不开的 URL。URL 来自 `apps/site/.env`（gitignored，模板 `.env.example`）——
+   这些是**部署身份**（域名 / 商店页 / 备案号 / 收款码），不进仓库，因为 fork 之后
+   不该静默继承别人的它们。
+
+结构要点：`src/pages/{index,en/index,privacy,en/privacy,changelog,…}.astro` 双语四类页；
+`src/layouts/Base.astro` 管 `<head>`（hreflang / canonical / og）+ 页头页脚；
+`src/i18n/{zh,en}.json` 两语言键集合一致由单测强制；部署前检查清单见 `docs/releasing.md`
+§1 / §1.1 / §7。
+
 ## 12. 测试体系
 
 `npm test`：**403 断言 / 32 文件**（`npm run typecheck` 0 错误为另一道闸）：
@@ -320,6 +346,14 @@ CSP 收紧后扩展页无任何外部脚本/连接可能。
   JS 侧引用管理（§7 下载器表「内存释放」行），不代表进程总内存。
 
 ## 15. 项目结构与引擎边界
+
+`packages/engine` 是检测与替换引擎：**纯 TypeScript，宿主无关**——同一份代码服务多个宿主：
+
+| 宿主 | 用途 |
+|------|------|
+| 扩展（Chrome service worker / 侧栏） | 浏览器内正则 + AI 级联检测 |
+| 扩展 offscreen（Firefox 侧栏为 LocalHost） | GLiNER 模型宿主 |
+| Node（本地脱敏代理，后续迭代） | CLI / IDE / agent 出网前拦截 |
 
 ```
 packages/
@@ -366,17 +400,27 @@ packages/extension/                # 扩展（宿主层）
     ├── shims/                     # 构建期打桩（ort GPU 子路径）
     └── style.css                  # 引入 @tokens/tokens.css + Tailwind theme 映射
 
-apps/site/                         # 落地页（Astro 静态站点，零客户端 JS —— 见 apps/site/README.md）
+apps/site/                         # 落地页（Astro 静态站点，零客户端 JS——命令、结构与
+                                   # 部署前检查见 docs/releasing.md §1 / §7）
 public/                            # 仓库级共享静态资源（icons）
-tests/  scripts/  docs/            # 测试 / 构建与探针脚本 / 设计文档
-docs/design/                       # 设计决策与后续迭代规划（防御性公开，详见其 README）
+tests/  scripts/  docs/            # 测试 / 构建与探针脚本 / 文档
+docs/design/                       # 设计决策与后续迭代规划（防御性公开，索引见根 README）
 ```
 
 **引擎边界**：引擎通过别名 `@engine/*` 被扩展引用（`tsconfig.json` 与 `vite.config.ts`
-各自声明）。**引擎不依赖任何宿主 API**：不静态 import `chrome` / `node:*` / `vue` /
-`gliner` / `onnxruntime-web` / `@xenova/transformers`，宿主能力一律通过适配器注入。
-这条约束有自动化断言保护（`tests/unit/engineBoundaries.test.ts`）——它是同一份代码能
-同时服务浏览器扩展与后续 Node 代理服务的前提。
+各自声明）。**引擎不依赖任何宿主 API**，本目录**禁止**静态 import：
+
+- `chrome`、`node:*` —— 宿主 API，连 `import type` 都不行，必须注入适配器；
+- `vue`、`pinia`、`reka-ui` —— UI 属于宿主层；
+- `gliner`、`onnxruntime-web`、`onnxruntime-common`、`@xenova/transformers`、
+  `@huggingface/jinja` —— 模型运行时属于宿主层，必须可替换；
+- `packages/extension` 下的任何文件（反向依赖，`import type` 也算）。
+
+**允许**：对宿主全局做 `typeof chrome === 'undefined'` 守卫式访问，前提是同时提供可注入
+的适配器（`createChromeStorage` 这类）——引擎能在 Node 下被 vitest 直接跑起来、`tests/`
+全部用例不需要浏览器环境，靠的就是这条。这条约束有自动化断言保护
+（`tests/unit/engineBoundaries.test.ts`，含「本节禁用清单与测试一致」的对账）——它是
+同一份代码能同时服务浏览器扩展与后续 Node 代理服务的前提。
 
 模型运行时（`packages/extension/src/model/`）与检测管线（`packages/engine/`）之间
 只有一道接口：`InferenceBackend`。宿主在启动时 `installModelBackend()` 注册自己的实现；

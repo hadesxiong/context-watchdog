@@ -5,6 +5,31 @@
 > 设计决策与后续迭代规划：`docs/design/`。
 > 单条提交详情见 `git log`；被清退的历史规划文档见 `f35ceae` 之前的 TODO。
 
+## 2026-10-22
+
+### ⑯ H-1 / H-2 与 TC-07-8/9 真机验收结案
+
+- **H-1 输入区去自动检测**（2026-10-18 落地）真机验收通过 → **TC-02-1 结案**：
+  粘贴与手动输入均不再自动检测，仅「检测」按钮触发；检测后继续编辑旧结果保留。
+- **H-2 落地页安装区改版**（2026-10-19 落地）真机双语目视验收通过 →
+  四并列渠道卡片改 VS Code/GitHub 式下载按钮 + details 下拉面板（零 JS）；
+  应用组未上架渠道占位「即将上架」无死链；分割线评估=保留每节 1px 单色细线。
+- **TC-07-8 站点挂件与逐站 AI 开关、TC-07-9 粘贴链路 AI 二次升级**真机验收通过
+  → 第①条线（S1–S5）全量结案。
+
+### ⑰ docs/README 整合与改名收尾
+
+- **移出内部工作文档**：`docs/design/release-1.0.0-plan.md` 与 `docs/design/roadmap.md`
+  移出仓库（roadmap 内容与 CHANGELOG 重复，plan 是已执行完的一次性规划），不再随分发。
+- **删除 4 个子 README**，独有内容并入单一真相源：`docs/README.md` 文档索引与更新触发
+  → `CONTRIBUTING.md`；`docs/design/README.md` 索引表 → 根 README 文档地图（双语同步）；
+  `apps/site/README.md` → spec §11.1（落地页：命令/结构/三条不改的原则）+ releasing §7
+  （部署前检查）；`packages/engine/README.md` → spec §15（三宿主表 + 硬约束禁用清单），
+  `engineBoundaries` 测试改为与 spec §15 对账。
+- **新增 `public/icons/logo-dark.svg`**（暗底用浅色变体，纯资产，暂无消费方）。
+- **改名收尾**：origin 指向 `github.com:hadesxiong/context-watchdog`；两个移出文档的
+  全部历史提交经 `git filter-branch` 清除（全仓库短 SHA 重写，push 需 `--force`）。
+
 ## 2026-10-21
 
 ### ⑮ 挂件「已打开」状态查询修复（真机验收发现，最后一个已知问题）
@@ -383,7 +408,7 @@ Chrome/Edge 下模型运行时移出任何 UI 上下文，放进唯一的 offscr
 
 ### 1.0.0 发布准备 A–F · 关键节点结案
 
-路线图见 `docs/design/roadmap.md`（A–F 六个关键节点）。本轮完成 A–D：
+本轮完成 A–D（A–F 六个关键节点）：
 
 - **A 许可与文档**（`2c61c0b`）：`LICENSE`（Apache-2.0 全文）、`NOTICE`、`PATENTS.md`、
   `CONTRIBUTING.md`、`SECURITY.md`；`scripts/third-party-notices.mjs` 生成

@@ -40,7 +40,7 @@ export default defineConfig(({ mode }) => {
       alias: {
         // 扩展自身（宿主层）
         '@': resolve(EXT_ROOT, 'src'),
-        // 检测引擎（纯逻辑，宿主无关）。硬约束见 packages/engine/README.md
+        // 检测引擎（纯逻辑，宿主无关）。硬约束见 docs/spec.md §15
         '@engine': resolve(REPO_ROOT, 'packages/engine/src'),
         // 设计 token 唯一来源（扩展与落地页共用）
         '@tokens': resolve(REPO_ROOT, 'packages/design-tokens'),

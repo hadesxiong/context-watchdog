@@ -100,10 +100,10 @@ describe('引擎边界 - 不得静态引用宿主 API 或模型运行时', () =>
 })
 
 describe('引擎边界 - 硬约束文档与实现一致', () => {
-  it('packages/engine/README.md 记录的禁用清单与测试一致', () => {
-    const readme = readFileSync(join(ENGINE_ROOT, 'README.md'), 'utf8')
+  it('docs/spec.md §15 记录的禁用清单与测试一致', () => {
+    const spec = readFileSync(resolve(ENGINE_ROOT, '../../docs/spec.md'), 'utf8')
     for (const name of ['gliner', '@xenova/transformers', 'onnxruntime-web', 'vue', 'pinia']) {
-      expect(readme, `README 未记录对 ${name} 的禁用`).toContain(name)
+      expect(spec, `spec §15 未记录对 ${name} 的禁用`).toContain(name)
     }
   })
 })

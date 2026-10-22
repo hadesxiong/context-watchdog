@@ -125,10 +125,14 @@ submission steps, asset checklist) is in [`docs/releasing.md`](docs/releasing.md
 | [`docs/spec.md`](docs/spec.md) | Technical reference: pipeline, rules, profiles, permissions, storage, build, test map (Chinese) |
 | [`docs/test-cases.md`](docs/test-cases.md) | Manual verification cases with pass criteria (Chinese) |
 | [`docs/releasing.md`](docs/releasing.md) | Release runbook: tags, store submission, asset checklist (Chinese) |
-| [`docs/design/`](docs/design/) | Design decisions and future lines — deliberately published as prior art |
+| [`docs/design/license-patent-and-brand.md`](docs/design/license-patent-and-brand.md) | Why Apache-2.0, patent strategy, trademark and brand policy (Chinese) |
+| [`docs/design/site-ai-offscreen-host.md`](docs/design/site-ai-offscreen-host.md) | Design ①: per-site AI enhancement — widget control plane + offscreen single model host (Chinese) |
+| [`docs/design/local-sanitize-proxy.md`](docs/design/local-sanitize-proxy.md) | Design ②: local sanitising proxy — outbound interception + whitelist + audit trail (Chinese) |
 | [`CHANGELOG.md`](CHANGELOG.md) | Round-by-round implementation record (Chinese) |
 | [`TODO.md`](TODO.md) | Current status and open items (Chinese) |
 | Landing page `/changelog/` | User-facing release notes, bilingual |
+
+Design documents are **deliberately published with the code**: this project files no patents, so the designs themselves constitute practisable prior art (see [PATENTS.md](PATENTS.md)). `site-ai-offscreen-host.md` and `local-sanitize-proxy.md` describe lines ①/② planned *after* 1.0.0 — published before implementation precisely so there is no gap period.
 
 ## Contributing
 

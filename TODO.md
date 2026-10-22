@@ -3,12 +3,13 @@
 > 当前架构：`README.md`（快速开始）+ `docs/spec.md`（技术说明）。
 > 手动验收判据：`docs/test-cases.md`；实现轮次与结案沿革：`CHANGELOG.md`。
 
-## 当前状态（2026-10-20）
+## 当前状态（2026-10-22）
 
-- **1.0.0 发布准备：代码侧已完成**（A–F 关键节点，见 `docs/design/roadmap.md`）：
-  A 许可与文档、B/C 目录重排与 `InferenceBackend` 抽象、D i18n + 区域规则集 + 能力矩阵、
-  E Astro 落地页、F 发布就绪（`check:versions` / `pack-release` / `docs/releasing.md`）
-  均已落地。**剩三件只能由作者做的事**：
+- **1.0.0 收尾进行中**：真机验收（H-1 输入区去自动检测、H-2 落地页安装区改版、
+  TC-07-8/9 站点挂件与粘贴 AI 升级）已全部通过并结案（见 `CHANGELOG.md` 2026-10-22）；
+  两个 Firefox 真机缺陷已知未修（挂件按钮文案与侧栏状态反馈，本轮修复放弃、留待后续）；
+  文档整理完成（内部工作文档移出仓库、4 个子 README 并入根 README/CONTRIBUTING/spec/releasing）。
+  **剩三件只能由作者做的事**：
   1. **F8 打 tag**（`1.0.0-ext` / `1.0.0-site`）——`npm run check:versions -- --release` 会先列出还差什么
   2. **F7 互链**：把落地页域名填进 `apps/site/.env` 的 `SITE_URL`，渠道上架后填对应的 `*_URL`（模板见 `apps/site/.env.example`）
   3. **素材**：演示 GIF、打赏收款码、商店截图与 promo tile（清单见 `docs/releasing.md` §6）
@@ -28,7 +29,7 @@
   失败/超时保留正则结果。
   **S5 已收尾**：延迟提示文案、宿主销毁验证（offscreen 目标消失 + `hasDocument=false` +
   session 快照清空）、`npm run probe:widget` 探针、spec/test-cases 文档均已落地；
-  剩作者按 `docs/test-cases.md` TC-07-8/9 做真机手动验收。
+  TC-07-8/9 真机验收通过（2026-10-21/22，结案见 CHANGELOG）。
 - **功能全部实现、验收全绿**：侧栏手动脱敏（正则恒开 + AI 级联可选）、
   自定义档案/正则/白名单与 JSON 导入导出、粘贴自动拦截（逐站授权，含 contenteditable
   富文本与「已脱敏 N 处」轻提示）、GLiNER 推理链路（wasm/模型全本地、断网可用、
@@ -52,12 +53,5 @@ npm run site:check && npm run site:build && npm run check:versions
 
 ## 待办
 
-- [ ] **H-1 输入区去自动检测**（`f81ced0`）：粘贴与手动输入均不再自动检测，仅「检测」按钮
-  触发；检测后继续编辑旧结果保留（「清空」一并清）。→ **TC-02-1**（含负向判据）
-- [ ] **H-2 落地页安装区改版 + 分割线评估**（`f9b5133` + `86c9dd1`）：四并列渠道卡片 →
-  VS Code/GitHub 式下载按钮 + details 下拉面板（零 JS）——插件组含 Chrome/Edge/Firefox
-  与 GitHub 源码（Release 页实链），应用组 Windows/macOS 未上架占位「即将上架」（无死链）；
-  组内渠道行改 ghost 式；分割线评估结论=保留每节 1px 单色细线，删 `:first-of-type` 死规则。
-  → 双语目视验收（`/` 与 `/en/`：按钮开合、caret 旋转、面板行 hover、窄屏无横向溢出）
-- 暂无其他。新候选在此登记（挂 `docs/test-cases.md` TC 编号）；实现 + 实机验收闭环后
+- 暂无。新候选在此登记（挂 `docs/test-cases.md` TC 编号）；实现 + 实机验收闭环后
   移入 `CHANGELOG.md` 对应轮次并清空本清单。

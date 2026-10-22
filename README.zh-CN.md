@@ -124,10 +124,14 @@ npm run release:pack                # 两个可直接上架的 zip + SHA256SUMS 
 | [`docs/spec.md`](docs/spec.md) | 技术参考：管线、规则、档案、权限、存储、构建、测试地图 |
 | [`docs/test-cases.md`](docs/test-cases.md) | 手动验收用例与通过判据 |
 | [`docs/releasing.md`](docs/releasing.md) | 发布操作手册：tag、商店提交、素材清单 |
-| [`docs/design/`](docs/design/) | 设计决策与后续线——有意随代码公开，构成现有技术 |
+| [`docs/design/license-patent-and-brand.md`](docs/design/license-patent-and-brand.md) | 为何是 Apache-2.0、专利策略、商标与品牌政策 |
+| [`docs/design/site-ai-offscreen-host.md`](docs/design/site-ai-offscreen-host.md) | 设计 ①：授权站点 AI 增强——页面挂件控制面 + offscreen 单一模型宿主 |
+| [`docs/design/local-sanitize-proxy.md`](docs/design/local-sanitize-proxy.md) | 设计 ②：本地脱敏代理——拦截出网请求 + 白名单 + 溯源审计 |
 | [`CHANGELOG.md`](CHANGELOG.md) | 实现轮次与结案记录 |
 | [`TODO.md`](TODO.md) | 当前状态与未结事项 |
 | 落地页 `/changelog/` | 面向用户的更新记录（中英双语） |
+
+设计文档**有意随代码公开**：本项目不申请任何专利，设计本身即构成可实施的现有技术（见 [PATENTS.md](PATENTS.md)）。`site-ai-offscreen-host.md` 与 `local-sanitize-proxy.md` 描述 1.0.0 **之后**的两条线，现在就公开正是为了不留空窗期。
 
 ## 贡献方式
 
