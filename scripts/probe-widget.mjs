@@ -26,6 +26,8 @@
  * 用法：
  *   npm run probe:widget
  *   CHROME_PATH=/path/to/chrome npm run probe:widget
+ *   # Windows：正式版 Chrome / 新版 Edge 会忽略 --load-extension，须指向 Chromium 或
+ *   # Chrome for Testing，如 %LOCALAPPDATA%\ms-playwright\chromium-*\chrome-win64\chrome.exe
  */
 import { execFileSync, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
@@ -116,8 +118,17 @@ const debugPort = await freePort()
 const profile = join(root, 'node_modules', '.cache', `probe-widget-${process.pid}`)
 rmSync(profile, { recursive: true, force: true })
 
-// 扩展 ID：未打包扩展由绝对路径的 sha256 推导（前 32 个 hex → a-p）
-const extensionId = [...createHash('sha256').update(DIST).digest('hex').slice(0, 32)]
+// 扩展 ID：未打包扩展由绝对路径的 sha256 推导（前 32 个 hex → a-p）。
+// Windows 上 Chromium 哈希的是路径的 **UTF-16LE** 字节（base::FilePath::CharType
+// 为 wchar_t，见 components/crx_file/id_util.cc 的 GenerateIdForPath 与
+// tools/crx_id/crx_id.py 注释），POSIX 才是 UTF-8——用错编码推出的 ID 导航
+// chrome-extension:// 必 404，整个探针死在「扩展未加载」上。
+const extensionId = [
+  ...createHash('sha256')
+    .update(process.platform === 'win32' ? Buffer.from(DIST, 'utf16le') : Buffer.from(DIST, 'utf8'))
+    .digest('hex')
+    .slice(0, 32)
+]
   .map(char => String.fromCharCode(97 + parseInt(char, 16)))
   .join('')
 
@@ -433,5 +444,17 @@ try {
   station.close()
   writeFileSync(MANIFEST, originalManifest)
   await sleep(300)
-  rmSync(profile, { recursive: true, force: true })
+  // Windows 上 SIGKILL 后 Chrome 子进程退尽、文件锁释放常晚于 300ms——锁没松就
+  // 重试几轮。全 PASS 的探针不许在收尾这一下删除上翻车（EPERM → exit 1）。
+  for (let attempt = 0; attempt < 12; attempt++) {
+    try {
+      rmSync(profile, { recursive: true, force: true })
+      break
+    } catch {
+      await sleep(500)
+    }
+  }
+  if (existsSync(profile)) {
+    console.warn('[probe:widget] 临时 profile 未删净（文件锁仍占用），留待下次手动清理:', profile)
+  }
 }
