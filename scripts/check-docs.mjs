@@ -128,13 +128,7 @@ if (mentionProblems === 0) {
 // ------------------------------------------------ 3) 三处地图 vs docs/ 实际文件集
 
 const actualDocs = git('docs/*.md')
-const docsMentioned = (rel) => {
-  const text = read(rel)
-  const set = new Set(text.match(/docs\/[A-Za-z0-9._/-]+\.md/g) ?? [])
-  if (/docs\/design\//.test(text)) set.add('docs/design/*') // 目录级引用（CONTRIBUTING）
-  return set
-}
-const inSet = (set, file) => set.has(file) || (file.startsWith('docs/design/') && set.has('docs/design/*'))
+const docsMentioned = (rel) => new Set(read(rel).match(/docs\/[A-Za-z0-9._/-]+\.md/g) ?? [])
 const maps = {
   'README.md': docsMentioned('README.md'),
   'README.zh-CN.md': docsMentioned('README.zh-CN.md'),
@@ -143,21 +137,19 @@ const maps = {
 let mapProblems = 0
 for (const file of actualDocs) {
   for (const [mapName, set] of Object.entries(maps)) {
-    if (!inSet(set, file)) {
+    if (!set.has(file)) {
       mapProblems += 1
       fail(`${mapName} 缺少 ${file} 的行/提及`)
     }
   }
 }
 for (const f of maps['README.md']) {
-  if (f.includes('design') || f.includes('*')) continue
   if (!maps['README.zh-CN.md'].has(f)) {
     mapProblems += 1
     fail(`双语地图不同步：README.md 有而 zh 无 → ${f}`)
   }
 }
 for (const f of maps['README.zh-CN.md']) {
-  if (f.includes('design') || f.includes('*')) continue
   if (!maps['README.md'].has(f)) {
     mapProblems += 1
     fail(`双语地图不同步：zh 有而 README.md 无 → ${f}`)
@@ -165,7 +157,6 @@ for (const f of maps['README.zh-CN.md']) {
 }
 for (const [mapName, set] of Object.entries(maps)) {
   for (const f of set) {
-    if (f.includes('*')) continue
     if (!existsSync(resolve(root, f))) {
       mapProblems += 1
       fail(`${mapName} 提及不存在的文件 → ${f}`)
@@ -185,7 +176,7 @@ const baselineSpots = [
   { rel: 'docs/spec.md', re: /`npm test`：\*\*(\d+) 断言 \/ (\d+) 文件\*\*/ },
   { rel: 'docs/test-cases.md', re: /期望 \*\*(\d+) passed \/ (\d+) 文件\*\*/ },
   { rel: 'TODO.md', re: /\*\*(\d+) passed（(\d+) 文件）\*\*/ },
-  { rel: 'docs/design/site-ai-offscreen-host.md', re: /当前基线 (\d+) 项/ }
+  { rel: 'docs/site-ai-offscreen-host.md', re: /当前基线 (\d+) 项/ }
 ]
 const testHits = []
 const fileHits = []

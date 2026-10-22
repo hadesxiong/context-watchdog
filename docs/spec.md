@@ -409,8 +409,8 @@ packages/extension/                # 扩展（宿主层）
 apps/site/                         # 落地页（Astro 静态站点，零客户端 JS——命令、结构与
                                    # 部署前检查见 docs/releasing.md §1 / §7）
 public/                            # 仓库级共享静态资源（icons）
-tests/  scripts/  docs/            # 测试 / 构建与探针脚本 / 文档
-docs/design/                       # 设计决策与后续迭代规划（防御性公开，索引见根 README）
+tests/  scripts/  docs/            # 测试 / 构建与探针脚本 / 文档（设计线三份同在
+                                   # docs/ 顶层：防御性公开，索引见根 README）
 ```
 
 **引擎边界**：引擎通过别名 `@engine/*` 被扩展引用（`tsconfig.json` 与 `vite.config.ts`

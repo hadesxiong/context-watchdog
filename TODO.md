@@ -16,7 +16,7 @@
   2. **F7 互链**：把落地页域名填进 `apps/site/.env` 的 `SITE_URL`，渠道上架后填对应的 `*_URL`（模板见 `apps/site/.env.example`）
   3. **素材**：演示 GIF、打赏收款码、商店截图与 promo tile（清单见 `docs/releasing.md` §6）
 - **1.0.0 之后第①条线（授权站点 AI 增强）：S1–S4 已完成**
-  （`docs/design/site-ai-offscreen-host.md` §9）：
+  （`docs/site-ai-offscreen-host.md` §9）：
   offscreen 文档持有唯一一份模型运行时，SW 经 Port 路由 ENSURE / DETECT；
   Chrome/Edge 有宿主，Firefox 构建不产出该入口也不带 `offscreen` 权限。
   已实测：文档创建 → 模型加载 → DETECT 回包（正则 + 模型双来源 items）→ 销毁。

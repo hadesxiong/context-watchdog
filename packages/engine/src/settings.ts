@@ -1,7 +1,7 @@
 // 扩展设置的存储键与判定（侧栏 / SW / 页面挂件共用）
 //
 // 单独成文件是为了让键名只有一个来源：侧栏 store、SW 的有效 AI 判定、站点挂件
-// 的逐站开关都读同一套键。语义见 docs/design/site-ai-offscreen-host.md §4。
+// 的逐站开关都读同一套键。语义见 docs/site-ai-offscreen-host.md §4。
 
 /** 全局 AI 开关（语义：允许使用 AI；默认 false） */
 export const AI_ENABLED_KEY = 'contextwatchdog.aiEnabled'

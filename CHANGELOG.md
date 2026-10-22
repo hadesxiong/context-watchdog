@@ -2,8 +2,22 @@
 
 > ContextWatchdog 实现轮次与结案记录（按时间倒序，压缩版）。
 > 技术规格：`docs/spec.md`；手动验收判据：`docs/test-cases.md`；当前状态：`TODO.md`；
-> 设计决策与后续迭代规划：`docs/design/`。
+> 设计决策与后续迭代规划：`docs/` 设计线三份（索引见根 README 文档地图）。
 > 单条提交详情见 `git log`；被清退的历史规划文档见 `f35ceae` 之前的 TODO。
+
+## 2026-10-23
+
+### ㉑ 去掉 design/ 层级 —— 设计线三份平铺进 docs/
+
+- **结构收敛**：`docs/design/` 三份（license-patent-and-brand / site-ai-offscreen-host /
+  local-sanitize-proxy）`git mv` 至 `docs/` 顶层、目录撤销——6 份文档单层平铺，角色区分
+  交回 README 文档地图与 CONTRIBUTING 索引承载（路径不再承担分组语义）。
+- **全仓活引用跟随（12 个文件 18 处）**：README 双语地图 ×6 行、CONTRIBUTING 索引行、
+  本文件头注、spec §15 结构树、TODO、PATENTS 正文、落地页 footer `treeUrl('docs')`、
+  engine/extension 注释 ×2、check-docs 模式表、license 设计稿自指 ×3；⑰ 与 474 行等
+  历史提及是存档不改（门禁豁免照旧）。
+- 五道门禁复验：check:docs（首验平铺后的地图与路径）/ typecheck / test 420·33 /
+  site:build（footer 改动）/ check:versions。
 
 ## 2026-10-22
 

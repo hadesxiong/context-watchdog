@@ -52,7 +52,7 @@ export type ModelHostRequest = ModelHostPingRequest | ModelHostEnsureRequest | M
  * 宿主 → SW 的状态通知（**不是**请求，没有 token、不回包）。
  *
  * 为什么必须绕这一圈：offscreen 文档**只暴露 chrome.runtime**（实测：
- * chrome.storage / chrome.i18n 都是 undefined，见 docs/design/site-ai-offscreen-host.md），
+ * chrome.storage / chrome.i18n 都是 undefined，见 docs/site-ai-offscreen-host.md），
  * 所以宿主自己写不了 storage.session，只能让 SW 代写。
  */
 export interface ModelHostNotice {
