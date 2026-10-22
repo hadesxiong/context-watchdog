@@ -310,8 +310,8 @@ Astro 静态站点（`output: 'static'`），产物是纯 HTML + 一个 CSS 文�
 
 结构要点：`src/pages/{index,en/index,privacy,en/privacy,changelog,…}.astro` 双语四类页；
 `src/layouts/Base.astro` 管 `<head>`（hreflang / canonical / og）+ 页头页脚；
-`src/i18n/{zh,en}.json` 两语言键集合一致由单测强制；部署前检查清单见 `docs/releasing.md`
-§1 / §1.1 / §7。
+`src/i18n/{zh,en}.json` 两语言键集合一致由单测强制（部署前检查清单随发布 runbook
+移出仓库，作者自持）。
 
 ## 12. 测试体系
 
@@ -406,8 +406,8 @@ packages/extension/                # 扩展（宿主层）
     ├── shims/                     # 构建期打桩（ort GPU 子路径）
     └── style.css                  # 引入 @tokens/tokens.css + Tailwind theme 映射
 
-apps/site/                         # 落地页（Astro 静态站点，零客户端 JS——命令、结构与
-                                   # 部署前检查见 docs/releasing.md §1 / §7）
+apps/site/                         # 落地页（Astro 静态站点，零客户端 JS——结构见 §11，
+                                   # 部署前检查随发布 runbook 移出仓库）
 public/                            # 仓库级共享静态资源（icons）
 tests/  scripts/  docs/            # 测试 / 构建与探针脚本 / 文档（设计线两份同在
                                    # docs/ 顶层：防御性公开，索引见根 README）

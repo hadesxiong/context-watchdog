@@ -113,8 +113,7 @@ npm run check:versions -- --release # 「现在能打 tag 了吗」：要求一�
 npm run release:pack                # 两个可直接上架的 zip + SHA256SUMS → release/
 ```
 
-完整操作手册（tag、Release 附件、AMO 可复现构建源码包、三渠道提交、素材清单）见
-[`docs/releasing.md`](docs/releasing.md)。版本号的唯一真相源是
+版本号的唯一真相源是
 `packages/extension/src/manifest.json`（商店读的就是它），`check:versions` 会强制其它地方与它一致。
 
 ## 文档地图
@@ -123,7 +122,6 @@ npm run release:pack                # 两个可直接上架的 zip + SHA256SUMS 
 |------|--------|
 | [`docs/spec.md`](docs/spec.md) | 技术参考：管线、规则、档案、权限、存储、构建、测试地图 |
 | [`docs/test-cases.md`](docs/test-cases.md) | 手动验收用例与通过判据 |
-| [`docs/releasing.md`](docs/releasing.md) | 发布操作手册：tag、商店提交、素材清单 |
 | [`docs/site-ai-offscreen-host.md`](docs/site-ai-offscreen-host.md) | 设计 ①：授权站点 AI 增强——页面挂件控制面 + offscreen 单一模型宿主 |
 | [`docs/local-sanitize-proxy.md`](docs/local-sanitize-proxy.md) | 设计 ②：本地脱敏代理——拦截出网请求 + 白名单 + 溯源审计 |
 | [`CHANGELOG.md`](CHANGELOG.md) | 实现轮次与结案记录 |

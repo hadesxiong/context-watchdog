@@ -31,7 +31,7 @@ const repoBase = (locale: SiteLocale): string =>
 /** 「阅读源码」：中文页优先镜像 */
 export const repoUrlFor = (locale: SiteLocale): string => repoBase(locale)
 
-/** 「下载 / Release」：中文页优先镜像（镜像的 Release 也要上传同样的 zip，见 releasing.md） */
+/** 「下载 / Release」：中文页优先镜像（镜像的 Release 也要上传同样的 zip） */
 export const releasesUrlFor = (locale: SiteLocale): string => `${repoBase(locale)}/releases`
 
 /** 问题反馈：固定上游 */

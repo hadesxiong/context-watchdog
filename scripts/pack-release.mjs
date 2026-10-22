@@ -83,4 +83,4 @@ const sums = [chrome, firefox]
 
 writeFileSync(`${outDir}/SHA256SUMS`, `${sums}\n`, 'utf8')
 console.log(`  ✓ ${relative(`${outDir}/SHA256SUMS`)}`)
-console.log('\n[pack] 下一步：把两个 zip 与 SHA256SUMS 作为附件挂到 Release，然后按 docs/releasing.md 提交三个渠道。')
+console.log('\n[pack] 下一步：把两个 zip 与 SHA256SUMS 作为附件挂到 Release（发布 runbook 已移出仓库，提交步骤作者自持）。')
