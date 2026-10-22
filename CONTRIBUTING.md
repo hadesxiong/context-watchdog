@@ -126,7 +126,9 @@ npm run probe:layout       # 全绿
 - **改发布流程**：`releasing.md` → 若影响商店审核口径，同步落地页 `/privacy/`
   与 README 的隐私表（审核会拿两处对照）；
 - **README 与 spec 的边界**：README 只放门面与链接。2026-10-21 曾把 README 中
-  约六成与 spec 重叠的架构细节整体并入 spec，别把它们搬回去。
+  约六成与 spec 重叠的架构细节整体并入 spec，别把它们搬回去；
+- **增删/改名文档**：`README.md` 与 `README.zh-CN.md` 的文档地图、本文档索引行
+  三处同步更新；`CHANGELOG.md` 头注四条指路若受影响则同动。
 
 ---
 
