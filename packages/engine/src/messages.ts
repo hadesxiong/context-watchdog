@@ -40,13 +40,19 @@ export const SITE_AI_SET = 'SITE_AI_SET'
 // 从页面打开侧边栏
 export const OPEN_SIDE_PANEL = 'OPEN_SIDE_PANEL'
 // SW → 注入挂件：侧栏开/关的实时推送（SW 转发 Chrome 141+ 的 sidePanel.onOpened /
-// 142+ 的 onClosed）。只带 panelOpen 一个字段——挂件其余状态由轮询负责，
-// 旧浏览器没有这两个事件时，2s 轮询照常兜底。
+// 142+ 的 onClosed，以及打开动作成功后的主动同步）。panelOpen 之外只带一个可选
+// panelKind——开着的是真侧栏还是弹窗兜底面板，挂件按它选文案；关闭态不带 kind
+// （没开就无所谓形态）。挂件其余状态由 2s 轮询负责，Firefox 没有这两个事件，
+// 恒走轮询兜底。
 export const SITE_AI_PANEL_STATE = 'SITE_AI_PANEL_STATE'
+
+/** 面板打开的形态：sidePanel/sidebarAction 的真侧栏，或 windows.create 的弹窗兜底 */
+export type PanelKind = 'sidebar' | 'popup'
 
 export interface SiteAiPanelStatePush {
   type: typeof SITE_AI_PANEL_STATE
   panelOpen: boolean
+  panelKind?: PanelKind
 }
 
 export interface SiteAiState {
@@ -55,8 +61,10 @@ export interface SiteAiState {
   globalEnabled: boolean
   siteEnabled: boolean
   hostReady: boolean
-  /** 该标签页的侧边栏当前是否开着；浏览器查不到（无 getContexts）时缺省 */
+  /** 该标签页的侧边栏当前是否开着；浏览器查不到状态时缺省（挂件按「没开」处理） */
   panelOpen?: boolean
+  /** panelOpen=true 时的打开形态；缺省时挂件按侧边栏文案兜底（向后兼容旧回包） */
+  panelKind?: PanelKind
 }
 
 export interface SiteAiGetResponse {
@@ -67,5 +75,13 @@ export interface SiteAiGetResponse {
 
 export interface SiteAiSetResponse {
   ok: boolean
+  error?: string
+}
+
+/** OPEN_SIDE_PANEL 的回包：ok 之外还要告诉挂件本次真正打开的是哪种形态 */
+export interface SiteAiOpenPanelResponse {
+  ok: boolean
+  /** 真侧栏（sidePanel / sidebarAction）还是弹窗兜底面板；失败回包缺省 */
+  panelKind?: PanelKind
   error?: string
 }

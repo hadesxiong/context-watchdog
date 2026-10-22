@@ -7,7 +7,9 @@
 
 - **1.0.0 收尾进行中**：真机验收（H-1 输入区去自动检测、H-2 落地页安装区改版、
   TC-07-8/9 站点挂件与粘贴 AI 升级）已全部通过并结案（见 `CHANGELOG.md` 2026-10-22）；
-  两个 Firefox 真机缺陷已知未修（挂件按钮文案与侧栏状态反馈，本轮修复放弃、留待后续）；
+  两个 Firefox 真机缺陷**已修待真机验收**（方案 A 诚实降级：挂件文案按实际形态如实
+  显示 + FF 状态查询走 `sidebarAction.isOpen` ∪ 弹窗自追踪，见 `CHANGELOG.md` ⑱；
+  判据 = TC-07-8 步骤 6/7 的 **Firefox 分支**）；
   文档整理完成（内部工作文档移出仓库、4 个子 README 并入根 README/CONTRIBUTING/spec/releasing）。
   **剩三件只能由作者做的事**：
   1. **F8 打 tag**（`1.0.0-ext` / `1.0.0-site`）——`npm run check:versions -- --release` 会先列出还差什么
@@ -34,7 +36,7 @@
   自定义档案/正则/白名单与 JSON 导入导出、粘贴自动拦截（逐站授权，含 contenteditable
   富文本与「已脱敏 N 处」轻提示）、GLiNER 推理链路（wasm/模型全本地、断网可用、
   形状门禁拦截幻觉）、Chrome/Firefox 双目标构建、明暗主题、中英双语界面、双语落地页与隐私权政策页。
-- **校验基线**：`npm run typecheck` 0 错误 / `npm test` **403 passed（32 文件）** /
+- **校验基线**：`npm run typecheck` 0 错误 / `npm test` **420 passed（33 文件）** /
   `npm run build` + `npm run build:firefox` 通过 / `npm run probe:layout` 全通过 /
   `npm run probe:widget` 全通过（授权站点挂件 / iframe 不挂 / 未授权零注入 / 删除后重挂 /
   收起态 44×44 / 12px 圆角 / 明暗主题两套配色 / 暗色下面板带边框 /
@@ -47,8 +49,10 @@
 ```bash
 npm run typecheck && npm test && npm run build && npm run build:firefox && npm run probe:layout && npm run probe:widget
 npm run site:check && npm run site:build && npm run check:versions
-# 期望：0 error / 403 passed / 双目标构建通过 / 布局与挂件探针全通过 / 站点 0 诊断且构建通过 /
+# 期望：0 error / 420 passed / 双目标构建通过 / 布局与挂件探针全通过 / 站点 0 诊断且构建通过 /
 #       check:versions 通过（SITE_URL 与渠道未配置时为 2 项警告）
+# Windows：probe:widget 需 CHROME_PATH 指向 Chromium / Chrome for Testing
+#       （正式版 Chrome 与新 Edge 会忽略 --load-extension，示例见 scripts/probe-widget.mjs 头注）
 ```
 
 ## 待办

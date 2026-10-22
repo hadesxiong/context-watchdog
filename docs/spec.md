@@ -272,7 +272,13 @@ CSP 收紧后扩展页无任何外部脚本/连接可能。
   移除 `sidePanel` 权限、补 `browser_specific_settings.gecko`
   （`contextwatchdog@contextwatchdog.invalid`，min 121）；
 - SW 运行时探测 `chrome.sidePanel.open` → 回退 `chrome.sidebarAction.open`，
-  同一份 SW 代码服务双浏览器；
+  同一份 SW 代码服务双浏览器；**面板开合状态查询同样分叉**（`background/panelState.ts`）：
+  Chrome/Edge 走 `runtime.getContexts`「存在即打开」（复数 filter）；Firefox 既无该
+  API 也无任何侧栏开关事件，走 `sidebarAction.isOpen()` ∪ 弹窗兜底窗口的
+  `storage.session` 自追踪（`windows.get` 探活 + `type === 'popup'` 复用防线，零新增
+  权限）。FF 上挂件点击受 user-gesture 限制（content script 消息不算手势，MDN /
+  bug 1800401）必开弹窗兜底，按钮文案按 `panelKind` 形态如实显示（「打开脱敏面板」/
+  「面板已打开」，不冒充侧栏）；
 - **vite root 指向 `packages/extension`**（而非仓库根）：manifest 入口路径保持包内
   相对形式（`src/sidepanel/index.html`），产物布局与重构前逐字节一致，运行时无需改
   `chrome.runtime.getURL`。副作用：Tailwind 扫描范围恰好收敛在扩展包内（扫仓库根会把

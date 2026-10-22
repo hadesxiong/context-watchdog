@@ -110,7 +110,9 @@
 
   "site_widget_ai": "本站 AI 增强",
   "site_widget_open": "在侧边栏中打开",
+  "site_widget_open_panel": "打开脱敏面板",
   "site_widget_opened": "侧边栏已打开",
+  "site_widget_opened_popup": "面板已打开",
   "site_widget_open_failed": "打开失败，请点扩展图标",
   "site_widget_need_ai": "需先在侧边栏开启 AI 模型",
   "site_widget_loading": "AI 模型尚未就绪",

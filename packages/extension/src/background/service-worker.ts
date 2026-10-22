@@ -18,9 +18,11 @@ import {
   SITE_AI_GET,
   SITE_AI_PANEL_STATE,
   SITE_AI_SET,
+  type PanelKind,
   type PasteAiResult,
   type PasteDetectResponse,
   type SiteAiGetResponse,
+  type SiteAiOpenPanelResponse,
   type SiteAiPanelStatePush,
   type SiteAiSetResponse,
   type SiteAiState
@@ -33,6 +35,12 @@ import {
 } from '@engine/settings'
 import type { ProfileConfig } from '@engine/types'
 import { contextWatchdogEntryPoint } from './pasteEntryPoint'
+import {
+  openButtonLabelKey,
+  readPanelState,
+  trackPopupWindow,
+  type SidebarActionLike
+} from './panelState'
 // 挂件内嵌 mark 的唯一来源：注入函数在隔离世界里读不到模块也读不到扩展资源，
 // 由 SW 在构建期把 logo.svg 原文读进来（?raw）随 args 递过去；
 // 染色（跟随页面明暗主题）在注入侧做，SW 只管原文。
@@ -76,10 +84,6 @@ interface SidePanelLike {
   onOpened?: { addListener: (cb: (info: { tabId?: number }) => void) => void }
   /** Chrome 142+：侧栏关闭的原生推送；同上 */
   onClosed?: { addListener: (cb: (info: { tabId?: number }) => void) => void }
-}
-
-interface SidebarActionLike {
-  open?: () => Promise<void> | void
 }
 
 chrome.action.onClicked.addListener(async tab => {
@@ -131,35 +135,8 @@ const readHostReady = async (): Promise<boolean> => {
   }
 }
 
-// 该标签页的侧边栏是否开着。语义是「存在即打开」：侧栏 context 实测不绑定标签页
-// （tabId: -1），按 tab 过滤既不可行也无必要——工具栏图标、侧栏选择器、挂件按钮
-// 打开的侧栏都算开。代价是别个窗口开着侧栏时本窗口挂件也显示已打开（API 不给
-// 窗口关联），可接受：侧栏本来就是「开着就该看到」的东西。
-//
-// 坑（2026-10-21 真机验收）：runtime.getContexts 的 filter 字段是**复数数组**形态
-// （tabIds / documentUrls），单数写法会被运行时以 Unexpected property 拒绝并**抛错**，
-// 而这里历史上包着 catch 返回 undefined ⇒ panelOpen 恒 false：点开侧栏后 2s 轮询
-// 把「已打开」翻回可点、挂件重挂初始即错。两段查询都必须用复数形态。
-// 没有这个 API（旧版 / Firefox）返回 undefined = 未知，挂件按「没开」处理。
-const isSidePanelOpen = async (): Promise<boolean | undefined> => {
-  const runtime = chrome.runtime as unknown as {
-    getContexts?: (filter: Record<string, unknown>) => Promise<unknown[]>
-  }
-  if (typeof runtime.getContexts !== 'function') return undefined
-  try {
-    const panels = await runtime.getContexts({ contextTypes: ['SIDE_PANEL'] })
-    if (panels.length > 0) return true
-    // 无侧栏 API 时按钮退回的「弹窗面板」是 TAB context，按文档 URL 认：
-    // 否则弹窗一开按钮又亮回可点，用户会连开好几个窗口
-    const popups = await runtime.getContexts({
-      contextTypes: ['TAB'],
-      documentUrls: [chrome.runtime.getURL('src/sidepanel/index.html')]
-    })
-    return popups.length > 0
-  } catch {
-    return undefined
-  }
-}
+// 面板开合的权威查询在 ./panelState（「存在即打开」语义、getContexts 复数 filter 的
+// ⑮坑、Firefox 无 getContexts 时的 isOpen + 弹窗自追踪都在那边），这里只取结果。
 
 // 把侧栏开/关的真实状态推给挂件（顶层文档才有挂件）。
 // 这是 onOpened/onClosed 原生事件的落点：外部关掉侧栏时由浏览器主动通知，
@@ -168,8 +145,17 @@ const isSidePanelOpen = async (): Promise<boolean | undefined> => {
 // 工具栏图标打开的全局侧栏，onOpened/onClosed 的 info.tabId 是 undefined——此时
 // 不能一丢了之（挂件按钮会永远停在旧状态），广播到所有标签页补上：未授权站点
 // 没有挂件，sendMessage reject 静默吞掉即可，有挂件的授权站点才会更新。
-const pushPanelState = (tabId: number | undefined, panelOpen: boolean): void => {
-  const message: SiteAiPanelStatePush = { type: SITE_AI_PANEL_STATE, panelOpen }
+const pushPanelState = (
+  tabId: number | undefined,
+  panelOpen: boolean,
+  panelKind?: PanelKind
+): void => {
+  const message: SiteAiPanelStatePush = {
+    type: SITE_AI_PANEL_STATE,
+    panelOpen,
+    // 形态只在「开着」时带：关闭态挂件只认 panelOpen=false，kind 无意义
+    ...(panelOpen && panelKind ? { panelKind } : {})
+  }
   if (typeof tabId === 'number') {
     chrome.tabs.sendMessage(tabId, message, { frameId: 0 }).catch(() => undefined)
     return
@@ -190,7 +176,7 @@ const pushPanelState = (tabId: number | undefined, panelOpen: boolean): void => 
 // 把「别处关掉侧栏 → 按钮复位」的延迟从最坏一个轮询周期压到即时。
 // 旧版浏览器没有这两个事件，注册处用特性检测跳过，轮询照常兜底。
 const sidePanelApi = (chrome as unknown as { sidePanel?: SidePanelLike }).sidePanel
-sidePanelApi?.onOpened?.addListener?.(info => pushPanelState(info?.tabId, true))
+sidePanelApi?.onOpened?.addListener?.(info => pushPanelState(info?.tabId, true, 'sidebar'))
 sidePanelApi?.onClosed?.addListener?.(info => pushPanelState(info?.tabId, false))
 
 // 本站 AI 是否生效：全局允许 ∧ 本站开启 ∧ 宿主就绪（三者缺一即退回正则档）
@@ -223,10 +209,17 @@ const injectContextWatchdog = (tabId: number): void => {
   // 兜底用英文（default_locale），免得 _locales 缺失时只显示一个数字。
   const toastRedacted = chrome.i18n.getMessage('paste_toast_redacted') || '{count} redacted'
   const toastAi = chrome.i18n.getMessage('paste_toast_ai') || '{count} redacted with AI'
+  // 打开按钮的文案按宿主选键：Chrome/Edge 点了直达真侧栏，说「侧栏」；Firefox 的
+  // 手势死路（MDN User actions：页面 content script 消息不算手势）决定点击必然走
+  // 弹窗兜底，文案必须说「面板」——⑱ 挂件按钮文案缺陷的根治处。
+  const hasSidePanel =
+    typeof (chrome as unknown as { sidePanel?: SidePanelLike }).sidePanel?.open === 'function'
   const widget = {
     ai: chrome.i18n.getMessage('site_widget_ai') || 'AI enhancement',
-    open: chrome.i18n.getMessage('site_widget_open') || 'Open side panel',
+    open: chrome.i18n.getMessage(openButtonLabelKey(hasSidePanel)) ||
+      (hasSidePanel ? 'Open side panel' : 'Open panel'),
     opened: chrome.i18n.getMessage('site_widget_opened') || 'Side panel is open',
+    openedPopup: chrome.i18n.getMessage('site_widget_opened_popup') || 'Panel is open',
     openFailed: chrome.i18n.getMessage('site_widget_open_failed') || 'Could not open the side panel',
     needAi: chrome.i18n.getMessage('site_widget_need_ai') || 'Enable AI in the side panel first',
     loading: chrome.i18n.getMessage('site_widget_loading') || 'AI model is still loading',
@@ -383,12 +376,15 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
       if (globalEnabled && siteEnabled && !hostReady && isModelHostSupported()) {
         void ensureModelHost().catch(() => undefined)
       }
+      const panel = await readPanelState()
       const state: SiteAiState = {
         pattern,
         globalEnabled,
         siteEnabled,
         hostReady,
-        panelOpen: await isSidePanelOpen()
+        // 未知（undefined）与「没开」（false）在挂件侧等价：都按可点处理
+        panelOpen: panel?.open,
+        panelKind: panel?.open === true ? panel.kind : undefined
       }
       sendResponse({ ok: true, state } satisfies SiteAiGetResponse)
     })()
@@ -419,6 +415,9 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
     // 异步任务就过期了（实测报 "may only be called in response to a user gesture"，
     // 表现为按钮点了没反应）。授权校验并行进行，只决定回包内容——能触发这条消息的
     // 只有我们自己注入的内容脚本，打开我们自己的面板不触碰任何站点数据。
+    // Firefox 更死板：页面 content script 的消息**根本不算手势**（MDN User actions，
+    // bug 1800401 维持该行为），这里必然 reject 走弹窗兜底——回包如实带 panelKind，
+    // 挂件按「面板」文案显示，不许冒充侧栏（⑱ 文案缺陷）。
     const opened: Promise<unknown> =
       typeof sidePanel?.open === 'function' && typeof tabId === 'number'
         ? sidePanel.open({ tabId })
@@ -430,27 +429,32 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
         await opened
         // 主动推一次开态：不依赖 onOpened 是否到达（部分 Chrome 版本不触发、
         // 全局侧栏不带 tabId），确保「点开按钮 → 所有挂件同步为已打开」必然发生
-        pushPanelState(tabId, true)
-        sendResponse({ ok: true } satisfies SiteAiSetResponse)
+        pushPanelState(tabId, true, 'sidebar')
+        sendResponse({ ok: true, panelKind: 'sidebar' } satisfies SiteAiOpenPanelResponse)
         return
       } catch (error) {
         console.warn('[ContextWatchdog] 打开侧栏失败，退回弹窗面板:', error)
       }
-      // 无侧栏 API（无头/旧版浏览器）或手势已失效：同一份面板页面开成弹窗，
-      // 按钮必须有反应
+      // 无侧栏 API（无头/旧版浏览器）、手势已失效、或 Firefox 的手势死路：
+      // 同一份面板页面开成弹窗，按钮必须有反应
       try {
-        await chrome.windows.create({
+        const popup = await chrome.windows.create({
           url: chrome.runtime.getURL('src/sidepanel/index.html'),
           type: 'popup',
           width: 420,
           height: 640
         })
-        sendResponse({ ok: true } satisfies SiteAiSetResponse)
+        // 记账给 readPanelState 探活：Firefox 的 isOpen 只认真侧栏，弹窗态的
+        // 「开着」全靠这条（否则挂件下个轮询就把已打开翻回可点、重复点击叠窗）
+        if (typeof popup?.id === 'number') void trackPopupWindow(popup.id)
+        // 弹窗也是开：同样广播，其他标签页的挂件一并切到已打开态
+        pushPanelState(tabId, true, 'popup')
+        sendResponse({ ok: true, panelKind: 'popup' } satisfies SiteAiOpenPanelResponse)
       } catch (error) {
         sendResponse({
           ok: false,
           error: error instanceof Error ? error.message : String(error)
-        } satisfies SiteAiSetResponse)
+        } satisfies SiteAiOpenPanelResponse)
       }
     })()
     return true

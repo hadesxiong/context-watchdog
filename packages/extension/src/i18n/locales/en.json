@@ -110,7 +110,9 @@
 
   "site_widget_ai": "AI enhancement",
   "site_widget_open": "Open side panel",
+  "site_widget_open_panel": "Open panel",
   "site_widget_opened": "Side panel is open",
+  "site_widget_opened_popup": "Panel is open",
   "site_widget_open_failed": "Could not open it — click the toolbar icon",
   "site_widget_need_ai": "Enable AI in the side panel first",
   "site_widget_loading": "AI model is still loading",

@@ -16,6 +16,8 @@ export const contextWatchdogEntryPoint = (messages?: {
     ai?: string
     open?: string
     opened?: string
+    /** 弹窗兜底面板开着时的已打开文案（真侧栏开着仍用 opened） */
+    openedPopup?: string
     openFailed?: string
     needAi?: string
     loading?: string
@@ -340,6 +342,7 @@ export const contextWatchdogEntryPoint = (messages?: {
       ai: messages?.widget?.ai ?? 'AI enhancement',
       open: messages?.widget?.open ?? 'Open side panel',
       opened: messages?.widget?.opened ?? 'Side panel is open',
+      openedPopup: messages?.widget?.openedPopup ?? 'Panel is open',
       openFailed: messages?.widget?.openFailed ?? 'Could not open the side panel, click the toolbar icon',
       needAi: messages?.widget?.needAi ?? 'Enable AI in the side panel first',
       loading: messages?.widget?.loading ?? 'AI model is still loading',
@@ -358,8 +361,12 @@ export const contextWatchdogEntryPoint = (messages?: {
     let globalEnabled = false
     let siteEnabled = false
     let hostReady = false
-    // 侧栏当前是否开着（SW 用 runtime.getContexts 查真实状态，别处关掉也能同步回来）
+    // 侧栏当前是否开着（SW 的 readPanelState 查真实状态：Chrome getContexts、
+    // Firefox sidebarAction.isOpen + 弹窗自追踪，别处关掉也能同步回来）
     let panelOpen = false
+    // 开着的形态：真侧栏用 opened 文案，弹窗兜底面板用 openedPopup 文案——
+    // Firefox 点击必然开弹窗（手势死路），文案跟着事实走，不冒充侧栏
+    let panelKind: 'sidebar' | 'popup' | undefined
     // 打开侧栏的请求在途、失败提示的 3s 窗口：两者都是局部 UI 态，
     // 由 render 一起重建，避免"点一次就永久卡在灰态 + 转圈光标"
     let opening = false
@@ -516,6 +523,7 @@ export const contextWatchdogEntryPoint = (messages?: {
                 siteEnabled?: boolean
                 hostReady?: boolean
                 panelOpen?: boolean
+                panelKind?: 'sidebar' | 'popup'
               }
             }
           | undefined
@@ -525,8 +533,10 @@ export const contextWatchdogEntryPoint = (messages?: {
         globalEnabled = result.state.globalEnabled === true
         siteEnabled = result.state.siteEnabled === true
         hostReady = result.state.hostReady === true
-        // panelOpen 缺省（浏览器不支持 getContexts）时按「没开」处理，按钮照常可点
+        // panelOpen 缺省（浏览器查不到状态）时按「没开」处理，按钮照常可点；
+        // 开着但缺 kind 的旧回包按侧边栏文案兜底
         panelOpen = result.state.panelOpen === true
+        panelKind = panelOpen ? result.state.panelKind ?? 'sidebar' : undefined
         ready = true
         render()
         applySyncSchedule()
@@ -554,17 +564,20 @@ export const contextWatchdogEntryPoint = (messages?: {
       applySyncSchedule()
     }
 
-    // 侧栏开/关的实时推送（SW 转发 Chrome 141+ 的 onOpened / 142+ 的 onClosed）。
-    // 「别处关掉侧栏 → 按钮复位」不再等下一个轮询周期，事件一到立即生效。
-    // 旧版浏览器没有原生事件，这条通道收不到消息，2s 轮询照常兜底。
-    // 推送只带 panelOpen 一个字段，且不动 opening/openFailed——那是本页
-    // 「打开请求」自己的生命周期，由 OPEN_SIDE_PANEL 的回包负责收尾。
+    // 侧栏开/关的实时推送（SW 转发 Chrome 141+ 的 onOpened / 142+ 的 onClosed，
+    // 以及打开动作成功后的主动同步）。「别处关掉侧栏 → 按钮复位」不再等下一个轮询
+    // 周期，事件一到立即生效。Firefox 没有这类原生事件，这条通道收不到消息，
+    // 2s 轮询照常兜底（isOpen + 弹窗自追踪都在轮询里）。推送不动 opening/openFailed
+    // ——那是本页「打开请求」自己的生命周期，由 OPEN_SIDE_PANEL 的回包负责收尾。
     chrome.runtime.onMessage.addListener((message: unknown) => {
-      const push = message as { type?: string; panelOpen?: boolean } | null
+      const push = message as { type?: string; panelOpen?: boolean; panelKind?: 'sidebar' | 'popup' } | null
       if (push?.type !== 'SITE_AI_PANEL_STATE') return
       if (typeof push.panelOpen !== 'boolean') return
-      if (panelOpen === push.panelOpen) return
+      // 形态跟着开态走：开着且推送带了 kind 才更新；关着就清空（下次开重新定）
+      const nextKind = push.panelOpen ? push.panelKind ?? panelKind ?? 'sidebar' : undefined
+      if (push.panelOpen === panelOpen && nextKind === panelKind) return
       panelOpen = push.panelOpen
+      panelKind = nextKind
       render()
     })
 
@@ -694,7 +707,14 @@ export const contextWatchdogEntryPoint = (messages?: {
       // 表现就是"点了就失效、悬浮还转圈"
       const openButton = document.createElement('button')
       openButton.type = 'button'
-      openButton.textContent = openFailed ? t.openFailed : panelOpen ? t.opened : t.open
+      // 已打开态按形态选文案：真侧栏说「侧边栏已打开」，弹窗兜底面板说「面板已打开」
+      openButton.textContent = openFailed
+        ? t.openFailed
+        : panelOpen
+          ? panelKind === 'popup'
+            ? t.openedPopup
+            : t.opened
+          : t.open
       openButton.disabled = opening || panelOpen
       Object.assign(openButton.style, {
         width: '100%',
@@ -713,10 +733,12 @@ export const contextWatchdogEntryPoint = (messages?: {
         render()
         send({ type: 'OPEN_SIDE_PANEL' }, response => {
           opening = false
-          const result = response as { ok?: boolean } | undefined
+          const result = response as { ok?: boolean; panelKind?: 'sidebar' | 'popup' } | undefined
           if (result?.ok) {
-            // 打开成功就切成「已打开」态，交给轮询去发现别处的关闭
+            // 打开成功就切成「已打开」态（形态以回包为准，免得等一轮轮询
+            // 才把「侧边栏已打开」纠正成「面板已打开」），交给轮询去发现别处的关闭
             panelOpen = true
+            panelKind = result.panelKind ?? 'sidebar'
             render()
             return
           }

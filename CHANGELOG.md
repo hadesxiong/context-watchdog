@@ -30,6 +30,31 @@
 - **改名收尾**：origin 指向 `github.com:hadesxiong/context-watchdog`；两个移出文档的
   全部历史提交经 `git filter-branch` 清除（全仓库短 SHA 重写，push 需 `--force`）。
 
+### ⑱ Firefox 侧栏两缺陷修复（真机验收发现，方案 A 诚实降级）
+
+- **挂件按钮文案撒谎**（按钮亮「侧边栏已打开」，实际打开的是弹窗）：Firefox 的
+  `sidebarAction.open()` 只认用户手势，而挂件 content script 消息**不算手势**
+  （MDN User actions，bug 1800401 维持该行为）→ 点击必然 reject 走 `windows.create`
+  弹窗兜底——平台级死路不可绕，取**方案 A 诚实降级**：协议加可选 `panelKind`
+  （`'sidebar' | 'popup'`，只增不改，OPEN_SIDE_PANEL 回包 / SITE_AI_GET /
+  SITE_AI_PANEL_STATE 三路携带），FF 打开前文案「打开脱敏面板」、弹窗态「面板已打开」
+  （新键 `site_widget_open_panel` / `site_widget_opened_popup`，zh/en 原子同步）；
+  Chrome/Edge 直达真侧栏、文案不变。
+- **侧栏状态反馈恒 false**（`isSidePanelOpen` 在 FF 恒 `undefined`）：FF 既无
+  `runtime.getContexts` 也无任何侧栏开关事件。状态查询抽成 `background/panelState.ts`：
+  Chrome 保持 getContexts「存在即打开」原路径零改动；FF 走 `sidebarAction.isOpen()`
+  （FF 59+、无手势要求）∪ 弹窗兜底窗口自追踪（窗口 id 记 `storage.session`，
+  `windows.get` 探活 + `type === 'popup'` 复用防线，浏览器重启/关窗自动清账，零新增
+  权限）。弹窗创建成功后补 `pushPanelState` 广播——此前弹窗分支开成功不同步，
+  是重复点击叠窗的另一半。
+- **单测 +17**（`tests/unit/panelState.test.ts`，403→420 / 33 文件）：两平台状态
+  语义、⑮ 复数 filter 回归防线、窗口 id 复用防线、文案键按宿主选择。
+- **probe:widget Windows 修复**：未打包扩展 ID 在 Windows 上由路径的 **UTF-16LE**
+  字节哈希（Chromium `id_util.cc::GenerateIdForPath` 与 `tools/crx_id/crx_id.py`
+  注释明写），探针原按 UTF-8 推 ID 与浏览器不符 → 导航 404 死在「扩展未加载」；
+  收尾 `rmSync` 加重试（SIGKILL 后文件锁释放常晚于 300ms，原先全绿也会 EPERM
+  exit 1）。Chromium 151 复测 20 项全过。文档同步：TC-07-8 步骤 6/7 补 FF 分支判据。
+
 ## 2026-10-21
 
 ### ⑮ 挂件「已打开」状态查询修复（真机验收发现，最后一个已知问题）
