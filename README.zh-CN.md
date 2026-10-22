@@ -124,7 +124,6 @@ npm run release:pack                # 两个可直接上架的 zip + SHA256SUMS 
 | [`docs/spec.md`](docs/spec.md) | 技术参考：管线、规则、档案、权限、存储、构建、测试地图 |
 | [`docs/test-cases.md`](docs/test-cases.md) | 手动验收用例与通过判据 |
 | [`docs/releasing.md`](docs/releasing.md) | 发布操作手册：tag、商店提交、素材清单 |
-| [`docs/license-patent-and-brand.md`](docs/license-patent-and-brand.md) | 为何是 Apache-2.0、专利策略、商标与品牌政策 |
 | [`docs/site-ai-offscreen-host.md`](docs/site-ai-offscreen-host.md) | 设计 ①：授权站点 AI 增强——页面挂件控制面 + offscreen 单一模型宿主 |
 | [`docs/local-sanitize-proxy.md`](docs/local-sanitize-proxy.md) | 设计 ②：本地脱敏代理——拦截出网请求 + 白名单 + 溯源审计 |
 | [`CHANGELOG.md`](CHANGELOG.md) | 实现轮次与结案记录 |

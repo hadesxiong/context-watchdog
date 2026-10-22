@@ -2,7 +2,7 @@
 
 > ContextWatchdog 实现轮次与结案记录（按时间倒序，压缩版）。
 > 技术规格：`docs/spec.md`；手动验收判据：`docs/test-cases.md`；当前状态：`TODO.md`；
-> 设计决策与后续迭代规划：`docs/` 设计线三份（索引见根 README 文档地图）。
+> 设计决策与后续迭代规划：`docs/` 设计线两份（索引见根 README 文档地图）。
 > 单条提交详情见 `git log`；被清退的历史规划文档见 `f35ceae` 之前的 TODO。
 
 ## 2026-10-23
@@ -18,6 +18,18 @@
   历史提及是存档不改（门禁豁免照旧）。
 - 五道门禁复验：check:docs（首验平铺后的地图与路径）/ typecheck / test 420·33 /
   site:build（footer 改动）/ check:versions。
+
+### ㉒ 移出 license-patent-and-brand.md（可执行内容已由关键文档承载）
+
+- **移出仓库**：定案类「选用思路与想法」文档撤出公开面。其可执行部分本就分布在
+  `LICENSE`（Apache-2.0 全文）/ `PATENTS.md`（专利与现有技术声明全文，中英双语）/
+  `NOTICE`（商标权属与衍生作品三条件）/ `THIRD-PARTY-NOTICES.txt`（第三方依赖许可）/
+  根 README（归属与商标节、prior art 段）/ `CONTRIBUTING`（贡献与 fork 政策）；该文档
+  独有的是决策轨迹、被排除选项与注册建议等思路性内容，按作者裁决不再随仓公开。
+- 引用跟随：README 双语地图行、CONTRIBUTING 索引行、PATENTS 正文、spec 结构树与
+  本文件头注的「三份」字样；㉑ 的三份记述是当时事实，保留。docs/ 现为 5 份。
+- **排期（作者裁决）**：`docs/releasing.md` 计划在 1.0.0 发布流程完成后移出——现阶段
+  它仍是作者自己的发布 runbook，首次发布前不撤。
 
 ## 2026-10-22
 

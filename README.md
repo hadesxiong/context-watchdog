@@ -125,7 +125,6 @@ submission steps, asset checklist) is in [`docs/releasing.md`](docs/releasing.md
 | [`docs/spec.md`](docs/spec.md) | Technical reference: pipeline, rules, profiles, permissions, storage, build, test map (Chinese) |
 | [`docs/test-cases.md`](docs/test-cases.md) | Manual verification cases with pass criteria (Chinese) |
 | [`docs/releasing.md`](docs/releasing.md) | Release runbook: tags, store submission, asset checklist (Chinese) |
-| [`docs/license-patent-and-brand.md`](docs/license-patent-and-brand.md) | Why Apache-2.0, patent strategy, trademark and brand policy (Chinese) |
 | [`docs/site-ai-offscreen-host.md`](docs/site-ai-offscreen-host.md) | Design ①: per-site AI enhancement — widget control plane + offscreen single model host (Chinese) |
 | [`docs/local-sanitize-proxy.md`](docs/local-sanitize-proxy.md) | Design ②: local sanitising proxy — outbound interception + whitelist + audit trail (Chinese) |
 | [`CHANGELOG.md`](CHANGELOG.md) | Round-by-round implementation record (Chinese) |

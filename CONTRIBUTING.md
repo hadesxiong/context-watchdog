@@ -112,7 +112,7 @@ npm run probe:layout       # 全绿
 | [`docs/spec.md`](docs/spec.md) | 技术真相源：功能矩阵、架构、检测管线、规则与区域校验、档案、权限与 CSP、存储、构建、测试地图、已知限制 | 代码改变了「系统怎么工作」的任何时刻——与代码同一次提交改；数字基线（测试数等）随事实变化更新 |
 | [`docs/test-cases.md`](docs/test-cases.md) | 手动验收用例与逐条通过判据 | 新增或变更**自动化测不到**的用户可见行为（视觉、权限弹窗、真实下载、真机交互）时 |
 | [`docs/releasing.md`](docs/releasing.md) | 发布操作手册：部署顺序、tag、Release 附件、商店提交、素材清单 | 发布链任一环节变化（新渠道、素材要求、顺序调整、脚本增删）时 |
-| [`docs/license-patent-and-brand.md`](docs/license-patent-and-brand.md) / [`docs/site-ai-offscreen-host.md`](docs/site-ai-offscreen-host.md) / [`docs/local-sanitize-proxy.md`](docs/local-sanitize-proxy.md) | 设计决策与后续迭代线，**有意随代码公开**（防御性公开，构成 prior art） | 立项新设计/新决策线时新增一份；决策被推翻时在原文标注结局，不删历史 |
+| [`docs/site-ai-offscreen-host.md`](docs/site-ai-offscreen-host.md) / [`docs/local-sanitize-proxy.md`](docs/local-sanitize-proxy.md) | 设计决策与后续迭代线，**有意随代码公开**（防御性公开，构成 prior art） | 立项新设计/新决策线时新增一份；决策被推翻时在原文标注结局，不删历史 |
 | [`CHANGELOG.md`](CHANGELOG.md) | 实现轮次与结案记录（按时间倒序，压缩版） | 每完成一个可验收轮次归档一条；真机验收发现的缺陷修复也要记 |
 | [`TODO.md`](TODO.md) | 当前状态、挂账项与回归命令基线 | 每次验收/清账后同步；基线数字（测试数、探针数）随事实更新 |
 | 落地页 `/changelog/`（`apps/site/src/i18n/`） | 面向用户的双语更新记录，只列已发布版本 | 商店过审/新版本发布时追加条目（zh/en 词典原子同步） |
