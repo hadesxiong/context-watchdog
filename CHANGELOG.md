@@ -120,6 +120,23 @@
   同族）。换模复验未结状态如实挂当前状态区。
 - 门禁：site:check / site:build / check:docs / typecheck / test 420·33。
 
+### ㉘ 修复模型下载源指向前代模型（换模漏改）+ 缓存期望字节数守卫
+
+- **真机报障**：「换模后下载提示仍是 183MB、AI 检测无变化」。根因：㉖ 换模替换了
+  `MODEL_FILE_BYTES`/缓存 key/`tokenizerPath`，却漏改 `MODEL_SOURCES` 数组——两个源站
+  URL 仍指向前代 `gliner_small-v2`。于是 183MB 前代模型被「完整下完」存进新缓存 key，
+  版本探测两侧同为 183,403,734 永远判定「current」；`tokenizerPath` 却已是 multi-v2.1
+  的 250K 词表，**分词器与 ONNX 词表错配、推理失败被静默吞掉** → 表现为进度总长
+  183MB 且 AI 零召回（D 案例无变化），两个症状一条根。
+- **修复**：`MODEL_SOURCES` 更正为 `onnx-community/gliner_multi-v2.1`（ModelScope 主源 +
+  HuggingFace 兜底）。重载后由守卫自动清掉污染缓存并重下正确模型，无需手工清存储。
+- **期望字节数守卫**（缓存层新不变式：只允许 `MODEL_FILE_BYTES` 字节永久化）：
+  `match()` 字节数不符 → 删除并返回 null 自愈（本地直判、不依赖版本探测，24h 节流
+  或离线时同样生效）；`put()` 字节数不符 → 拒写抛错，下载流程换源重试、最终失败带
+  详情浮出，绝不静默用错模型；`migrateLegacy()` 非本模字节不搬迁。专治「完整下完的
+  错误文件」自洽常驻这一类故障（Content-Length 与探测比对都拦不住）。
+- 单测新增 `createBrowserModelCache` 守卫三例（伪 caches 实现）；423 tests · 33 files 全绿。
+
 ## 2026-10-22
 
 ### ⑯ H-1 / H-2 与 TC-07-8/9 真机验收结案

@@ -155,7 +155,7 @@ DB_PASSWORD=Tr0ub4dor!#2024
 
 ## 附录 A：自动化测试基线
 
-- 运行：`npm test`（vitest，期望 **420 passed / 33 文件**）；`npm run typecheck` 0 错误。
+- 运行：`npm test`（vitest，期望 **423 passed / 33 文件**）；`npm run typecheck` 0 错误。
 - 浏览器探针：`npm run probe:layout`（侧栏布局 85 项，无头 Chrome + CDP）、
   `npm run probe:widget`（授权站点挂件 / iframe 不挂 / 未授权零注入 / 不影响页面布局 /
   收起态 44×44 / 12px 圆角矩形 / mark 跟随明暗主题换色 / 暗色下面板有边框 /

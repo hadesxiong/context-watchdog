@@ -18,7 +18,7 @@ ContextWatchdog（文本守卫）是面向 AI 工作流的本地检测与脱敏�
 npm install
 npm run build           # Chrome 包 → dist/，加载到 chrome://extensions
 npm run build:firefox   # Firefox 包 → dist-firefox/，about:debugging → 此 Firefox → 加载临时附加组件 → 选 dist-firefox/manifest.json
-npm run test            # 运行测试套件（420 项断言）
+npm run test            # 运行测试套件（423 项断言）
 ```
 
 ## 架构

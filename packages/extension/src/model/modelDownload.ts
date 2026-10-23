@@ -36,8 +36,8 @@ export type { ModelProgress } from '@engine/detector/backend'
 // 扩展页（manifest 未声明 host_permissions，只能走 CORS）会在第一跳直接抛
 // TypeError: Failed to fetch —— 界面上表现为「网络请求被阻止或模型下载失败」。
 export const MODEL_SOURCES = [
-  'https://modelscope.cn/models/onnx-community/gliner_small-v2/resolve/main/onnx/model_quantized.onnx',
-  'https://huggingface.co/onnx-community/gliner_small-v2/resolve/main/onnx/model_quantized.onnx'
+  'https://modelscope.cn/models/onnx-community/gliner_multi-v2.1/resolve/main/onnx/model_quantized.onnx',
+  'https://huggingface.co/onnx-community/gliner_multi-v2.1/resolve/main/onnx/model_quantized.onnx'
 ]
 
 // 当前模型文件字节数：只作"期望大小"的文档参考，不再用作缓存版本号
@@ -291,6 +291,17 @@ export const createBrowserModelCache = (): ModelCache | null => {
         // 写入被中断会表现为声明长度与实际不符 → 作废重下
         const declared = Number(response.headers.get('content-length')) || 0
         if (declared > 0 && declared !== buffer.byteLength) return null
+        // 期望字节数守卫（污染自愈）：上游装错文件（源站 URL 漂移 / 镜像不同步）时
+        // Content-Length 自洽、探测两侧也自洽，唯独不是本模型——2026-10-23 实机踩过：
+        // 前代 183MB 文件被存进新 key，版本探测两侧同为 183,403,734 永远「current」，
+        // 错模型静默常驻。此处本地直判、不依赖探测，故 24h 节流或离线时也立即作废重下
+        if (buffer.byteLength !== MODEL_FILE_BYTES) {
+          console.warn(
+            `[ContextWatchdog] 缓存字节数 ${buffer.byteLength} ≠ 期望 ${MODEL_FILE_BYTES}，判定为污染条目，删除重下`
+          )
+          await cache.delete(MODEL_CACHE_URL)
+          return null
+        }
         return {
           buffer,
           etag: response.headers.get('etag'),
@@ -305,6 +316,12 @@ export const createBrowserModelCache = (): ModelCache | null => {
       }
     },
     put: async (buffer, meta) => {
+      // 期望字节数守卫（拒写）：下载器的「传输完整性校验」只验「完整下完」，
+      // 验不出「完整下完的是错的」——与 MODEL_FILE_BYTES 比对兜底，错误文件不落盘；
+      // 抛出走下载流程的失败重试（换源），最终失败带详情浮出，绝不静默用错模型
+      if (buffer.byteLength !== MODEL_FILE_BYTES) {
+        throw new Error(`拒绝写入模型缓存：字节数 ${buffer.byteLength} ≠ 期望 ${MODEL_FILE_BYTES}`)
+      }
       try {
         const cache = await caches.open(MODEL_CACHE_NAME)
         await cache.put(
@@ -343,6 +360,9 @@ export const createBrowserModelCache = (): ModelCache | null => {
         const buffer = await legacy.arrayBuffer()
         await cache.delete(LEGACY_MODEL_CACHE_URL)
         if (buffer.byteLength === 0) return false
+        // 旧 key 里可能不是当前模型的字节（历史换模残留）：大小不符不迁移、走正常重下
+        //（match() 的期望字节数守卫是最终兜底，此处只是省一次无谓的大文件写读）
+        if (buffer.byteLength !== MODEL_FILE_BYTES) return false
         await cache.put(MODEL_CACHE_URL, new Response(buffer, { headers: buildModelHeaders(buffer.byteLength) }))
         console.log('[ContextWatchdog] 已将旧版模型缓存迁移到新 key，无需重新下载')
         return true

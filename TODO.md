@@ -14,7 +14,7 @@
 - **AI 模型已换用多语言版**（`onnx-community/gliner_multi-v2.1`，修复中文召回为零，
   ㉖）：换模后中文召回**真机复验未结**——复验判据 = TC-06-5 / TC-07-9，
   不过则回退换模并诚实化 FAQ（作者侧清单自存仓外）。
-- **校验基线**：`npm run typecheck` 0 错误 / `npm test` **420 passed（33 文件）** /
+- **校验基线**：`npm run typecheck` 0 错误 / `npm test` **423 passed（33 文件）** /
   `npm run build` + `npm run build:firefox` 通过 / `npm run probe:layout` 全通过 /
   `npm run probe:widget` 全通过（20 项）/ `npm run site:check` 0 诊断 /
   `npm run site:build` 通过 / `npm run check:versions` 通过（2 项预期警告：SITE_URL 与渠道未配置）。
@@ -24,7 +24,7 @@
 ```bash
 npm run typecheck && npm test && npm run build && npm run build:firefox && npm run probe:layout && npm run probe:widget
 npm run site:check && npm run site:build && npm run check:versions
-# 期望：0 error / 420 passed / 双目标构建通过 / 布局与挂件探针全通过 / 站点 0 诊断且构建通过 /
+# 期望：0 error / 423 passed / 双目标构建通过 / 布局与挂件探针全通过 / 站点 0 诊断且构建通过 /
 #       check:versions 通过（SITE_URL 与渠道未配置时为 2 项警告）
 # Windows：probe:widget 需 CHROME_PATH 指向 Chromium / Chrome for Testing
 #       （正式版 Chrome 与新 Edge 会忽略 --load-extension，示例见 scripts/probe-widget.mjs 头注）

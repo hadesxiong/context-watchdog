@@ -176,9 +176,9 @@ vite 别名把 gliner 静态引用的 `onnxruntime-web/webgpu|webgl` 打桩（EP
 | 断点续传 | 会话内 + 跨会话（Cache Storage `?partial`，元数据在条目响应头 `x-model-bytes/total/etag/last-modified/saved-at`，读取三重一致性校验）；仅同源+强 etag 发 `If-Range` |
 | 重试退避 | 指数退避、尊重 `Retry-After`、封顶 16s |
 | 停滞看门狗 | 30s 无字节中断（下次从断点续）；进度心跳续期，杜绝无 Content-Length 的假超时 |
-| 完整性校验 | 字节数不符不入缓存，绝不拼脏数据 |
+| 完整性校验 | 字节数不符不入缓存，绝不拼脏数据；缓存层再按**期望字节数**（`MODEL_FILE_BYTES`）复核——`match()` 字节数不符即删除自愈（本地直判、不依赖版本探测，节流/离线时同样生效）、`put()` 拒写抛错让下载流程换源重试。防「完整下完的错误文件」自洽常驻（2026-10-23 实机回归：上游 URL 漂移致前代模型存进新 key、探测两侧同值永远 current） |
 | 多窗口去重 | storage 单键锁 `contextwatchdog.modelLock`（owner + 30s 心跳 TTL + 进度转发）；抢锁方等待显示「另一窗口下载中」，等待 ≤~5 分钟超时后自行下载；接管前再查缓存 |
-| 缓存失效 | 缓存 key 固定（不带版本号）；命中后 1 字节探测（`Range: bytes=0-0`，5s 超时）**三级比对 ETag → Last-Modified → 总长**；⚠️ 浏览器跨源只读得到 CORS 安全列表头（ModelScope CDN 无 `Access-Control-Expose-Headers` → ETag/Content-Range 读不到，206 的 `content-length=1` 绝不当总长，否则全量 ≠ 1 误判 stale → 每个探测窗重下全量模型，TC-06-9 回归）；离线/信息不可知时优先沿用缓存；旧 `?v=` key 一次性搬迁；换模后前代模型孤儿条目一次性清扫（`PREDECESSOR_MODEL_CACHE_URL`） |
+| 缓存失效 | 缓存 key 固定（不带版本号）；命中后 1 字节探测（`Range: bytes=0-0`，5s 超时）**三级比对 ETag → Last-Modified → 总长**；⚠️ 浏览器跨源只读得到 CORS 安全列表头（ModelScope CDN 无 `Access-Control-Expose-Headers` → ETag/Content-Range 读不到，206 的 `content-length=1` 绝不当总长，否则全量 ≠ 1 误判 stale → 每个探测窗重下全量模型，TC-06-9 回归）；离线/信息不可知时优先沿用缓存；旧 `?v=` key 一次性搬迁（字节数非本模不搬）；换模后前代模型孤儿条目一次性清扫（`PREDECESSOR_MODEL_CACHE_URL` + `PREDECESSOR_LEGACY_MODEL_CACHE_URL`） |
 | 单飞门闩 | `createSingleFlight`：并发加载复用同一 promise，重试不产生并行下载 |
 | 内存释放 | `initialize()` 后置空对 349MB ArrayBuffer 的引用（ORT session 已持 wasm 堆副本）；前后打 JS 堆快照日志 |
 
@@ -315,7 +315,7 @@ Astro 静态站点（`output: 'static'`），产物是纯 HTML + 一个 CSS 文�
 
 ## 12. 测试体系
 
-`npm test`：**420 断言 / 33 文件**（`npm run typecheck` 0 错误为另一道闸）：
+`npm test`：**423 断言 / 33 文件**（`npm run typecheck` 0 错误为另一道闸）：
 
 | 目录 | 内容 |
 |------|------|

@@ -2,9 +2,10 @@
 // 覆盖：多源回退 / 会话内+跨会话断点续传 / 指数退避与 Retry-After / 传输完整性校验 /
 //       Cache Storage 落盘 / 缓存版本探测（1 字节）与离线降级 / 多窗口锁与等待方 /
 //       停滞看门狗 / 单飞门闩（重试复用在飞加载）
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import {
   MODEL_SOURCES,
+  MODEL_FILE_BYTES,
   MAX_ATTEMPTS,
   RETRY_BASE_DELAY_MS,
   RETRY_MAX_DELAY_MS,
@@ -20,6 +21,7 @@ import {
   probeRemoteVersion,
   createModelLock,
   createSingleFlight,
+  createBrowserModelCache,
   downloadModel,
   type ModelCache,
   type PartialStore,
@@ -988,5 +990,73 @@ describe('downloadModel', () => {
       sleep: noSleep
     })
     expect(probeState2.writes).toEqual([])
+  })
+})
+
+// 浏览器缓存实现的期望字节数守卫：
+// 2026-10-23 实机缺陷——上游源 URL 漂移，前代 183MB 模型被「完整下完」存进新 key，
+// 版本探测两侧同为 183,403,734 永远判定「current」，错模型静默常驻。
+// 不变式：缓存层只允许 MODEL_FILE_BYTES 字节永久化（match 自愈删除 / put 拒写抛错）
+describe('createBrowserModelCache 期望字节数守卫', () => {
+  interface FakeStored {
+    bytes: ArrayBuffer
+    headers: Record<string, string>
+  }
+
+  // 最小 caches 伪实现：match/put/delete 作用于内存条目
+  const installFakeCaches = (entry?: FakeStored) => {
+    let stored: FakeStored | null = entry ?? null
+    vi.stubGlobal('caches', {
+      open: async () => ({
+        match: async () =>
+          stored
+            ? ({
+                ok: true,
+                arrayBuffer: async () => stored!.bytes,
+                headers: { get: (key: string) => stored!.headers[key] ?? null }
+              } as unknown as Response)
+            : undefined,
+        put: async (_url: string, response: Response) => {
+          stored = { bytes: await response.arrayBuffer(), headers: Object.fromEntries(response.headers) }
+        },
+        delete: async () => {
+          stored = null
+        }
+      })
+    })
+    return { read: () => stored }
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('match：缓存字节数 ≠ 期望 → 删除污染条目并返回 null（自愈，不依赖探测）', async () => {
+    const wrong = toBytes('wrong-model-bytes').buffer as ArrayBuffer
+    const store = installFakeCaches({
+      bytes: wrong,
+      headers: { 'content-length': String(wrong.byteLength), 'x-model-total': String(wrong.byteLength) }
+    })
+    const cache = createBrowserModelCache()
+    expect(cache).not.toBeNull()
+    expect(await cache!.match()).toBeNull()
+    expect(store.read()).toBeNull() // 污染条目已被删除
+  })
+
+  it('put：字节数 ≠ 期望 → 拒绝写入并抛出（下载流程据此换源重试）', async () => {
+    const store = installFakeCaches()
+    const cache = createBrowserModelCache()
+    await expect(cache!.put(toBytes('wrong').buffer as ArrayBuffer, null)).rejects.toThrow(/字节数/)
+    expect(store.read()).toBeNull() // 未落盘
+  })
+
+  it('put：字节数 = 期望 → 正常落盘，match 原样读回', async () => {
+    const store = installFakeCaches()
+    const cache = createBrowserModelCache()
+    await cache!.put(new ArrayBuffer(MODEL_FILE_BYTES), { etag: '"v1"', source: 'fake.host' })
+    expect(store.read()?.bytes.byteLength).toBe(MODEL_FILE_BYTES)
+    const hit = await cache!.match()
+    expect(hit?.total).toBe(MODEL_FILE_BYTES)
+    expect(hit?.etag).toBe('"v1"')
   })
 })
