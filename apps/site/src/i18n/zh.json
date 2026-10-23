@@ -2,7 +2,7 @@
   "meta": {
     "lang": "zh-CN",
     "ogLocale": "zh_CN",
-    "title": "ContextWatchdog — 粘贴前就地脱敏，数据不出你的机器",
+    "title": "ContextWatchdog · 粘贴前就地脱敏，数据不出你的机器",
     "description": "开源、免费、无服务端的本地脱敏工具。在你把文本发给 AI 之前，自动检出并替换其中的密钥与个人信息。检测与替换全程在本机完成；当前形态为浏览器扩展，后续扩展到桌面端、CLI 与本地代理。"
   },
   "nav": {

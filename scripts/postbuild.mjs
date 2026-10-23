@@ -128,7 +128,7 @@ delete manifest.background.service_worker
 // 扩展无法也不应指定。
 if (manifest.side_panel?.default_path) {
   manifest.sidebar_action = {
-    default_title: 'ContextWatchdog - AI脱敏助手',
+    default_title: 'ContextWatchdog · AI脱敏助手',
     default_panel: manifest.side_panel.default_path
   }
   delete manifest.side_panel

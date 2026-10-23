@@ -2,7 +2,7 @@
   "meta": {
     "lang": "en",
     "ogLocale": "en_US",
-    "title": "ContextWatchdog — redact in place before you paste, without your data leaving the machine",
+    "title": "ContextWatchdog · redact in place before you paste, without your data leaving the machine",
     "description": "Open-source, free and backend-free local redaction for AI workflows: detects and replaces secrets and personal data before text reaches a model. A browser extension today; desktop, CLI and proxy planned."
   },
   "nav": {

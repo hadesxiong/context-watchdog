@@ -157,7 +157,7 @@ export const renderThirdPartyNotices = () => {
       .join('\n')
 
   return [
-    'ContextWatchdog — 第三方组件许可与署名声明',
+    'ContextWatchdog · 第三方组件许可与署名声明',
     '='.repeat(78),
     '',
     `本文件由 scripts/third-party-notices.mjs 在构建时生成（${today}），请勿手工编辑。`,
