@@ -110,7 +110,7 @@ npm run probe:layout       # 全绿
 |------|------|--------------|
 | [`README.md`](README.md) / [`README.zh-CN.md`](README.zh-CN.md) | 门面（同一份 README 的双语对）：简介、快速开始、可核验隐私表、文档地图 | 面向用户的事实变化时；**不放细节**——细节一律链向 spec，避免双份维护 |
 | [`docs/spec.md`](docs/spec.md) | 技术真相源：功能矩阵、架构、检测管线、规则与区域校验、档案、权限与 CSP、存储、构建、测试地图、已知限制 | 代码改变了「系统怎么工作」的任何时刻——与代码同一次提交改；数字基线（测试数等）随事实变化更新 |
-| [`docs/test-cases.md`](docs/test-cases.md) | 手动验收用例与逐条通过判据 | 新增或变更**自动化测不到**的用户可见行为（视觉、权限弹窗、真实下载、真机交互）时 |
+| [`docs/test-cases.md`](docs/test-cases.md) | 检验样例（可复用输入夹具）与 TC 目录（编号 + 标题 + 一句核心判据）；完整验收步骤与逐条判据为作者发布文档，自存仓外 | 新增/修订可复用检验样例，或新增 TC 目录项时 |
 | [`docs/site-ai-offscreen-host.md`](docs/site-ai-offscreen-host.md) / [`docs/local-sanitize-proxy.md`](docs/local-sanitize-proxy.md) | 设计决策与后续迭代线，**有意随代码公开**（防御性公开，构成 prior art） | 立项新设计/新决策线时新增一份；决策被推翻时在原文标注结局，不删历史 |
 | [`CHANGELOG.md`](CHANGELOG.md) | 实现轮次与结案记录（按时间倒序，压缩版） | 每完成一个可验收轮次归档一条；真机验收发现的缺陷修复也要记 |
 | [`TODO.md`](TODO.md) | 当前状态、挂账项与回归命令基线 | 每次验收/清账后同步；基线数字（测试数、探针数）随事实更新 |
@@ -118,7 +118,7 @@ npm run probe:layout       # 全绿
 
 跨文档联动（改 A 别忘 B）：
 
-- **改行为**：`spec.md`（怎么工作）→ `test-cases.md`（怎么验收）→ `CHANGELOG.md`
+- **改行为**：`spec.md`（怎么工作）→ `test-cases.md`（样例与 TC 目录项）→ `CHANGELOG.md`
   （归档结案）→ 若用户可感知，落地页 i18n 文案同步；
 - **改版本号**：唯一真相源是 `packages/extension/src/manifest.json`，
   其余位置由 `npm run check:versions` 强制对齐，不手工散改；

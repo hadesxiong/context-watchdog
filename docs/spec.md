@@ -1,6 +1,6 @@
 # ContextWatchdog 产品（技术）说明文档
 
-> 面向开发者与技术评审。快速开始见 `README.md`，手动验收见 `docs/test-cases.md`，
+> 面向开发者与技术评审。快速开始见 `README.md`，检验样例与 TC 目录见 `docs/test-cases.md`，
 > 待办状态见 `TODO.md`，实现轮次与结案沿革见 `CHANGELOG.md`。本文档所有描述以代码为准
 > （`packages/`、`apps/`、`scripts/`；版本 1.0.0）。
 
@@ -325,7 +325,8 @@ Astro 静态站点（`output: 'static'`），产物是纯 HTML + 一个 CSS 文�
 | `tests/perf/`（1） | 长文本基准（5000 字 < 2s） |
 
 原则：下载器/管线等纯逻辑全部依赖注入，node 环境可单测；真机判定项（视觉/真实下载/
-权限弹窗/真实推理）收敛到 `docs/test-cases.md`，不与自动化重叠。
+权限弹窗/真实推理）登记在 `docs/test-cases.md` 的 TC 目录（完整步骤与逐条判据为作者
+发布文档，自存仓外），不与自动化重叠。
 
 ## 13. 已知限制
 

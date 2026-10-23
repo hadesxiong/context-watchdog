@@ -94,7 +94,7 @@ npm run site:build    # 落地页：静态构建 → apps/site/dist
 npm run check:versions # 版本/许可/canonical 一致性 + 商店提交预检
 ```
 
-目录地图见 [`docs/spec.md`](docs/spec.md) §12；带判据的手动验收用例见 [`docs/test-cases.md`](docs/test-cases.md)。
+目录地图见 [`docs/spec.md`](docs/spec.md) §12；可复用检验样例与 TC 索引见 [`docs/test-cases.md`](docs/test-cases.md)（完整验收步骤为作者发布文档，自存仓外）。
 
 ## 技术栈
 
@@ -119,7 +119,7 @@ npm run release:pack                # 两个可直接上架的 zip + SHA256SUMS 
 | 文档 | 是什么 |
 |------|--------|
 | [`docs/spec.md`](docs/spec.md) | 技术参考：管线、规则、档案、权限、存储、构建、测试地图 |
-| [`docs/test-cases.md`](docs/test-cases.md) | 手动验收用例与通过判据 |
+| [`docs/test-cases.md`](docs/test-cases.md) | 检验样例与 TC 索引（完整验收步骤作者自存） |
 | [`docs/site-ai-offscreen-host.md`](docs/site-ai-offscreen-host.md) | 设计 ①：授权站点 AI 增强——页面挂件控制面 + offscreen 单一模型宿主 |
 | [`docs/local-sanitize-proxy.md`](docs/local-sanitize-proxy.md) | 设计 ②：本地脱敏代理——拦截出网请求 + 白名单 + 溯源审计 |
 | [`CHANGELOG.md`](CHANGELOG.md) | 实现轮次与结案记录 |

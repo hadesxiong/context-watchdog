@@ -1,7 +1,7 @@
 # ContextWatchdog 待办与状态
 
 > 当前架构：`README.md`（快速开始）+ `docs/spec.md`（技术说明）。
-> 手动验收判据：`docs/test-cases.md`；实现轮次与结案沿革：`CHANGELOG.md`。
+> 手动验收入口：`docs/test-cases.md`（样例与 TC 目录，判据明细作者自存）；实现轮次与结案沿革：`CHANGELOG.md`。
 
 ## 当前状态（2026-10-23）
 
@@ -12,7 +12,8 @@
   **Firefox 分支**）与 TC-02 卡号夹具 Luhn 复跑于 2026-10-23 真机复验通过、结案；
   Firefox manifest `default_position` warning 已修（见 `git log`）。
   文档整理完成（内部工作文档移出仓库、子 README 并入根文档、发布类内容随作者个人
-  runbook 移出、`test-cases.md` 精简为 A 类并全历史清除，见 `CHANGELOG.md` ㉔）。
+  runbook 移出、`test-cases.md` 收敛为检验样例与 TC 索引、验收判据明细移出仓库，
+  全历史清除，见 `CHANGELOG.md` ㉔/㉕）。
   **剩三件只能由作者做的事**：
   1. **F8 打 tag**（`1.0.0-ext` / `1.0.0-site`）——`npm run check:versions -- --release` 会先列出还差什么
   2. **F7 互链**：把落地页域名填进 `apps/site/.env` 的 `SITE_URL`，渠道上架后填对应的 `*_URL`（模板见 `apps/site/.env.example`）

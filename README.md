@@ -94,7 +94,7 @@ npm run site:build    # landing page: static build → apps/site/dist
 npm run check:versions # version/licence/canonical consistency + store pre-flight
 ```
 
-The directory map lives in [`docs/spec.md`](docs/spec.md) §12; manual verification cases with pass criteria are in [`docs/test-cases.md`](docs/test-cases.md).
+The directory map lives in [`docs/spec.md`](docs/spec.md) §12; reusable verification fixtures (sample texts) and the TC index are in [`docs/test-cases.md`](docs/test-cases.md) (full acceptance steps are the author's release document, held outside the repo).
 
 ## Tech stack
 
@@ -119,7 +119,7 @@ npm run release:pack                # two store-ready zips + SHA256SUMS → rele
 | Document | What it is |
 |----------|------------|
 | [`docs/spec.md`](docs/spec.md) | Technical reference: pipeline, rules, profiles, permissions, storage, build, test map (Chinese) |
-| [`docs/test-cases.md`](docs/test-cases.md) | Manual verification cases with pass criteria (Chinese) |
+| [`docs/test-cases.md`](docs/test-cases.md) | Verification fixtures and TC index (Chinese; full acceptance steps author-held) |
 | [`docs/site-ai-offscreen-host.md`](docs/site-ai-offscreen-host.md) | Design ①: per-site AI enhancement — widget control plane + offscreen single model host (Chinese) |
 | [`docs/local-sanitize-proxy.md`](docs/local-sanitize-proxy.md) | Design ②: local sanitising proxy — outbound interception + whitelist + audit trail (Chinese) |
 | [`CHANGELOG.md`](CHANGELOG.md) | Round-by-round implementation record (Chinese) |
