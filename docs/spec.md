@@ -14,7 +14,7 @@
 |------|------|------|
 | 侧栏手动脱敏 | ✅ | 粘贴/输入 → 点「检测」→ 检出列表 → 单条/一键脱敏 → 复制 |
 | 正则基础引擎 | ✅ 恒开 | 14 类检测（密钥 5 + PII 7 + 高熵 + 自定义），SW 亦可用 |
-| AI 增强（GLiNER） | ✅ 可选 | 级联触发，仅处理正则未覆盖片段；首次需下载 ~183MB 模型（ort wasm ~11MB 随包本地加载，推理本身离线可用） |
+| AI 增强（GLiNER） | ✅ 可选 | 级联触发，仅处理正则未覆盖片段；首次需下载 ~349MB 模型（ort wasm ~11MB 随包本地加载，推理本身离线可用） |
 | 检测档案 | ✅ | 内置 5 档（universal / text / code / us / eu）+ 用户自定义（类别/灵敏度/分类型策略/白名单/GLiNER 标签） |
 | 自定义正则规则 | ✅ | ReDoS 双层防护；档案 JSON 剪贴板导入导出 |
 | 粘贴自动拦截 | ✅ 可选 | 逐站授权，粘贴时自动就地替换（正则档；input/textarea 与 contenteditable 均支持，命中显示「已脱敏 N 处」提示） |
@@ -156,8 +156,8 @@ npm、GitLab、SendGrid、Postman、Shopify、DigitalOcean、Mailgun、Twilio）
 
 ## 7. AI 增强：模型与下载机制
 
-**模型**：`onnx-community/gliner_small-v2` 的 `onnx/model_quantized.onnx`（int8 量化，
-183,403,734 字节 ≈183MB）；运行栈 `gliner` + `onnxruntime-web`（WASM，单线程，
+**模型**：`onnx-community/gliner_multi-v2.1` 的 `onnx/model_quantized.onnx`（int8 量化，
+349,120,924 字节 ≈349MB；2026-10-23 换模修复中文召回，根因见 §13-3）；运行栈 `gliner` + `onnxruntime-web`（WASM，单线程，
 CSP 需 `wasm-unsafe-eval`）+ `@xenova/transformers`（tokenizer）。场景识别为启发式
 （`sceneDetector.ts`），不占模型。
 
@@ -178,9 +178,9 @@ vite 别名把 gliner 静态引用的 `onnxruntime-web/webgpu|webgl` 打桩（EP
 | 停滞看门狗 | 30s 无字节中断（下次从断点续）；进度心跳续期，杜绝无 Content-Length 的假超时 |
 | 完整性校验 | 字节数不符不入缓存，绝不拼脏数据 |
 | 多窗口去重 | storage 单键锁 `contextwatchdog.modelLock`（owner + 30s 心跳 TTL + 进度转发）；抢锁方等待显示「另一窗口下载中」，等待 ≤~5 分钟超时后自行下载；接管前再查缓存 |
-| 缓存失效 | 缓存 key 固定（不带版本号）；命中后 1 字节探测（`Range: bytes=0-0`，5s 超时）**三级比对 ETag → Last-Modified → 总长**；⚠️ 浏览器跨源只读得到 CORS 安全列表头（ModelScope CDN 无 `Access-Control-Expose-Headers` → ETag/Content-Range 读不到，206 的 `content-length=1` 绝不当总长，否则 183MB ≠ 1 误判 stale → 每个探测窗重下 183MB，TC-06-9 回归）；离线/信息不可知时优先沿用缓存；旧 `?v=` key 一次性搬迁 |
+| 缓存失效 | 缓存 key 固定（不带版本号）；命中后 1 字节探测（`Range: bytes=0-0`，5s 超时）**三级比对 ETag → Last-Modified → 总长**；⚠️ 浏览器跨源只读得到 CORS 安全列表头（ModelScope CDN 无 `Access-Control-Expose-Headers` → ETag/Content-Range 读不到，206 的 `content-length=1` 绝不当总长，否则全量 ≠ 1 误判 stale → 每个探测窗重下全量模型，TC-06-9 回归）；离线/信息不可知时优先沿用缓存；旧 `?v=` key 一次性搬迁；换模后前代模型孤儿条目一次性清扫（`PREDECESSOR_MODEL_CACHE_URL`） |
 | 单飞门闩 | `createSingleFlight`：并发加载复用同一 promise，重试不产生并行下载 |
-| 内存释放 | `initialize()` 后置空对 183MB ArrayBuffer 的引用（ORT session 已持 wasm 堆副本）；前后打 JS 堆快照日志 |
+| 内存释放 | `initialize()` 后置空对 349MB ArrayBuffer 的引用（ORT session 已持 wasm 堆副本）；前后打 JS 堆快照日志 |
 
 **UI 语义**：只有确认走网络下载（`onDownloadStart`）才显示 toast 与进度条；
 **缓存命中全程静默**（仅 console 日志），杜绝「先闪首次需下载再变已命中」的误导。
@@ -228,7 +228,7 @@ vite 别名把 gliner 静态引用的 `onnxruntime-web/webgpu|webgl` 打桩（EP
 | `sidePanel` | 侧栏主界面 |
 | `storage` | 档案/AI 开关/受保护站点/模型锁持久化 |
 | `clipboardWrite` | 脱敏结果与档案 JSON 复制 |
-| `unlimitedStorage` | 183MB 模型缓存配额 |
+| `unlimitedStorage` | 349MB 模型缓存配额 |
 | `scripting` | 仅向已授权站点注入粘贴监听 |
 | `offscreen` | 模型宿主（Chrome/Edge；Firefox 构建会移除） |
 | `optional_host_permissions` | 粘贴拦截逐站授权（https + http，运行时按需申请；条目可带路径） |
@@ -332,14 +332,21 @@ Astro 静态站点（`output: 'static'`），产物是纯 HTML + 一个 CSS 文�
 
 1. Firefox 无 `chrome.offscreen`：粘贴链路的 AI 二次升级不可用（正则档不受影响），
    侧栏手动检测仍走 LocalHost；Chrome/Edge 的粘贴 AI 需要全局 AI + 本站 AI + 宿主就绪；
-2. AI 模型 ~183MB 首次下载依赖网络（支持断点续传与多窗口去重）；
-3. GLiNER 对自由文本（无格式姓名/地址）的召回依赖模型能力，中低置信默认仅提示；
-   2026-10-18 实机：中文真召回为零，0.25–0.65 区间多为单字幻觉（「户」→姓名 0.456、
-   「订」→邮箱 0.330），已由形状门禁（`entityShape.ts` 的 `isPlausibleEntity`）拦截；
-   形似词幻觉（如 2 字词→姓名）仍可能通过，属模型能力限制，换更强模型才能收敛；
+2. AI 模型 ~349MB 首次下载依赖网络（支持断点续传与多窗口去重）；
+3. 中文召回根因与换模（2026-10-23）：前代模型 gliner_small-v2 骨干为
+   microsoft/deberta-v3-small（纯英文 128K SPM 词表），中文字符全部塌缩为 [UNK]，
+   encoder 对中文内容全盲——2026-10-18 实机「真召回为零 + 0.25–0.65 区间单字乱指
+   幻觉（「户」→姓名 0.456、「订」→邮箱 0.330）」即此失效模式，与阈值/门禁无关
+   （形状门禁 `entityShape.ts` 只负责拦幻觉、救不了召回）。已换用多语言骨干的
+   gliner_multi-v2.1（mdeberta-v3-base，中文在词表与训练语料内；切词对中文逐字成词，
+   提供字级 span 边界），换模后中文实际召回待真机复验；形似词幻觉（如 2 字词→姓名）
+   仍可能通过，属零样本模型固有风险，形状门禁常开兜底；
 4. tokenizer/config 由 gliner 内部 transformers 下载，走其自带缓存，不受 §10 版本管理。
 
 ## 14. 实测数据（2026-10-18，Chrome，TC-06-4 / A-4 结案）
+
+> ⚠️ 本节数值基于前代 183MB 模型（gliner_small-v2）。2026-10-23 换用 349MB 的
+> gliner_multi-v2.1 后基线待复测（JS 堆与推理耗时均预计上升，口径说明仍适用）。
 
 - JS 堆快照（`performance.memory.usedJSHeapSize`；Chromium 专有，Firefox 静默跳过），
   走缓存命中路径（模型 174.9MB 从 Cache Storage 物化为 ArrayBuffer）：

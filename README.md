@@ -78,7 +78,7 @@ The same content, written as a store-submittable policy page, lives at `/privacy
 | @xenova/transformers | model runtime (transformers.js) | Apache-2.0 |
 | onnxruntime-web / onnxruntime-common | ONNX Runtime (WASM backend) | MIT |
 | @huggingface/jinja | template engine (transformers dependency) | MIT |
-| model `onnx-community/gliner_small-v2` (downloaded at runtime, not redistributed) | AI detection | Apache-2.0 |
+| model `onnx-community/gliner_multi-v2.1` (downloaded at runtime, not redistributed) | AI detection | Apache-2.0 |
 
 > ※ `gliner`'s `package.json` declares MIT, but the `LICENSE` file inside the package is the full Apache-2.0 text. **The `LICENSE` file wins**, so it is treated as Apache-2.0. This discrepancy is recorded in `THIRD-PARTY-NOTICES.txt`.
 

@@ -12,12 +12,22 @@ import type { ModelProgress } from '@engine/detector/backend'
 export type { ModelProgress } from '@engine/detector/backend'
 
 // 注意：模型文件在 onnx/ 子目录下（仓库根目录没有 model.onnx，直接请求会 404）。
-// 选 model_quantized.onnx（int8 量化，约 183MB / 183,403,734 字节）：全量 model.onnx 达 611MB，不适合浏览器扩展
+// 选 model_quantized.onnx（int8 量化，约 349MB / 349,120,924 字节）：fp16 版 580MB、
+// 全量 model.onnx 达 1.16GB，都不适合浏览器扩展
+//
+// 为什么是 gliner_multi-v2.1（2026-10-23 换模，修复「中文 AI 召回为零」缺陷）：
+// 前代 gliner_small-v2 的骨干是 microsoft/deberta-v3-small（纯英文，128K SPM 词表），
+// 中文字符全部塌缩为 [UNK]，encoder 对中文内容全盲——实机表现为真召回为零 +
+// 0.25–0.65 区间单字乱指幻觉（形状门禁只能拦幻觉、救不了召回，见 spec §13-3）。
+// multi-v2.1 骨干为 microsoft/mdeberta-v3-base（多语言，中文在词表与训练语料内），
+// max_width 同为 12、同为 span-level 导出，推理接线零改动；切词 /\w+(?:[-_]\w+)*|\S/
+// 对中文逐字成词，恰好提供字级 span 边界。代价：体积 183MB→349MB、推理计算量约 5–6 倍
+// （首次下载与内存基线见 spec §10/§13，旧缓存条目由 PREDECESSOR_MODEL_CACHE_URL 清扫）。
 //
 // 模型源（按顺序轮换）：
 // 1. ModelScope（阿里云）：`/models/{id}/resolve/{rev}/{path}` 端点的 302 带完整 CORS 头
 //    （Access-Control-Allow-Origin: *，Allow-Headers 含 Range），末端 cdn-lfs-cn-1.modelscope.cn
-//    返回与 HuggingFace 一致的 183,403,734 字节，国内实测约 14MB/s。
+//    与 HuggingFace 同字节数，国内实测（前代模型）约 14MB/s。
 //    ⚠️ 不要换回 `/api/v1/models/{id}/repo?FilePath=...`：它的 302 没有 ACAO，同样会被 CORS 判死。
 // 2. HuggingFace 官方源：302 会回显请求 Origin（CORS 通过），作为 ModelScope 镜像缺失时的兜底。
 //
@@ -32,16 +42,21 @@ export const MODEL_SOURCES = [
 
 // 当前模型文件字节数：只作"期望大小"的文档参考，不再用作缓存版本号
 // （缓存是否失效改由 1 字节探测三级比对 ETag / Last-Modified / 长度自动决定，见 probeRemoteVersion）
-export const MODEL_FILE_BYTES = 183403734
+export const MODEL_FILE_BYTES = 349120924
 
 export const MODEL_CACHE_NAME = 'contextwatchdog-models'
 // 缓存 key 固定（合成 URL，.invalid 永不解析、不参与网络请求）；
 // 版本信息（ETag / Last-Modified / 长度 / 时间）存进条目的响应头，由探测结果决定是否作废
-export const MODEL_CACHE_URL = 'https://contextwatchdog.invalid/models/gliner_small-v2/model_quantized.onnx'
+export const MODEL_CACHE_URL = 'https://contextwatchdog.invalid/models/gliner_multi-v2.1/model_quantized.onnx'
 // 未完成下载的部分文件（跨会话断点续传的落点）
 export const MODEL_PARTIAL_URL = `${MODEL_CACHE_URL}?partial`
-// 旧版缓存 key（带 ?v= 字节数）：命中时一次性搬迁，避免升级用户重下 183MB
+// 旧版缓存 key（带 ?v= 字节数）：命中时一次性搬迁，避免升级用户重下全量模型
 export const LEGACY_MODEL_CACHE_URL = `${MODEL_CACHE_URL}?v=${MODEL_FILE_BYTES}`
+// 前代模型（gliner_small-v2，183,403,734 字节）的完整缓存 key：2026-10-23 换模后成为
+// 孤儿条目。其字节属于另一个模型，不能搬迁复用（搬进新 key 也会被探测按总长判 stale），
+// 由 migrateLegacy 一次性清扫，避免占着 ~183MB 缓存配额
+export const PREDECESSOR_MODEL_CACHE_URL =
+  'https://contextwatchdog.invalid/models/gliner_small-v2/model_quantized.onnx'
 
 export const MAX_ATTEMPTS = 5
 // 单次尝试的停滞看门狗：这么久没收到任何字节就中断本次连接，下次从断点续传
@@ -123,7 +138,7 @@ export interface ModelCache {
     meta?: { etag?: string | null; source?: string | null; lastModified?: string | null }
   ) => Promise<void>
   clear: () => Promise<void>
-  // 旧版 key 一次性迁移；返回是否发生了迁移
+  // 旧版 key 一次性搬迁 + 前代模型条目清扫；返回是否发生了搬迁
   migrateLegacy?: () => Promise<boolean>
 }
 
@@ -209,8 +224,8 @@ export const isWeakEtag = (etag: string | null): boolean => !etag || etag.trim()
 // 本地缓存与远端版本比对：'stale' 才需要重新下载；
 // 探测失败（离线 / 被限流 / 超时）→ 'unknown' → 沿用缓存（离线优先）
 // ⚠️ ETag / Last-Modified 只在同源（或任一侧来源未知）时才可比对：ModelScope 与
-// HuggingFace 各自生成，跨源直接比对必然不一致 → 误判 'stale' → 清缓存重下 183MB。
-// 跨源时退回比总字节数（两源对同一文件返回一致的 183,403,734 字节）
+// HuggingFace 各自生成，跨源直接比对必然不一致 → 误判 'stale' → 清缓存重下全量模型。
+// 跨源时退回比总字节数（两源对同一文件返回一致的 349,120,924 字节）
 // ⚠️ 浏览器跨源读不到非安全列表头（Fetch 规范只放行 Cache-Control / Content-Language /
 // Content-Length / Content-Type / Expires / Last-Modified / Pragma）：ModelScope CDN 不发
 // Access-Control-Expose-Headers → JS 里 ETag / Content-Range 恒为 null。故三级比对：
@@ -313,6 +328,13 @@ export const createBrowserModelCache = (): ModelCache | null => {
     migrateLegacy: async () => {
       try {
         const cache = await caches.open(MODEL_CACHE_NAME)
+        // 换模清扫（2026-10-23）：前代模型完整条目不属于当前模型，直接删除让出缓存配额。
+        // 清扫失败不阻塞主流程（孤儿条目只是占空间，不影响正确性）
+        try {
+          await cache.delete(PREDECESSOR_MODEL_CACHE_URL)
+        } catch {
+          // 忽略
+        }
         const legacy = await cache.match(LEGACY_MODEL_CACHE_URL)
         if (!legacy) return false
         const buffer = await legacy.arrayBuffer()

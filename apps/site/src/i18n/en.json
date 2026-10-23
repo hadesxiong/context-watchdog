@@ -67,7 +67,7 @@
       },
       {
         "title": "AI tier (optional)",
-        "body": "Entities with no fixed shape — names, addresses — go to a local GLiNER model (WASM), which only looks at spans the regex tier left uncovered and never redoes its work; you must enable it explicitly and download the quantised model once (~180 MB). If the model is unavailable, the pipeline degrades to pure regex: no errors, no blocking."
+        "body": "Entities with no fixed shape — names, addresses — go to a local GLiNER model (WASM), which only looks at spans the regex tier left uncovered and never redoes its work; you must enable it explicitly and download the quantised model once (~350 MB). If the model is unavailable, the pipeline degrades to pure regex: no errors, no blocking."
       }
     ]
   },
@@ -116,7 +116,7 @@
       },
       {
         "q": "Do I have to download the AI model?",
-        "a": "No. The regex tier is always on and covers secrets, connection strings, phone numbers, national IDs, bank cards, IBANs and other fixed-shape targets — zero latency, offline. The AI tier only adds shapeless entities like names and addresses. The quantised model is about 180 MB, downloaded once and then served from the browser cache; if it is unavailable the pipeline falls back to pure regex."
+        "a": "No. The regex tier is always on and covers secrets, connection strings, phone numbers, national IDs, bank cards, IBANs and other fixed-shape targets — zero latency, offline. The AI tier only adds shapeless entities like names and addresses. The quantised model is about 350 MB, downloaded once and then served from the browser cache; if it is unavailable the pipeline falls back to pure regex."
       },
       {
         "q": "What if it flags something that is not sensitive?",

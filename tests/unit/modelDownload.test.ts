@@ -256,7 +256,7 @@ describe('纯函数', () => {
     const cached = {
       etag: null,
       lastModified: 'Wed, 11 Dec 2024 14:46:20 GMT',
-      total: 183403734,
+      total: 349120924,
       source: 'modelscope.cn'
     }
     // 探测侧 total=0（206 读不到 Content-Range）也必须能判 current，不依赖总长
@@ -297,8 +297,8 @@ describe('纯函数', () => {
 
   it('compareCachedVersion：跨源时 ETag 不可比，退回比总长（防误判清缓存）', () => {
     // HF 下载（etag hf-*）+ ModelScope 探测（etag ms-*）：同文件不同源 ETag 必然不同 → 不能判 stale
-    const cached = { etag: '"hf-abc"', total: 183403734, source: 'huggingface.co' }
-    const remoteMs: RemoteVersion = { etag: '"ms-xyz"', total: 183403734, source: 'modelscope.cn' }
+    const cached = { etag: '"hf-abc"', total: 349120924, source: 'huggingface.co' }
+    const remoteMs: RemoteVersion = { etag: '"ms-xyz"', total: 349120924, source: 'modelscope.cn' }
     expect(compareCachedVersion(cached, remoteMs)).toBe('current')
 
     // 跨源且总长也变了 → 真过期
@@ -310,8 +310,8 @@ describe('纯函数', () => {
     expect(compareCachedVersion({ etag: '"hf"', total: 0, source: 'huggingface.co' }, unknownTotal)).toBe('unknown')
 
     // 同源仍然比 ETag（总长相同但 ETag 变 → stale）
-    const sameSource: RemoteVersion = { etag: '"ms-new"', total: 183403734, source: 'modelscope.cn' }
-    expect(compareCachedVersion({ etag: '"ms-old"', total: 183403734, source: 'modelscope.cn' }, sameSource)).toBe('stale')
+    const sameSource: RemoteVersion = { etag: '"ms-new"', total: 349120924, source: 'modelscope.cn' }
+    expect(compareCachedVersion({ etag: '"ms-old"', total: 349120924, source: 'modelscope.cn' }, sameSource)).toBe('stale')
 
     // 旧缓存条目无 source（升级前写入）：按同源处理，保持旧比对行为
     expect(compareCachedVersion({ etag: '"a"', total: 10 }, { etag: '"b"', total: 10, source: 'x' })).toBe('stale')
@@ -343,7 +343,7 @@ describe('版本探测（1 字节）', () => {
       makeResponse(
         206,
         {
-          'content-range': 'bytes 0-0/183403734',
+          'content-range': 'bytes 0-0/349120924',
           etag: '"abc"',
           'last-modified': 'Wed, 11 Dec 2024 14:46:20 GMT'
         },
@@ -354,7 +354,7 @@ describe('版本探测（1 字节）', () => {
     expect(version).toEqual({
       etag: '"abc"',
       lastModified: 'Wed, 11 Dec 2024 14:46:20 GMT',
-      total: 183403734,
+      total: 349120924,
       source: new URL(MODEL_SOURCES[0]).host
     })
     expect(calls[0].headers.range).toBe('bytes=0-0')

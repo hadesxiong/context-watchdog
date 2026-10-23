@@ -77,7 +77,7 @@ const runLoad = async (
     ort.env.wasm.proxy = false
 
     // gliner 会把 onnxSettings 原样留在实例上（gliner/src/web/ONNXWebWrapper.ts:61 用 settings.modelPath 建会话），
-    // 内联传 modelBuffer 会让 183MB 引用在整个会话期可达 → 峰值内存接近翻倍。
+    // 内联传 modelBuffer 会让 349MB 引用在整个会话期可达 → 峰值内存接近翻倍。
     // 这里持本地引用，等 ORT 把数据拷进 wasm 堆后再断开（见下方释放）
     const onnxSettings: {
       modelPath: string | ArrayBufferLike
@@ -98,18 +98,22 @@ const runLoad = async (
     }
 
     glinerInstance = new Gliner({
-      tokenizerPath: 'onnx-community/gliner_small-v2',
+      // 多语言骨干（mdeberta-v3-base，中文在词表内）——中文姓名/地址可被检出的前提。
+      // 前代 gliner_small-v2 为纯英文 deberta-v3-small，中文全塌缩为 [UNK] → 召回为零，
+      // 换模根因与代价见 modelDownload.ts 头部与 spec §13-3
+      tokenizerPath: 'onnx-community/gliner_multi-v2.1',
       onnxSettings,
       transformersSettings: {
         allowLocalModels: false,
         useBrowserCache: true
       },
       // 模型导出宽度约束（曾为「长连接串/长 PII 不切块」将默认 12 提到 256，真机推理即崩）：
-      // onnx-community/gliner_small-v2 的 ONNX 导出把 span_rep_layer 的宽度常量烘焙死为 12
-      // （Reshape 目标 [batch, num_words, 12, hidden]），maxWidth≠12 时 span 行数
-      // （num_words × maxWidth）对不上必报 Reshape 失败——浏览器里表现为裸数字错误
+      // onnx-community/gliner_multi-v2.1（及前代 small-v2）的 ONNX 导出把 span_rep_layer 的
+      // 宽度常量烘焙死为 12（gliner_config.json 的 max_width: 12；Reshape 目标
+      // [batch, num_words, 12, hidden]），maxWidth≠12 时 span 行数（num_words × maxWidth）
+      // 对不上必报 Reshape 失败——浏览器里表现为裸数字错误
       // （ORT 的 OrtStatus 指针未透出消息），AI 级联静默归零。超过 12 词的跨度会被截到
-      // 12 词窗口，这是该导出的固有限制（中文姓名/地址/手机号远短于 12 词，不受影响）。
+      // 12 词窗口，这是该导出的固有限制（中文逐字成词，姓名/地址/手机号远短于 12 词，不受影响）。
       maxWidth: 12,
       // 关键：gliner@0.0.19 只认 "span-level"（index.mjs:691 分支），传其他值会走
       // TokenModel（只喂 input_ids/attention_mask/words_mask/text_lengths），
@@ -121,7 +125,7 @@ const runLoad = async (
 
     await glinerInstance.initialize()
 
-    // 释放 JS 侧 183MB 模型引用（ORT session 已持有 wasm 堆副本，推理不受影响）
+    // 释放 JS 侧 349MB 模型引用（ORT session 已持有 wasm 堆副本，推理不受影响）
     onnxSettings.modelPath = ''
     reportHeapSnapshot('初始化完成并释放模型引用')
 
