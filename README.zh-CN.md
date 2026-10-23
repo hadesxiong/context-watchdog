@@ -1,9 +1,7 @@
-# ContextWatchdog（文本守卫）
-
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="public/icons/logo-1-dark.svg" />
-  <img src="public/icons/logo-1.svg" alt="ContextWatchdog（文本守卫）" width="260" />
-</picture>
+  <img src="public/icons/logo-1.svg" alt="ContextWatchdog（文本守卫）" width="320" />
+</picture><br><br>
 
 [English](README.md) | **简体中文**
 
