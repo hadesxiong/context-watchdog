@@ -126,7 +126,7 @@
 - **新增 `npm run check:docs`**（`scripts/check-docs.mjs`，与 check:versions 同族）：
   机器校验全仓 md 的相对链接与锚点、README 双语地图/CONTRIBUTING 索引与 `docs/`
   实际文件集三方一致、测试基线数字跨文档一致（CHANGELOG 历史数字与历史移出记录
-  豁免）。1be7918 的人工同步规则自此有执行器，漂移当场报红。
+  豁免）。bf162bb 的人工同步规则自此有执行器，漂移当场报红。
 - **补上 ⑱ 遗漏的四处「当前性」基线数字**：README 双语 `(403 assertions)`、
   spec §12 `403 断言 / 32 文件`（单元目录 25→26，实数 4+26+2+1=33）、设计稿
   回归清单「当前基线 403 项」→ 全部对齐 420/33。这批正是建门禁模式表对账时
@@ -512,16 +512,16 @@ Chrome/Edge 下模型运行时移出任何 UI 上下文，放进唯一的 offscr
 
 本轮完成 A–D（A–F 六个关键节点）：
 
-- **A 许可与文档**（`2c61c0b`）：`LICENSE`（Apache-2.0 全文）、`NOTICE`、`PATENTS.md`、
+- **A 许可与文档**（`f2b8a4e`）：`LICENSE`（Apache-2.0 全文）、`NOTICE`、`PATENTS.md`、
   `CONTRIBUTING.md`、`SECURITY.md`；`scripts/third-party-notices.mjs` 生成
   `THIRD-PARTY-NOTICES.txt` 并随产物分发（Apache-2.0 §4 / MIT 通知条款要求）。
   许可选型逐条对齐作者诉求——Apache-2.0 §4(b)(c)(d) 强制署名 + 标注改动 + 随附 NOTICE，
   §6 不授予商标。**不申请专利**，转防御性公开。
-- **B/C 目录重排**（`fdda367`、`1307d06`）：`src/core` → `packages/engine`（宿主无关，
+- **B/C 目录重排**（`8f5b06c`、`52ba7b9`）：`src/core` → `packages/engine`（宿主无关，
   带边界断言护栏）、`src` → `packages/extension`、设计 token 抽出 `packages/design-tokens`。
   引擎侧引入 `InferenceBackend` 抽象：模型运行时不进引擎，宿主注入；未注册时管线自动
   退化为纯正则——这也是全部用例能在 Node 下直接跑的前提。
-- **D i18n + 区域规则集 + 能力矩阵**（`b3f1fe4`、`e18294b`、`51fd642`）：
+- **D i18n + 区域规则集 + 能力矩阵**（`08ef0b4`、`cef55ae`、`df3793a`）：
   - 单一 catalog（`packages/extension/src/i18n/locales/*.json`）同时供 UI 的 `t()` 与
     manifest/SW 的 `_locales` 使用，后者构建时生成、不手抄；占位符语言随界面语言切换
   - 区域规则集 `us`/`eu` **默认全关**：SSN 号段校验、EIN 带标签 + 前缀校验、
@@ -556,7 +556,7 @@ Chrome/Edge 下模型运行时移出任何 UI 上下文，放进唯一的 offscr
   1 字节探测把 206 的 `content-length=1`（`Range: 0-0` 的响应体长）当总长 → 183MB ≠ 1 误判
   stale → 清缓存重下；探测成功又刷新 24h 节流，缺陷被掩盖成「第三次起正常」。
   node 单测注入 fetch 无 CORS 过滤，故自动化测不出。
-- **修复**（`226f5a6`）：三级比对 ETag → Last-Modified（CORS 安全列表头，恒可见）→ 总长；
+- **修复**（`c031a28`）：三级比对 ETag → Last-Modified（CORS 安全列表头，恒可见）→ 总长；
   206 的总长只信 Content-Range（可见时）、200 才用 Content-Length；三级皆无信息 → unknown
   沿用缓存（离线优先）。下载与断点续传随条目保存 `X-Model-Last-Modified`。补浏览器视角专测
   3 例，测试基线 187 → 190。
@@ -565,26 +565,26 @@ Chrome/Edge 下模型运行时移出任何 UI 上下文，放进唯一的 offscr
 
 ### 四项后续候选落地 · F-1/F-2/F-3 结案
 
-- `d6e03a0`：移除未使用的 `contextMenus` 权限声明（全 src 零引用）。
-- `259affa`：粘贴拦截强化——contenteditable 富文本区支持（阻止默认 + 选区快照 +
+- `da040df`：移除未使用的 `contextMenus` 权限声明（全 src 零引用）。
+- `6eca2d7`：粘贴拦截强化——contenteditable 富文本区支持（阻止默认 + 选区快照 +
   `execCommand('insertText')`，检测异常补插原文不吞粘贴、多行可整体撤销）；改写生效右上
   「已脱敏 N 处」轻提示（2s 自消、不堆叠、未检出无提示）；>20000 字符粘贴入口层真放行
   （修复此前仅 SW 截断、入口吞尾部文本的缺陷）。
-- `c279f49`：短密钥族规则——「前缀即证据」阈值策略：独特前缀官方格式收录 10 家，
+- `7840f78`：短密钥族规则——「前缀即证据」阈值策略：独特前缀官方格式收录 10 家，
   Mailgun/Twilio 无分隔符置 medium；无前缀短串维持不检测（FP 不可控），
   「短但有上下文」由 env/kv 规则兜底。
 - **验证**：TC-07-6 / TC-07-7 / TC-02-7 2026-10-18 实测通过。
 
 ### AI 推理链路实机修复与运行时收敛
 
-- `e157024`：GLiNER `modelType` 改 `span-level`（推理从未真正跑通的首因）；`aee9dfd`：
+- `09c081b`：GLiNER `modelType` 改 `span-level`（推理从未真正跑通的首因）；`37708bd`：
   `maxWidth` 改 12、锁 onnxruntime-web 1.19.2。
-- `44c4dd5`：检出形状门禁（`entityShape.ts`）——拦截 GLiNER 中文单字幻觉的错误替换
+- `d92b6bc`：检出形状门禁（`entityShape.ts`）——拦截 GLiNER 中文单字幻觉的错误替换
   （`户`→姓名、`订`→邮箱）。
-- `93d229b` + `cfa58ff`：ort wasm 资产本地化（`wasmPaths:{}` 走本地 + webgpu/webgl 打桩剔
+- `7a48c8c` + `07669f9`：ort wasm 资产本地化（`wasmPaths:{}` 走本地 + webgpu/webgl 打桩剔
   21.3MB jsep）、移除 @huggingface/transformers——产物 ~34MB → ~12.1MB，断网推理可用、
   零 CDN 依赖。
-- `a7085bf`：A-4 heap 实测数据回填 spec §14（179.3 → 224.5 MB 口径说明）。
+- `ff7a6e8`：A-4 heap 实测数据回填 spec §14（179.3 → 224.5 MB 口径说明）。
 - **验证**：TC-06-5、TC-06-8 实测通过；GLiNER-small-v2 中文真召回为零系模型能力限制
   （spec §13-4）。
 
@@ -599,8 +599,8 @@ Chrome/Edge 下模型运行时移出任何 UI 上下文，放进唯一的 offscr
 
 - `63cd1f0`：TODO 清退历史规划（Phase 1-5 旧计划与 valueExtractor / MobileBERT /
   50GB GLiNER 等过时条目）；
-- `08742d0`：四份阶段验证文档合并为单份 `docs/test-cases.md`（样例 A–F + TC-01~09）；
-- `7cb3585`：`docs/spec.md` 技术说明成文（开发者/技术评审定位）。
+- `0d7d7c9`：四份阶段验证文档合并为单份 `docs/test-cases.md`（样例 A–F + TC-01~09）；
+- `293cdf2`：`docs/spec.md` 技术说明成文（开发者/技术评审定位）。
 
 ## 2026-10-17
 
@@ -610,7 +610,7 @@ Chrome/Edge 下模型运行时移出任何 UI 上下文，放进唯一的 offscr
   档案下拉放大、说明入选项、齿轮绑定自定义档案；`10a9a05`：正则改恒开基础引擎、场景识别
   并入 AI；`e4c1dfc`：弹窗标题放大一档、全局边框 token 加深。
 - **验证**：TC-06-2/3、TC-04-1/2、TC-06-1、TC-08-1 实测通过（缓存静默语义后曾被版本探测
-  缺陷破坏，2026-10-18 随 `226f5a6` 修复后完整成立）。
+  缺陷破坏，2026-10-18 随 `c031a28` 修复后完整成立）。
 
 ### 遗留项 A/B/C 收尾、粘贴拦截地基与探测首修（`684c7b2`…`95cbf29`）
 
