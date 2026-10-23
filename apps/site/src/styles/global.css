@@ -482,10 +482,24 @@ a.pg-channel:hover {
   overflow: hidden;
 }
 
+.pg-demo-case {
+  padding: 1.1rem;
+}
+
+/* 案例之间的分隔：与卡片边框同色的虚线，弱于实线分节 */
+.pg-demo-case + .pg-demo-case {
+  border-top: 1px dashed var(--border);
+}
+
+.pg-demo-case-title {
+  font-weight: 600;
+  font-size: 0.9375rem;
+  margin-bottom: 0.75rem;
+}
+
 .pg-demo-body {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.875rem;
-  padding: 1.1rem;
   display: grid;
   gap: 1rem;
   grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
@@ -513,12 +527,10 @@ a.pg-channel:hover {
   padding: 0.05rem 0.3rem;
 }
 
-.pg-demo-placeholder {
-  padding: 1.5rem 1.1rem;
-  text-align: center;
+.pg-demo-note {
+  margin-top: 0.75rem;
+  font-size: 0.8125rem;
   color: var(--muted-foreground);
-  font-size: 0.875rem;
-  border-top: 1px dashed var(--border);
 }
 
 /* ---------- 隐私承诺 ---------- */

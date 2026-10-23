@@ -32,12 +32,23 @@
   "demo": {
     "title": "30 秒看懂",
     "caption": "粘贴一段含数据库口令的配置：原文先正常插入（不阻塞输入），检测完成后**就地**变成占位符，右上角给一个「已脱敏 N 处」的轻提示，不打断你正在做的事。",
-    "placeholder": "演示动图待录制（E8）",
     "before": "粘贴时",
-    "after": "约 300ms 后",
-    "original": "DATABASE_URL=postgres://app:S3cr3t-Pa55@db.internal:5432/prod\nSLACK_TOKEN=xoxb-2847-9182\n联系电话：13800138000",
-    "redacted": "DATABASE_URL=postgres://app:<<数据库密码>>@db.internal:5432/prod\nSLACK_TOKEN=<<API密钥>>\n联系电话：<<手机号>>",
-    "placeholderNote": "占位符保持语义，所以替换后的配置发给 AI 依然能被理解。"
+    "cases": [
+      {
+        "label": "配置与密钥",
+        "timing": "约 300ms 后",
+        "original": "DATABASE_URL=postgres://app:S3cr3t-Pa55@db.internal:5432/prod\nSLACK_TOKEN=xoxb-2847-9182\n联系电话：13800138000",
+        "redacted": "DATABASE_URL=postgres://app:<<数据库密码>>@db.internal:5432/prod\nSLACK_TOKEN=<<API密钥>>\n联系电话：<<手机号>>",
+        "note": "占位符保持语义，所以替换后的配置发给 AI 依然能被理解。"
+      },
+      {
+        "label": "日常文本 · 通用文本档",
+        "timing": "约 300ms 后",
+        "original": "客户张伟的回访记录：手机 13812345678，身份证 11010519491231002X，银行卡 6222021202021234563，邮箱 zhang.wei@example.com，工单已同步。",
+        "redacted": "客户张伟的回访记录：手机 <<手机号>>，身份证 <<身份证号>>，银行卡 <<银行卡号>>，邮箱 zhang.wei@example.com，工单已同步。",
+        "note": "手机号/身份证/银行卡就地替换，邮箱按内置默认策略保留——按你的规则脱敏，不是无脑全替换。"
+      }
+    ]
   },
   "how": {
     "title": "工作原理",
@@ -176,7 +187,7 @@
     ],
     "verifyTitle": "你可以自己核验",
     "thirdPartyTitle": "第三方组件",
-    "thirdParty": "所用第三方组件及其许可见 THIRD-PARTY-NOTICES.txt（产物内与仓库各一份）。运行时下载的模型为 onnx-community/gliner_small-v2（Apache-2.0）。",
+    "thirdParty": "所用第三方组件及其许可见 THIRD-PARTY-NOTICES.txt（产物内与仓库各一份）。运行时下载的模型为 onnx-community/gliner_multi-v2.1（Apache-2.0）。",
     "contactTitle": "联系方式",
     "contact": "任何与隐私相关的问题，欢迎开 Issue。",
     "updated": "最后更新：2026-10-19"

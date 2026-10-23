@@ -101,6 +101,21 @@
   modelDownload/contentDetector 源码注释。
 - 门禁：typecheck / test（modelDownload 夹具数字随常量换签）/ 双目标构建。
 
+### ㉗ 落地页演示区改版（E8 占位收口）与 TODO 开源化精简
+
+- **demo 区**：删除「演示动图待录制（E8）」占位（演示 GIF 经作者裁决不做）；单一
+  对比块改为案例列表渲染，首期两组——配置与密钥（原案例原样）+ 日常文本·通用文本档
+  （手机号/身份证/银行卡就地替换、邮箱按内置默认保留；夹具改写自样例 B，占位符名与
+  引擎 `placeholder.ts` 双语名表逐一对齐）。AI 增强案例待 ㉖ 换模真机复验通过后补
+  （不演示未验证的输出）。
+- **换模文案补遗**：隐私页「第三方组件」双语行漏改的模型 ID（`gliner_small-v2` →
+  `gliner_multi-v2.1`）随本轮修正。
+- **TODO 开源化精简**（作者裁决）：TODO.md 只保留项目本身的状态/基线/回归命令/空待办
+  ——S1–S5 长叙事与 Firefox 缺陷细节回归 CHANGELOG 沿革；F8 打 tag / F7 互链 / 素材 /
+  push 等个人运维与换模复验清单迁出至作者仓外待办（`author-todo.md`，与 releasing.md
+  同族）。换模复验未结状态如实挂当前状态区。
+- 门禁：site:check / site:build / check:docs / typecheck / test 420·33。
+
 ## 2026-10-22
 
 ### ⑯ H-1 / H-2 与 TC-07-8/9 真机验收结案

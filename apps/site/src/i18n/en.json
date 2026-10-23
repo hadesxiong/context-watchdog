@@ -32,12 +32,23 @@
   "demo": {
     "title": "30 seconds",
     "caption": "Paste a config containing a database password: the original text is inserted normally first (input is never blocked), then replaced **in place** with placeholders once detection finishes, with a brief \"3 redactions\" toast in the corner. Nothing interrupts what you were doing.",
-    "placeholder": "Demo animation to be recorded (E8)",
     "before": "on paste",
-    "after": "~300 ms later",
-    "original": "DATABASE_URL=postgres://app:S3cr3t-Pa55@db.internal:5432/prod\nSLACK_TOKEN=xoxb-2847-9182\nCall me: 13800138000",
-    "redacted": "DATABASE_URL=postgres://app:<<DB_PASSWORD>>@db.internal:5432/prod\nSLACK_TOKEN=<<API_KEY>>\nCall me: <<PHONE>>",
-    "placeholderNote": "Placeholders stay semantic, so the redacted config is still understandable to the AI."
+    "cases": [
+      {
+        "label": "Config & secrets",
+        "timing": "~300 ms later",
+        "original": "DATABASE_URL=postgres://app:S3cr3t-Pa55@db.internal:5432/prod\nSLACK_TOKEN=xoxb-2847-9182\nCall me: 13800138000",
+        "redacted": "DATABASE_URL=postgres://app:<<DB_PASSWORD>>@db.internal:5432/prod\nSLACK_TOKEN=<<API_KEY>>\nCall me: <<PHONE>>",
+        "note": "Placeholders stay semantic, so the redacted config is still understandable to the AI."
+      },
+      {
+        "label": "Everyday text · General profile",
+        "timing": "~300 ms later",
+        "original": "Customer service notes: phone 13812345678, ID 11010519491231002X, card 6222021202021234563, email zhang.wei@example.com — ticket synced.",
+        "redacted": "Customer service notes: phone <<PHONE>>, ID <<ID_CARD>>, card <<CARD_NUMBER>>, email zhang.wei@example.com — ticket synced.",
+        "note": "Phone, ID and bank card are replaced in place; the email stays put per the built-in default — redacted by your rules, not blindly."
+      }
+    ]
   },
   "how": {
     "title": "How it works",
@@ -176,7 +187,7 @@
     ],
     "verifyTitle": "Verify it yourself",
     "thirdPartyTitle": "Third-party components",
-    "thirdParty": "The third-party components in use and their licences are listed in THIRD-PARTY-NOTICES.txt (both inside the bundle and in the repository). The model downloaded at runtime is onnx-community/gliner_small-v2 (Apache-2.0).",
+    "thirdParty": "The third-party components in use and their licences are listed in THIRD-PARTY-NOTICES.txt (both inside the bundle and in the repository). The model downloaded at runtime is onnx-community/gliner_multi-v2.1 (Apache-2.0).",
     "contactTitle": "Contact",
     "contact": "Open an issue for anything privacy-related.",
     "updated": "Last updated: 2026-10-19"

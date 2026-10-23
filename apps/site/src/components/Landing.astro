@@ -42,27 +42,32 @@ const d = dict(locale)
     <Rich text={d.demo.caption} class="pg-lead" />
 
     <div class="pg-demo">
-      <div class="pg-demo-body">
-        <div>
-          <div class="pg-demo-label">{d.demo.before}</div>
-          <div class="pg-demo-pane">{d.demo.original}</div>
-        </div>
-        <div>
-          <div class="pg-demo-label">{d.demo.after}</div>
-          <div class="pg-demo-pane">
-            {
-              // 把 <<占位符>> 单独染色，一眼看出「哪些部分被换掉了」。
-              // 用 split 保留分隔符，比 set:html 安全（无注入面）。
-              d.demo.redacted.split(/(<<[^>]+>>)/g).map((chunk) =>
-                chunk.startsWith('<<') ? <span class="pg-ph">{chunk}</span> : chunk
-              )
-            }
+      {
+        d.demo.cases.map((c) => (
+          <div class="pg-demo-case">
+            <div class="pg-demo-case-title">{c.label}</div>
+            <div class="pg-demo-body">
+              <div>
+                <div class="pg-demo-label">{d.demo.before}</div>
+                <div class="pg-demo-pane">{c.original}</div>
+              </div>
+              <div>
+                <div class="pg-demo-label">{c.timing}</div>
+                <div class="pg-demo-pane">
+                  {
+                    // 把 <<占位符>> 单独染色，一眼看出「哪些部分被换掉了」。
+                    // 用 split 保留分隔符，比 set:html 安全（无注入面）。
+                    c.redacted.split(/(<<[^>]+>>)/g).map((chunk) =>
+                      chunk.startsWith('<<') ? <span class="pg-ph">{chunk}</span> : chunk
+                    )
+                  }
+                </div>
+              </div>
+            </div>
+            <div class="pg-demo-note">{c.note}</div>
           </div>
-        </div>
-      </div>
-      <div class="pg-demo-placeholder">
-        {d.demo.placeholder} · {d.demo.placeholderNote}
-      </div>
+        ))
+      }
     </div>
   </div>
 </section>
