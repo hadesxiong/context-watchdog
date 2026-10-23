@@ -81,7 +81,7 @@
         "body": "Entities with no fixed shape — names, addresses — go to a local GLiNER model (WASM), which only looks at spans the regex tier left uncovered and never redoes its work; you must enable it explicitly and download the quantized model once (~183 MB). If the model is unavailable, the pipeline degrades to pure regex: no errors, no blocking."
       }
     ],
-    "note": "Note: the current model recognises English entities only — Chinese names and addresses are not AI-detected; fixed-shape Chinese targets (phone / ID / bank card / email) are fully covered by the regex tier. Multilingual support is on the roadmap."
+    "note": "Note: limited by model size, AI enhancement does not reliably recognise some general Chinese text; fixed-shape targets — phone, ID, bank card and email — remain handled by the always-on regex tier, and multilingual support is on the roadmap."
   },
   "privacy": {
     "title": "Verifiable privacy claims",
@@ -128,7 +128,7 @@
       },
       {
         "q": "Do I have to download the AI model?",
-        "a": "No. The regex tier is always on and covers secrets, connection strings, phone numbers, national IDs, bank cards, IBANs and other fixed-shape targets — zero latency, offline. The AI tier only adds shapeless entities like names and addresses. The quantized model is about 183 MB, downloaded once and then served from the browser cache; if it is unavailable the pipeline falls back to pure regex. The current model recognises English entities only — Chinese entities are handled by the regex tier, and multilingual support is on the roadmap."
+        "a": "No. The regex tier is always on and covers secrets, connection strings, phone numbers, national IDs, bank cards, IBANs and other fixed-shape targets — zero latency, offline. The AI tier only adds shapeless entities like names and addresses. The quantized model is about 183 MB, downloaded once and then served from the browser cache; if it is unavailable the pipeline falls back to pure regex. Limited by model size, AI enhancement does not reliably recognise some general Chinese text (fixed-shape targets remain handled by the always-on regex tier); multilingual support is on the roadmap."
       },
       {
         "q": "What if it flags something that is not sensitive?",

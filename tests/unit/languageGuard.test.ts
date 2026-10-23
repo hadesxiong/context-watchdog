@@ -1,6 +1,6 @@
 // 单元用例 - AI 档语言守卫（中文占优片段跳过 GLiNER）
 // 背景：gliner_small-v2 为纯英文词表，中文塌缩 [UNK] → 喂中文只产出幻觉
-//       （取证见 spec §13-3）；固定形状实体由正则全覆盖，跳过无检测损失。
+//       （取证见 spec §13-3）；固定形状实体由正则覆盖，跳过相对当前模型零损失。
 // 判定口径：CJK 字母数 ≥ 拉丁字母数 → 跳过（数字/符号不参与计数）
 import { describe, it, expect } from 'vitest'
 import { isCjkDominant } from '../../packages/extension/src/model/languageGuard'
