@@ -74,7 +74,3 @@ export const manualChannel = (locale: SiteLocale): ChannelLink & { key: 'manual'
 /** 页脚备案（为空则不渲染该行） */
 export const icp = config.icp
 export const police = config.police
-
-/** 收款码 data URI（支付宝 / 微信各一张；对应位为空则保留占位文案） */
-export const donateQrAlipay = config.donateQrAlipay
-export const donateQrWechat = config.donateQrWechat

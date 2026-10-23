@@ -214,6 +214,25 @@
   扩展侧 `about_model_value` 本就带「不作承诺/主要/只作补充」三重缓冲，维持不动。
 - 门禁：typecheck / 433 tests · 34 files / 双目标构建 / site:check·build / check:docs。
 
+### ㉜ 移除打赏与感谢墙 —— 配置链整体下线（作者裁决「用不到了」）
+
+- **范围**：落地页 §9 打赏区块（双收款码 + 说明）与 §7 感谢墙整体删除——感谢墙
+  名单（`data/supporters.json`）本就为空、区块从不渲染，属休眠配置。联动删除
+  `thanks`/`donate` 双语词条、`.pg-donate`/`.pg-qr`/`.pg-thanks*` 样式、
+  `Thanks.astro` 与 `data/supporters.{ts,json}`、单测 `siteSupporters.test.ts`
+  （8 例）；落地页头部注释 9 区块 → 7 区块，叙事链去掉「谁在支持 / 怎么支持」。
+- **配置链下线**：`DONATE_QR_ALIPAY`/`DONATE_QR_WECHAT`（.env.example）、
+  `site-links.mjs` 解析与 `siteLinks.test.ts` 断言、`astro.config.mjs` 构建期
+  data-URI 内联（`IMAGE_MIME`/`inlineDonateQr` 及 `fs`/`path` 导入）、`links.ts`
+  导出、`env.d.ts` 声明、`.gitignore` 的 `apps/site/donate-qr*`、CONTRIBUTING
+  部署身份表的 `DONATE_QR` 行。
+- **提法收口**：FAQ「以后会有付费功能吗」双语答句去掉打赏措辞（改「没有付费解锁
+  的计划」）；扩展 `about_price_value` 去「打赏解锁」（zh；en 本就无此措辞）、
+  CapabilityDialog 头注同步。全仓（除本文件史实）打赏/感谢/DONATE 触点清零。
+- **基线**：433/34 → **425 断言 / 33 文件**（-siteSupporters 8 例），check:docs
+  六处基线 + TODO 期望注释 + spec §12 清单同步；门禁 typecheck / 425 tests ·
+  33 files / 双目标构建 / probe:layout·widget / site:check·build / check:docs。
+
 ## 2026-10-22
 
 ### ⑯ H-1 / H-2 与 TC-07-8/9 真机验收结案

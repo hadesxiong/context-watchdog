@@ -113,12 +113,6 @@
       }
     ]
   },
-  "thanks": {
-    "title": "Thank-you wall",
-    "lead": "Donations buy time, not features. Every feature is free.",
-    "total": "{count} people",
-    "recent": "Showing the most recent {shown}"
-  },
   "faq": {
     "title": "FAQ",
     "items": [
@@ -152,16 +146,9 @@
       },
       {
         "q": "Will there be paid features later?",
-        "a": "No. Every feature is fully enabled right now: no paid tier, no quota, no accounts. Donations cover maintenance time and unlock nothing — the extension's own capability panel says the same thing."
+        "a": "No. Every feature is fully enabled right now: no paid tier, no quota, no accounts. and no plans to add paywalls — the extension’s own capability panel says the same thing."
       }
     ]
-  },
-  "donate": {
-    "title": "Support the project",
-    "body": "The project is free, serverless and account-free, so it earns nothing to cover the time it takes to maintain it, answer issues and ship releases. Donating unlocks nothing — there is nothing locked; it is a thank-you for time rather than a purchase, and the supporter list and payment code are maintained locally. If it ever saved you from one incident, or spared you an hour of sleep, you can buy me a coffee.",
-    "alipay": "Alipay",
-    "wechat": "WeChat",
-    "qrAlt": "Donation payment QR code"
   },
   "footer": {
     "repo": "Source repository",

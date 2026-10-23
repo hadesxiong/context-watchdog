@@ -553,56 +553,6 @@ a.pg-channel:hover {
   text-align: justify;
 }
 
-/* ---------- 感谢墙 ---------- */
-
-.pg-thanks-spotlight {
-  display: grid;
-  gap: 1rem;
-  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
-  margin-top: 1.75rem;
-}
-
-.pg-thanks-spotlight .pg-supporter-name {
-  font-size: 1.25rem;
-}
-
-.pg-thanks-list {
-  margin-top: 1.75rem;
-  display: grid;
-  gap: 0.5rem;
-}
-
-.pg-thanks-grid {
-  margin-top: 1.75rem;
-  display: grid;
-  gap: 0.5rem;
-  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
-}
-
-.pg-supporter {
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--card);
-  padding: 0.6rem 0.8rem;
-}
-
-.pg-supporter-name {
-  font-weight: 550;
-  font-size: 0.9375rem;
-}
-
-.pg-supporter-note {
-  font-size: 0.8125rem;
-  color: var(--muted-foreground);
-  margin-top: 0.1rem;
-}
-
-.pg-thanks-total {
-  margin-top: 1rem;
-  font-size: 0.875rem;
-  color: var(--muted-foreground);
-}
-
 /* ---------- FAQ ---------- */
 
 .pg-faq {
@@ -707,76 +657,7 @@ a.pg-channel:hover {
   color: var(--muted-foreground);
 }
 
-/* ---------- 打赏 + 页脚 ---------- */
-
-/* 打赏：单卡双栏——左侧并排两张收款码（支付宝 / 微信各一位），右侧「不解锁任何内容」
-   的说明。窄到放不下双栏时 flex-wrap 自然换行成上下两块。 */
-.pg-donate {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1.25rem 2.5rem;
-  margin-top: 1.75rem;
-  align-items: center;
-}
-
-/* 左栏：两张收款码并排，各自带小字标注 */
-.pg-donate-codes {
-  display: flex;
-  flex: none;
-  gap: 1rem;
-}
-
-.pg-qr {
-  margin: 0;
-  display: grid;
-  gap: 0.45rem;
-  justify-items: center;
-}
-
-/* 占位（未配置）：与真实收款码同尺寸的虚线框，框内直接标注渠道名（不另设底部标注） */
-.pg-qr-missing {
-  width: 9.5rem;
-  height: 9.5rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 0.6rem;
-  border: 1px dashed var(--border);
-  border-radius: calc(var(--radius) + 2px);
-  color: var(--muted-foreground);
-  font-size: 0.875rem;
-  text-align: center;
-}
-
-/* 真实收款码：固定白底。二维码靠明暗对比被扫码器识别，深色主题下若透明会扫不出来 */
-.pg-qr-img {
-  display: block;
-  width: 9.5rem;
-  height: 9.5rem;
-  padding: 0.5rem;
-  background: #fff;
-  border: 1px solid var(--border);
-  border-radius: calc(var(--radius) + 2px);
-}
-
-.pg-qr-label {
-  font-size: 0.8125rem;
-  color: var(--muted-foreground);
-}
-
-/* 右栏：说明文字占满余宽，首段不吃卡片通用的「标题→内容」间距（卡内没有标题行） */
-.pg-donate-body {
-  flex: 1;
-  min-width: 15rem;
-}
-
-.pg-donate-body p {
-  margin: 0;
-  font-size: 0.9375rem;
-  color: var(--muted-foreground);
-  /* 两端对齐：与其它卡片描述同一口径 */
-  text-align: justify;
-}
+/* ---------- 页脚 ---------- */
 
 .pg-footer {
   border-top: 1px solid var(--border);

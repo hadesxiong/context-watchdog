@@ -1,16 +1,15 @@
 ---
-// 单页 9 区块（E3）
+// 单页 7 区块（E3）
 //
 // 顺序即叙事：是什么 → 看一眼 → 怎么做到的 → 用什么识别 →
-// 凭什么信 → 谁在支持 → 还有疑问 → 怎么支持。
+// 凭什么信 → 还有疑问。
 //
 // 两个语言页面共用这一个组件，避免 / 与 /en/ 两处各写一遍结构（结构一旦
 // 分叉，两边迟早会长得不一样）。
 import { dict, type SiteLocale } from '@site/i18n'
-import { repoUrlFor, donateQrAlipay, donateQrWechat } from '@site/data/links'
+import { repoUrlFor } from '@site/data/links'
 import Rich from '@site/components/Rich.astro'
 import Download from '@site/components/Download.astro'
-import Thanks from '@site/components/Thanks.astro'
 
 interface Props {
   locale: SiteLocale
@@ -135,10 +134,7 @@ const d = dict(locale)
   </div>
 </section>
 
-<!-- 7. 感谢墙（0 人时整个区块不渲染） -->
-<Thanks locale={locale} />
-
-<!-- 8. FAQ -->
+<!-- 7. FAQ -->
 <section class="pg-section" id="faq">
   <div class="pg-shell">
     <h2 class="pg-section-title">{d.faq.title}</h2>
@@ -156,41 +152,3 @@ const d = dict(locale)
   </div>
 </section>
 
-<!-- 9. 打赏：单卡——左两张收款码（支付宝 / 微信），右整段说明（含免费声明与「不解锁任何内容」） -->
-<section class="pg-section" id="donate">
-  <div class="pg-shell">
-    <h2 class="pg-section-title">{d.donate.title}</h2>
-
-    <div class="pg-card pg-donate">
-      <div class="pg-donate-codes">
-        {
-          [
-            { label: d.donate.alipay, src: donateQrAlipay },
-            { label: d.donate.wechat, src: donateQrWechat }
-          ].map((code) => (
-            <figure class="pg-qr">
-              {code.src ? (
-                <>
-                  <img
-                    class="pg-qr-img"
-                    src={code.src}
-                    alt={`${code.label} ${d.donate.qrAlt}`}
-                    width="180"
-                    height="180"
-                  />
-                  <figcaption class="pg-qr-label">{code.label}</figcaption>
-                </>
-              ) : (
-                <div class="pg-qr-missing">{code.label}</div>
-              )}
-            </figure>
-          ))
-        }
-      </div>
-
-      <div class="pg-donate-body">
-        <p>{d.donate.body}</p>
-      </div>
-    </div>
-  </div>
-</section>

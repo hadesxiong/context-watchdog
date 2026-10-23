@@ -18,7 +18,7 @@ Two ways to use it:
 npm install
 npm run build           # Chrome bundle → dist/        (load via chrome://extensions)
 npm run build:firefox   # Firefox bundle → dist-firefox/ (about:debugging → This Firefox → Load Temporary Add-on → pick dist-firefox/manifest.json)
-npm run test            # run the suite (433 assertions)
+npm run test            # run the suite (425 assertions)
 ```
 
 ## Architecture

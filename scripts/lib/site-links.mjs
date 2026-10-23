@@ -111,9 +111,7 @@ export function resolveSiteLinks(env, pkg = {}) {
     gitee: parseHttpsBase(read(env, 'GITEE_URL'), 'GITEE_URL', { allowPath: true }),
     channels,
     icp: read(env, 'ICP_BEIAN'),
-    police: read(env, 'POLICE_BEIAN'),
-    donateQrAlipay: read(env, 'DONATE_QR_ALIPAY'),
-    donateQrWechat: read(env, 'DONATE_QR_WECHAT')
+    police: read(env, 'POLICE_BEIAN')
   }
 }
 

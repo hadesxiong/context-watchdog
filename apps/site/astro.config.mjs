@@ -7,15 +7,14 @@
 //   3. 不引 Tailwind / 图标库 / 动效库 / web font：站点样式直接用 token 变量写普通 CSS，
 //      图标用内联 SVG，字体用系统栈（顺带避开国内 web font 加载问题）
 //
-// 部署身份（域名 / 商店链接 / 备案号 / 收款码）全部来自环境变量，见 .env.example。
-// 它们不进仓库，是因为源码公开：fork 之后不该静默继承作者的域名、商店页或收款码。
+// 部署身份（域名 / 商店链接 / 备案号）全部来自环境变量，见 .env.example。
+// 它们不进仓库，是因为源码公开：fork 之后不该静默继承作者的域名或商店页。
 // 解析与校验在 scripts/lib/site-links.mjs（纯函数，有单测）。
 //
 // 注意：Astro 的 defineConfig 是恒等函数，**不支持回调式配置**（那是 Vite 的能力）。
 // 所以 env 在模块顶层解析，mode 从命令行推断。
 import { defineConfig } from 'astro/config'
-import { existsSync, readFileSync } from 'node:fs'
-import { extname, resolve } from 'node:path'
+import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { loadEnv } from 'vite'
 import { channelStates, resolveSiteLinks } from '../../scripts/lib/site-links.mjs'
@@ -72,29 +71,6 @@ if (pendingChannels.length > 0) {
   console.warn(`[site] 未配置的渠道将显示「即将上架」：${pendingChannels.join(', ')}`)
 }
 
-// 收款码：构建期内联成 data URI。
-// 不进仓库（个人收款信息，fork 继承会把别人的访客导向作者的账户），但产物里必须
-// 自带 —— 站点「零外部请求」的取向不允许为了一张图去拉第三方域名。
-const IMAGE_MIME = {
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.webp': 'image/webp',
-  '.gif': 'image/gif',
-  '.svg': 'image/svg+xml'
-}
-
-const inlineDonateQr = (value, label) => {
-  if (!value) return ''
-  const file = resolve(siteRoot, value)
-  if (!existsSync(file)) throw new Error(`[site] ${label} 指向的文件不存在：${file}`)
-  const mime = IMAGE_MIME[extname(file).toLowerCase()]
-  if (!mime) {
-    throw new Error(`[site] ${label} 只支持 ${Object.keys(IMAGE_MIME).join(' / ')}：${file}`)
-  }
-  return `data:${mime};base64,${readFileSync(file).toString('base64')}`
-}
-
 export default defineConfig({
   output: 'static',
   // 目录式输出：/en/ 而不是 /en.html（静态托管时路径更干净）
@@ -105,11 +81,7 @@ export default defineConfig({
   vite: {
     define: {
       __EXTENSION_VERSION__: JSON.stringify(extensionVersion),
-      __SITE_LINKS__: JSON.stringify({
-        ...links,
-        donateQrAlipay: inlineDonateQr(links.donateQrAlipay, 'DONATE_QR_ALIPAY'),
-        donateQrWechat: inlineDonateQr(links.donateQrWechat, 'DONATE_QR_WECHAT')
-      })
+      __SITE_LINKS__: JSON.stringify(links)
     },
     resolve: {
       alias: {
