@@ -3,15 +3,16 @@
 > 当前架构：`README.md`（快速开始）+ `docs/spec.md`（技术说明）。
 > 手动验收判据：`docs/test-cases.md`；实现轮次与结案沿革：`CHANGELOG.md`。
 
-## 当前状态（2026-10-22）
+## 当前状态（2026-10-23）
 
-- **1.0.0 收尾进行中**：真机验收（H-1 输入区去自动检测、H-2 落地页安装区改版、
-  TC-07-8/9 站点挂件与粘贴 AI 升级）已全部通过并结案（见 `CHANGELOG.md` 2026-10-22）；
-  两个 Firefox 真机缺陷**已修待真机验收**（方案 A 诚实降级：挂件文案按实际形态如实
-  显示 + FF 状态查询走 `sidebarAction.isOpen` ∪ 弹窗自追踪，见 `CHANGELOG.md` ⑱；
-  判据 = TC-07-8 步骤 6/7 的 **Firefox 分支**）；
-  文档整理完成（内部工作文档移出仓库、4 个子 README 并入根 README/CONTRIBUTING/spec，
-  发布类内容后来随作者个人 runbook 一并移出）。
+- **1.0.0 收尾完成、真机验收全部结案**：H-1 输入区去自动检测、H-2 落地页安装区改版、
+  TC-07-8/9 站点挂件与粘贴 AI 升级（2026-10-22 结案，见 `CHANGELOG.md` ⑯）；
+  两个 Firefox 真机缺陷（方案 A 诚实降级：挂件文案按实际形态如实显示 + FF 状态查询走
+  `sidebarAction.isOpen` ∪ 弹窗自追踪，`CHANGELOG.md` ⑱；判据 = TC-07-8 步骤 6/7 的
+  **Firefox 分支**）与 TC-02 卡号夹具 Luhn 复跑于 2026-10-23 真机复验通过、结案；
+  Firefox manifest `default_position` warning 已修（见 `git log`）。
+  文档整理完成（内部工作文档移出仓库、子 README 并入根文档、发布类内容随作者个人
+  runbook 移出、`test-cases.md` 精简为 A 类并全历史清除，见 `CHANGELOG.md` ㉔）。
   **剩三件只能由作者做的事**：
   1. **F8 打 tag**（`1.0.0-ext` / `1.0.0-site`）——`npm run check:versions -- --release` 会先列出还差什么
   2. **F7 互链**：把落地页域名填进 `apps/site/.env` 的 `SITE_URL`，渠道上架后填对应的 `*_URL`（模板见 `apps/site/.env.example`）

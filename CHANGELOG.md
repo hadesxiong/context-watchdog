@@ -44,6 +44,24 @@
   CONTRIBUTING（索引行 + 联动清单）、TODO（状态 + 素材挂账）、links.ts 注释、
   pack-release 提示语；docs/ 收敛为 4 份（spec / test-cases / 设计线两份）。
 
+### ㉔ 真机验收全结案；test-cases 精简为 A 类并全历史清除（作者裁决）
+
+- **验收结案**：Firefox 两缺陷（⑱，判据 = TC-07-8 步骤 6/7 的 Firefox 分支）与
+  TC-02 卡号夹具 Luhn 复跑（⑲）于 2026-10-23 真机复验通过——1.0.0 全部真机验收清零，
+  TODO 状态同步为「收尾完成」。
+- **test-cases.md 内容分层（只留 A 类）**：保留环境准备、样例夹具与复制注意、
+  真机判据主干、附录 A 自动化基线；移出 B 历史叙述（逐轮验收时间戳与根因沿革指针）、
+  C 像素规格（挂件尺寸/字号/间距数值——已固化者以 `probe:widget` 为准；TC-08 整节
+  纯目视细则并为探针指针）、D 排障与防假通过知识（节流盲区复核、复制排障——与顶部
+  复制注意重复者消重）。454 → 425 行，TC 编号骨架全保留，入站引用（spec §13-4/§4、
+  `modelDownload`/`entityShape` 注释、TODO/CHANGELOG 存档提及）逐一核对有效；
+  TC-08-1~5 仅存档提及，按㉑先例不回改。移出内容由作者仓外自存。
+- **全历史清除（方案乙）**：`filter-branch` 将 `docs/test-cases.md` 自 144 个提交的
+  历史中抹除、仅本轮精简版所在提交持有 → 需 force push（与 ㉓ 同类操作；
+  GitHub 端旧提交按 SHA 的短期残留同既往）。
+- 门禁复验：check:docs（基线模式仍命中附录 A）/ typecheck / test 420·33 /
+  probe:layout / probe:widget。
+
 ## 2026-10-22
 
 ### ⑯ H-1 / H-2 与 TC-07-8/9 真机验收结案
