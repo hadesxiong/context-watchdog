@@ -52,11 +52,13 @@ export const MODEL_CACHE_URL = 'https://contextwatchdog.invalid/models/gliner_mu
 export const MODEL_PARTIAL_URL = `${MODEL_CACHE_URL}?partial`
 // 旧版缓存 key（带 ?v= 字节数）：命中时一次性搬迁，避免升级用户重下全量模型
 export const LEGACY_MODEL_CACHE_URL = `${MODEL_CACHE_URL}?v=${MODEL_FILE_BYTES}`
-// 前代模型（gliner_small-v2，183,403,734 字节）的完整缓存 key：2026-10-23 换模后成为
-// 孤儿条目。其字节属于另一个模型，不能搬迁复用（搬进新 key 也会被探测按总长判 stale），
-// 由 migrateLegacy 一次性清扫，避免占着 ~183MB 缓存配额
+// 前代模型（gliner_small-v2）的两种历史 key：换模（2026-10-23）后均为孤儿条目。
+// 其字节属于另一个模型，不能搬迁复用（搬进新 key 也会被探测按总长判 stale），
+// 由 migrateLegacy 一次性清扫，避免占着 ~183MB 缓存配额。
+// `?v=` 版是探测机制之前的旧 key 格式（当时的字节数，历史事实故写死）
 export const PREDECESSOR_MODEL_CACHE_URL =
   'https://contextwatchdog.invalid/models/gliner_small-v2/model_quantized.onnx'
+export const PREDECESSOR_LEGACY_MODEL_CACHE_URL = `${PREDECESSOR_MODEL_CACHE_URL}?v=183403734`
 
 export const MAX_ATTEMPTS = 5
 // 单次尝试的停滞看门狗：这么久没收到任何字节就中断本次连接，下次从断点续传
@@ -332,6 +334,7 @@ export const createBrowserModelCache = (): ModelCache | null => {
         // 清扫失败不阻塞主流程（孤儿条目只是占空间，不影响正确性）
         try {
           await cache.delete(PREDECESSOR_MODEL_CACHE_URL)
+          await cache.delete(PREDECESSOR_LEGACY_MODEL_CACHE_URL)
         } catch {
           // 忽略
         }
@@ -530,7 +533,7 @@ export const probeRemoteVersion = async (options: ProbeOptions = {}): Promise<Re
       // ⚠️ 总长只信两处：206 的 Content-Range（安全列表外，浏览器里可能读不到）或
       // 200（源站忽略 Range）的 Content-Length。206 的 Content-Length 是本次响应体长
       // （Range: 0-0 → 1 字节），读不到 Content-Range 时它绝不能当总长——曾导致
-      // 183MB ≠ 1 误判 'stale' → 清缓存重下整包（见 test-cases TC-06-9）
+      // 全量（349MB）≠ 1 误判 'stale' → 清缓存重下整包（见 test-cases TC-06-9）
       const total = range && range.total > 0 ? range.total : response.status === 200 ? contentLength : 0
       const etag = response.headers.get('etag')
       // Last-Modified 在 CORS 安全列表内恒可见 → ETag 被隐藏时的替代比对信号
@@ -600,7 +603,7 @@ export const downloadModel = async (options: DownloadModelOptions = {}): Promise
   const lock = options.lock !== undefined ? options.lock : createModelLock(createChromeStorageCompat())
   const probe = options.probe ?? probeRemoteVersion
 
-  // 0) 旧版缓存 key 一次性迁移（升级用户不重下 183MB）
+  // 0) 旧版缓存 key 一次性搬迁 + 前代模型孤儿条目清扫（换模升级用户不重下也不残留）
   if (await cache?.migrateLegacy?.()) {
     console.log('[ContextWatchdog] 旧版缓存已迁移，无需重新下载')
   }
@@ -873,7 +876,7 @@ export const downloadModel = async (options: DownloadModelOptions = {}): Promise
           lastModified: resumeLastModified
         })
         await partial?.clear()
-        // 完成心跳：等待方看到 100% 才会去读缓存，避免它每轮都拉 183MB
+        // 完成心跳：等待方看到 100% 才会去读缓存，避免它每轮都拉全量模型
         await lock?.heartbeat({ percent: 100, received: buffer.byteLength, total: buffer.byteLength })
         onProgress?.(100, buffer.byteLength, buffer.byteLength)
         return buffer
