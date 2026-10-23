@@ -18,14 +18,14 @@
   "engine_regex_name": "正则规则",
   "engine_regex_desc": "密钥、连接串、PII（手机/身份证/银行卡）等模式匹配 · 基础引擎，始终启用",
   "engine_ai_name": "AI 模型",
-  "engine_ai_desc": "姓名、地址等无固定格式实体，自动叠加场景识别（需下载约 580MB 模型，仅此一次）",
+  "engine_ai_desc": "姓名、地址等无固定格式实体，自动叠加场景识别（需下载约 183MB 模型，仅此一次）",
   "engine_load_failed": "模型加载失败；基础检测不受影响",
   "engine_caption_waiting": "另一窗口下载中...",
   "engine_caption_downloading": "下载模型中...",
 
   "ner_downloading_other": "另一窗口下载中，等待同步...",
   "ner_downloading": "正在下载NER模型...",
-  "ner_first_download": "首次使用需要下载模型（约 580MB，半精度版），请稍候",
+  "ner_first_download": "首次使用需要下载模型（约 183MB，量化版），请稍候",
   "ner_downloading_progress": "下载中...",
   "ner_timeout": "NER模型加载超时",
   "ner_failed": "NER模型加载失败",
@@ -34,7 +34,7 @@
   "ner_ready_desc": "增强检测已启用",
 
   "onboarding_title": "启用 AI 增强检测？",
-  "onboarding_body": "AI 增强可识别姓名、地址等无固定格式内容，让检测更全面。开启后需下载约 580MB 半精度模型（仅此一次，本地处理，不上传任何数据）。不开启也可正常使用正则基础检测（密钥、手机号、身份证等）。",
+  "onboarding_body": "AI 增强可识别姓名、地址等无固定格式内容，让检测更全面。开启后需下载约 183MB 量化模型（仅此一次，本地处理，不上传任何数据）。不开启也可正常使用正则基础检测（密钥、手机号、身份证等）。",
   "onboarding_later": "暂不",
   "onboarding_enable": "开启 AI 增强",
 

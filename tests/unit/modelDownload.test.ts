@@ -6,6 +6,11 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import {
   MODEL_SOURCES,
   MODEL_FILE_BYTES,
+  MODEL_CACHE_URL,
+  MODEL_PARTIAL_URL,
+  LEGACY_MODEL_CACHE_URL,
+  PREDECESSOR_MULTI_FP16_MODEL_CACHE_URL,
+  PREDECESSOR_MULTI_INT8_MODEL_CACHE_URL,
   MAX_ATTEMPTS,
   RETRY_BASE_DELAY_MS,
   RETRY_MAX_DELAY_MS,
@@ -258,7 +263,7 @@ describe('纯函数', () => {
     const cached = {
       etag: null,
       lastModified: 'Wed, 11 Dec 2024 14:46:20 GMT',
-      total: 579717643,
+      total: 183403734,
       source: 'modelscope.cn'
     }
     // 探测侧 total=0（206 读不到 Content-Range）也必须能判 current，不依赖总长
@@ -299,8 +304,8 @@ describe('纯函数', () => {
 
   it('compareCachedVersion：跨源时 ETag 不可比，退回比总长（防误判清缓存）', () => {
     // HF 下载（etag hf-*）+ ModelScope 探测（etag ms-*）：同文件不同源 ETag 必然不同 → 不能判 stale
-    const cached = { etag: '"hf-abc"', total: 579717643, source: 'huggingface.co' }
-    const remoteMs: RemoteVersion = { etag: '"ms-xyz"', total: 579717643, source: 'modelscope.cn' }
+    const cached = { etag: '"hf-abc"', total: 183403734, source: 'huggingface.co' }
+    const remoteMs: RemoteVersion = { etag: '"ms-xyz"', total: 183403734, source: 'modelscope.cn' }
     expect(compareCachedVersion(cached, remoteMs)).toBe('current')
 
     // 跨源且总长也变了 → 真过期
@@ -312,8 +317,8 @@ describe('纯函数', () => {
     expect(compareCachedVersion({ etag: '"hf"', total: 0, source: 'huggingface.co' }, unknownTotal)).toBe('unknown')
 
     // 同源仍然比 ETag（总长相同但 ETag 变 → stale）
-    const sameSource: RemoteVersion = { etag: '"ms-new"', total: 579717643, source: 'modelscope.cn' }
-    expect(compareCachedVersion({ etag: '"ms-old"', total: 579717643, source: 'modelscope.cn' }, sameSource)).toBe('stale')
+    const sameSource: RemoteVersion = { etag: '"ms-new"', total: 183403734, source: 'modelscope.cn' }
+    expect(compareCachedVersion({ etag: '"ms-old"', total: 183403734, source: 'modelscope.cn' }, sameSource)).toBe('stale')
 
     // 旧缓存条目无 source（升级前写入）：按同源处理，保持旧比对行为
     expect(compareCachedVersion({ etag: '"a"', total: 10 }, { etag: '"b"', total: 10, source: 'x' })).toBe('stale')
@@ -345,7 +350,7 @@ describe('版本探测（1 字节）', () => {
       makeResponse(
         206,
         {
-          'content-range': 'bytes 0-0/579717643',
+          'content-range': 'bytes 0-0/183403734',
           etag: '"abc"',
           'last-modified': 'Wed, 11 Dec 2024 14:46:20 GMT'
         },
@@ -356,7 +361,7 @@ describe('版本探测（1 字节）', () => {
     expect(version).toEqual({
       etag: '"abc"',
       lastModified: 'Wed, 11 Dec 2024 14:46:20 GMT',
-      total: 579717643,
+      total: 183403734,
       source: new URL(MODEL_SOURCES[0]).host
     })
     expect(calls[0].headers.range).toBe('bytes=0-0')
@@ -1058,5 +1063,68 @@ describe('createBrowserModelCache 期望字节数守卫', () => {
     const hit = await cache!.match()
     expect(hit?.total).toBe(MODEL_FILE_BYTES)
     expect(hit?.etag).toBe('"v1"')
+  })
+})
+
+// 换模清扫不变式（2026-10-23 回退 small-v2 后的关键陷阱）：
+// MODEL_CACHE_URL 已回到 small-v2——清扫清单里若残留同名 key，每次启动都会
+// 自删现役缓存 → 用户每次打开都重下全量模型。
+describe('migrateLegacy 换模清扫', () => {
+  const SWEEP_KEYS = [
+    PREDECESSOR_MULTI_FP16_MODEL_CACHE_URL,
+    `${PREDECESSOR_MULTI_FP16_MODEL_CACHE_URL}?partial`,
+    PREDECESSOR_MULTI_INT8_MODEL_CACHE_URL,
+    `${PREDECESSOR_MULTI_INT8_MODEL_CACHE_URL}?partial`
+  ]
+  const LIVE_KEYS = [MODEL_CACHE_URL, MODEL_PARTIAL_URL, LEGACY_MODEL_CACHE_URL]
+
+  // 按 key 记账的最小 caches 伪实现（migrateLegacy 只需 match/put/delete）
+  const installKeyedCaches = (seed: string[]) => {
+    const entries = new Map<string, number>()
+    for (const k of seed) entries.set(k, 8) // 字节数不参与清扫逻辑，给最小值省内存
+    vi.stubGlobal('caches', {
+      open: async () => ({
+        match: async (url: string) =>
+          entries.has(String(url))
+            ? ({
+                ok: true,
+                arrayBuffer: async () => new ArrayBuffer(entries.get(String(url))!),
+                headers: { get: () => null }
+              } as unknown as Response)
+            : undefined,
+        put: async (url: string, response: Response) => {
+          entries.set(String(url), (await response.arrayBuffer()).byteLength)
+        },
+        delete: async (url: string) => entries.delete(String(url))
+      })
+    })
+    return { has: (k: string) => entries.has(k) }
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('清扫 multi 系孤儿条目（含各自 ?partial），现役 key 毫发无损', async () => {
+    const store = installKeyedCaches([MODEL_CACHE_URL, ...SWEEP_KEYS])
+    const cache = createBrowserModelCache()
+    expect(cache).not.toBeNull()
+    await cache!.migrateLegacy?.()
+    // 孤儿全清
+    for (const key of SWEEP_KEYS) expect(store.has(key)).toBe(false)
+    // 现役缓存（= 回退后的 small-v2 key）必须还在，否则每次启动重下 183MB
+    expect(store.has(MODEL_CACHE_URL)).toBe(true)
+  })
+
+  it('清扫常量与现役 key 零交集（常量级不变式，防清单误带回当前 key）', () => {
+    for (const sweep of [PREDECESSOR_MULTI_FP16_MODEL_CACHE_URL, PREDECESSOR_MULTI_INT8_MODEL_CACHE_URL]) {
+      for (const live of LIVE_KEYS) {
+        expect(sweep).not.toBe(live)
+        expect(`${sweep}?partial`).not.toBe(live)
+      }
+      expect(sweep).toContain('/gliner_multi-v2.1/')
+    }
+    // 两个清扫目标互不相同（避免重复删除掩盖笔误）
+    expect(PREDECESSOR_MULTI_FP16_MODEL_CACHE_URL).not.toBe(PREDECESSOR_MULTI_INT8_MODEL_CACHE_URL)
   })
 })

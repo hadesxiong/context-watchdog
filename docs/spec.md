@@ -14,7 +14,7 @@
 |------|------|------|
 | 侧栏手动脱敏 | ✅ | 粘贴/输入 → 点「检测」→ 检出列表 → 单条/一键脱敏 → 复制 |
 | 正则基础引擎 | ✅ 恒开 | 14 类检测（密钥 5 + PII 7 + 高熵 + 自定义），SW 亦可用 |
-| AI 增强（GLiNER） | ✅ 可选 | 级联触发，仅处理正则未覆盖片段；首次需下载 ~580MB 模型（ort wasm ~11MB 随包本地加载，推理本身离线可用） |
+| AI 增强（GLiNER） | ✅ 可选 | 级联触发，仅处理正则未覆盖片段；中文占优片段整段跳过（模型对中文全盲，见 §13-3）；首次需下载 ~183MB 模型（ort wasm ~11MB 随包本地加载，推理本身离线可用） |
 | 检测档案 | ✅ | 内置 5 档（universal / text / code / us / eu）+ 用户自定义（类别/灵敏度/分类型策略/白名单/GLiNER 标签） |
 | 自定义正则规则 | ✅ | ReDoS 双层防护；档案 JSON 剪贴板导入导出 |
 | 粘贴自动拦截 | ✅ 可选 | 逐站授权，粘贴时自动就地替换（正则档；input/textarea 与 contenteditable 均支持，命中显示「已脱敏 N 处」提示） |
@@ -67,11 +67,15 @@
        结果仅作 GLiNER 提示词，不影响正则检出；AI 关闭时整步省去）
    3b. buildUncoveredSegments：只取正则未覆盖片段（≤20 段、总计 ≤8000 字符、
        去空白后 ≥8 字符），偏移映射回全文
-   3c. GLiNER 实体分类 → 形状门禁 isPlausibleEntity（检出必须形似标签：单字姓名、
+   3c. 语言守卫（在模型后端入口执行，`extension/model/languageGuard.ts`）：
+       中文占优片段（CJK 字母数 ≥ 拉丁字母数）整段跳过 AI 直接返回空——当前模型
+       对中文全盲（§13-3），喂中文只会产出幻觉；中文退化为纯正则（固定形状目标
+       正则全覆盖）。混合片段（如「请帮我联系 John Smith」）保拉丁实体继续送检
+   3d. GLiNER 实体分类 → 形状门禁 isPlausibleEntity（检出必须形似标签：单字姓名、
        无@邮箱、短地址等幻觉直接丢弃并记 Dropped 日志）→ 阈值分档：
        >0.65 sensitive / <0.35 not / 其间 uncertain
-   3d. sensitive 经 validateSensitiveEntity 正则验证后采纳（已覆盖区跳过）
-   3e. uncertain 回流正则复检；复检不中的以 ≤0.5 低置信保留（默认档案
+   3e. sensitive 经 validateSensitiveEntity 正则验证后采纳（已覆盖区跳过）
+   3f. uncertain 回流正则复检；复检不中的以 ≤0.5 低置信保留（默认档案
        tierLowConfidence=true 下仅提示不替换）
 4. 后处理链   位置去重 → 按起点排序 → 重叠归并仲裁 → 值传播 → 白名单过滤
                → 按值聚合 → 占位符按值共享
@@ -156,9 +160,11 @@ npm、GitLab、SendGrid、Postman、Shopify、DigitalOcean、Mailgun、Twilio）
 
 ## 7. AI 增强：模型与下载机制
 
-**模型**：`onnx-community/gliner_multi-v2.1` 的 `onnx/model_fp16.onnx`（FP16 半精度，
-579,717,643 字节 ≈580MB；同仓 int8/uint8 量化版实测为坏文件、禁用，取证见 §13-3；
-2026-10-23 换模修复中文召回，根因亦见 §13-3）；运行栈 `gliner` + `onnxruntime-web`（WASM，单线程，
+**模型**：`onnx-community/gliner_small-v2` 的 `onnx/model_quantized.onnx`（int8 量化，
+183,403,734 字节 ≈183MB）。2026-10-23 曾换多语言 `gliner_multi-v2.1` 修复中文召回，
+其模型能力已验证优秀，但**无浏览器级可用字节**（int8/uint8 量化导出崩坏、fp16/q4f16
+WASM 内存不可行，完整取证见 §13-3），当日回退；中文 AI 支持转 1.1 路线，期间由
+`languageGuard.ts` 在级联入口跳过中文占优片段。运行栈 `gliner` + `onnxruntime-web`（WASM，单线程，
 CSP 需 `wasm-unsafe-eval`）+ `@xenova/transformers`（tokenizer）。场景识别为启发式
 （`sceneDetector.ts`），不占模型。
 
@@ -179,9 +185,9 @@ vite 别名把 gliner 静态引用的 `onnxruntime-web/webgpu|webgl` 打桩（EP
 | 停滞看门狗 | 30s 无字节中断（下次从断点续）；进度心跳续期，杜绝无 Content-Length 的假超时 |
 | 完整性校验 | 字节数不符不入缓存，绝不拼脏数据；缓存层再按**期望字节数**（`MODEL_FILE_BYTES`）复核——`match()` 字节数不符即删除自愈（本地直判、不依赖版本探测，节流/离线时同样生效）、`put()` 拒写抛错让下载流程换源重试。防「完整下完的错误文件」自洽常驻（2026-10-23 实机回归：上游 URL 漂移致前代模型存进新 key、探测两侧同值永远 current） |
 | 多窗口去重 | storage 单键锁 `contextwatchdog.modelLock`（owner + 30s 心跳 TTL + 进度转发）；抢锁方等待显示「另一窗口下载中」，等待 ≤~5 分钟超时后自行下载；接管前再查缓存 |
-| 缓存失效 | 缓存 key 固定（不带版本号）；命中后 1 字节探测（`Range: bytes=0-0`，5s 超时）**三级比对 ETag → Last-Modified → 总长**；⚠️ 浏览器跨源只读得到 CORS 安全列表头（ModelScope CDN 无 `Access-Control-Expose-Headers` → ETag/Content-Range 读不到，206 的 `content-length=1` 绝不当总长，否则全量 ≠ 1 误判 stale → 每个探测窗重下全量模型，TC-06-9 回归）；离线/信息不可知时优先沿用缓存；旧 `?v=` key 一次性搬迁（字节数非本模不搬）；换模后前代模型孤儿条目一次性清扫（`PREDECESSOR_MODEL_CACHE_URL` + `PREDECESSOR_LEGACY_MODEL_CACHE_URL`；FP16 换字节后再加 `PREDECESSOR_MULTI_INT8_MODEL_CACHE_URL`（含其 `?partial`），坏的 int8 条目连带未完成部分一并让出配额） |
+| 缓存失效 | 缓存 key 固定（不带版本号）；命中后 1 字节探测（`Range: bytes=0-0`，5s 超时）**三级比对 ETag → Last-Modified → 总长**；⚠️ 浏览器跨源只读得到 CORS 安全列表头（ModelScope CDN 无 `Access-Control-Expose-Headers` → ETag/Content-Range 读不到，206 的 `content-length=1` 绝不当总长，否则全量 ≠ 1 误判 stale → 每个探测窗重下全量模型，TC-06-9 回归）；离线/信息不可知时优先沿用缓存；旧 `?v=` key 一次性搬迁（字节数非本模不搬）；换模尝试遗留的孤儿条目一次性清扫（`PREDECESSOR_MULTI_FP16_MODEL_CACHE_URL` + `PREDECESSOR_MULTI_INT8_MODEL_CACHE_URL`，各含其 `?partial`；⚠️ 清扫清单严禁包含现役 `MODEL_CACHE_URL`/`LEGACY_MODEL_CACHE_URL`——回退后它们就是当前 key，误删会导致每次启动重下全量模型） |
 | 单飞门闩 | `createSingleFlight`：并发加载复用同一 promise，重试不产生并行下载 |
-| 内存释放 | `initialize()` 后置空对 580MB ArrayBuffer 的引用（ORT session 已持 wasm 堆副本）；前后打 JS 堆快照日志 |
+| 内存释放 | `initialize()` 后置空对 183MB ArrayBuffer 的引用（ORT session 已持 wasm 堆副本）；前后打 JS 堆快照日志 |
 
 **UI 语义**：只有确认走网络下载（`onDownloadStart`）才显示 toast 与进度条；
 **缓存命中全程静默**（仅 console 日志），杜绝「先闪首次需下载再变已命中」的误导。
@@ -229,7 +235,7 @@ vite 别名把 gliner 静态引用的 `onnxruntime-web/webgpu|webgl` 打桩（EP
 | `sidePanel` | 侧栏主界面 |
 | `storage` | 档案/AI 开关/受保护站点/模型锁持久化 |
 | `clipboardWrite` | 脱敏结果与档案 JSON 复制 |
-| `unlimitedStorage` | 580MB 模型缓存配额 |
+| `unlimitedStorage` | 183MB 模型缓存配额 |
 | `scripting` | 仅向已授权站点注入粘贴监听 |
 | `offscreen` | 模型宿主（Chrome/Edge；Firefox 构建会移除） |
 | `optional_host_permissions` | 粘贴拦截逐站授权（https + http，运行时按需申请；条目可带路径） |
@@ -316,7 +322,7 @@ Astro 静态站点（`output: 'static'`），产物是纯 HTML + 一个 CSS 文�
 
 ## 12. 测试体系
 
-`npm test`：**423 断言 / 33 文件**（`npm run typecheck` 0 错误为另一道闸）：
+`npm test`：**433 断言 / 34 文件**（`npm run typecheck` 0 错误为另一道闸）：
 
 | 目录 | 内容 |
 |------|------|
@@ -333,33 +339,43 @@ Astro 静态站点（`output: 'static'`），产物是纯 HTML + 一个 CSS 文�
 
 1. Firefox 无 `chrome.offscreen`：粘贴链路的 AI 二次升级不可用（正则档不受影响），
    侧栏手动检测仍走 LocalHost；Chrome/Edge 的粘贴 AI 需要全局 AI + 本站 AI + 宿主就绪；
-2. AI 模型 ~580MB 首次下载依赖网络（支持断点续传与多窗口去重）；
-3. 中文召回根因与换模（2026-10-23）：前代模型 gliner_small-v2 骨干为
+2. AI 模型 ~183MB 首次下载依赖网络（支持断点续传与多窗口去重）；
+3. **中文 AI 不可用（2026-10-23 换模取证后回退，1.0.0 终态）**：small-v2 骨干为
    microsoft/deberta-v3-small（纯英文 128K SPM 词表），中文字符全部塌缩为 [UNK]，
    encoder 对中文内容全盲——2026-10-18 实机「真召回为零 + 0.25–0.65 区间单字乱指
    幻觉（「户」→姓名 0.456、「订」→邮箱 0.330）」即此失效模式，与阈值/门禁无关
-   （形状门禁 `entityShape.ts` 只负责拦幻觉、救不了召回）。已换用多语言骨干的
-   gliner_multi-v2.1（mdeberta-v3-base，中文在词表与训练语料内；切词对中文逐字成词，
-   提供字级 span 边界）。
-4. **量化崩坏与 FP16 选型（2026-10-23 二次取证）**：换模后真机仍零召回——本地
-   harness（`gliner` node 入口 + 同一 span-level 接线）复现：同仓
-   `model_int8`（= `model_quantized`，349,120,924B）与 `model_uint8`（349,120,961B）
-   两套 quanto 静态量化导出在**所有语言**上输出全负 logits（英文送分题
-   max sigmoid 仅 0.15、0.25 阈值全零召回；fp16 同题 0.97）——双位宽同崩，
-   是量化配方算坏了 span 打分头，与语言/喂法/接线无关（前代 small-v2 同接线
-   英文 0.95–0.98 阳性对照通过，排除 harness 自身问题）。改用 `model_fp16.onnx`
-   （579,717,643B ≈580MB）后本地实测：中文「李雷」0.90「韩梅梅」0.72「大街1号」0.52
-   （样例 D 期望的姓名/地址召回成立），并以 gliner **web** 入口 + `onnxruntime-web`
-   1.19.2（WASM 内核）端到端复核：中英文推理各 ~0.5s，远在 TC-07-9 的 8s 级联窗内。
-   代价：较 int8 多 231MB 下载与内存；真机端到端复验（TC-06-5 / TC-07-9 / §14 复测）
-   仍待执行。形似词幻觉（如 2 字词→姓名）仍可能通过，属零样本模型固有风险，
-   形状门禁常开兜底；
+   （形状门禁 `entityShape.ts` 只负责拦幻觉、救不了召回）。兜底：`languageGuard.ts`
+   的 `isCjkDominant` 在 AI 级联入口跳过中文占优片段（CJK 字母数 ≥ 拉丁字母数即跳过，
+   混合文本如「请帮我联系 John Smith」保拉丁实体）——对全盲模型喂中文只会产出
+   幻觉，跳过后中文退化为纯正则，而手机号/身份证/银行卡/邮箱等固定形状目标正则
+   全覆盖，无实际检测损失。中文姓名/地址的 AI 召回转 1.1 目标，站点/扩展说明已如实声明；
+4. **换模取证：无任何可 ship 的 multi-v2.1 变体（2026-10-23 完整证据链）**：
+   曾换多语言 gliner_multi-v2.1（mdeberta-v3-base，中文在词表内；切词对中文逐字
+   成词，提供字级 span 边界）试图修复 §13-3 的全盲缺陷。本地 harness（`gliner`
+   node/web 双入口 + 同一 span-level 接线 + ModelScope 真文件，ORT-WASM 1.19.2
+   内核）取证：
+   ① 质量面——small-v2 同接线英文 0.95–0.98 阳性对照通过（harness 无辜）；
+   multi-v2.1 分词器中文出真 id（李=95290 非 [UNK]，词表无辜）；同仓 `model_int8`
+   （= `model_quantized`，349,120,924B）与 `model_uint8`（349,120,961B）两套 quanto
+   静态量化导出在**所有语言**上输出全负 logits（英文送分题 max sigmoid 仅 0.15、
+   0.25 阈值全零召回）——双位宽同崩，是量化配方算坏了 span 打分头；`model_fp16.onnx`
+   （579,717,643B）质量完好：英文 0.97、中文「李雷」0.90「韩梅梅」0.72「大街1号」
+   0.52、推理 ~0.5s（远在 TC-07-9 的 8s 级联窗内）；`model_q4f16.onnx`
+   （471,795,362B）中文衰减（0.75/0.46/0.34，姓名掉出敏感线）；
+   ② 内存面——ORT-WASM 无 fp16 算子，fp16/q4f16 权重被迫全量升位双份驻留：
+   实测建会话后 RSS 分别 3.2GB / 2.8GB，对比 small-v2 int8 的 1.5GB（实机流畅
+   基线）均 2× 超标 → 浏览器标签页内存海啸（实机表现为「Initializing models
+   卡很久」），结构性问题、配置绕不过，不可 ship；
+   ③ 决策——回退 small-v2（本包当前源与字节），中文 AI 召回转 1.1 路线
+   （本机 torch 重量化排除 span 打分头 + GitHub Release 托管，作者侧清单自存仓外），
+   期间 CJK 守卫消灭幻觉面。形似词幻觉（如 2 字词→姓名）对拉丁文本仍属零样本
+   模型固有风险，形状门禁常开兜底；
 5. tokenizer/config 由 gliner 内部 transformers 下载，走其自带缓存，不受 §10 版本管理。
 
 ## 14. 实测数据（2026-10-18，Chrome，TC-06-4 / A-4 结案）
 
-> ⚠️ 本节数值基于前代 183MB 模型（gliner_small-v2）。2026-10-23 换用 580MB FP16 版
-> gliner_multi-v2.1 后基线待复测（JS 堆与推理耗时均预计上升，口径说明仍适用）。
+> ℹ️ 本节数值基于当前模型（183MB 的 `gliner_small-v2`）。2026-10-23 的多语言换模
+> 尝试已取证回退（见 §13-4），模型与测量时一致，**基线仍然有效**；1.1 若换模需复测。
 
 - JS 堆快照（`performance.memory.usedJSHeapSize`；Chromium 专有，Firefox 静默跳过），
   走缓存命中路径（模型 174.9MB 从 Cache Storage 物化为 ArrayBuffer）：

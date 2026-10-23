@@ -153,7 +153,7 @@
     端到端复核通过（生产同款路径，中英文各 ~0.5s，远在 8s 级联窗内）。
 - **变更**：`MODEL_SOURCES` → `onnx/model_fp16.onnx`（双源）；`MODEL_FILE_BYTES`
   → 579717643；缓存 key → `.../model_fp16.onnx`，旧 int8 条目（含 `?partial`）纳入
-  `PREDECESSOR_MULTI_INT8_MODEL_CACHE_URL` 清扫，期望字清扫，期望字节数守卫（㉘）自动拒收
+  `PREDECESSOR_MULTI_INT8_MODEL_CACHE_URL` 清扫；期望字节数守卫（㉘）自动拒收
   349MB 坏字节；文案口径 350→580MB、「量化版」→「半精度版」（扩展/站点双侧词典
   四文件），代码注释 9 处数字跟随。
 - **文档**：spec §1/§7 模型行与清扫清单、§10 配额、§13-3 增「量化崩坏与 FP16
@@ -162,6 +162,42 @@
   §14 基线）待执行——若浏览器实测再有异常，备选为自产量化或回退 small-v2（见
   author-todo 复验清单）。
 - 门禁：typecheck / 423 tests · 33 files / 双目标构建 / site:check·build / check:docs。
+
+### ㉚ 回退 small-v2 —— 无任何可 ship 的 multi-v2.1 变体（FP16 内存实测判死）
+
+- **背景**：㉙ 落地 fp16 换字节后，真机（ORT-WASM 同栈）暴露结构性内存问题——
+  WASM 无 fp16 算子，fp16/q4f16 权重全量升位双份驻留，是配置绕不过的结构性事实：
+  - **内存矩阵**（建会话后 RSS 实测）：small-v2 int8 183MB → **1.5GB**（实机流畅
+    基线）；multi fp16 580MB → **3.2GB** ✗（真机「Initializing models 卡很久」根因）；
+    q4f16 472MB → **2.8GB** ✗——均 2× 超标，浏览器标签页内存海啸，不可 ship；
+  - **质量矩阵**：fp16 中文召回本身完美（「李雷」0.90「韩梅梅」0.72「大街1号」0.52，
+    推理 ~0.5s）——病根只差一份「质量完好 + 内存可行」的字节；q4f16 中文衰减
+    （0.75/0.46/0.34，姓名掉出敏感线）。
+- **裁决**：上游无任何可 ship 变体（int8/uint8 质量崩坏、fp16/q4f16 内存超标）→
+  回退 `gliner_small-v2`（1.0.0 终态）；中文 AI 召回转 **1.1 路线**（本机 torch
+  重量化排除 span 打分头 + GitHub Release 托管）。
+- **变更**：
+  - `MODEL_SOURCES` → small-v2 `onnx/model_quantized.onnx`（双源）；`MODEL_FILE_BYTES`
+    → 183403734；缓存 key → `.../gliner_small-v2/model_quantized.onnx`；期望字节数
+    守卫（㉘）基准随之回归 183MB——用户机上 580MB/349MB 孤儿条目由
+    `PREDECESSOR_MULTI_FP16_*` / `PREDECESSOR_MULTI_INT8_*`（各含 `?partial`）
+    一次性清扫（新增不变式单测：清扫清单严禁与现役 key 交集，否则每次启动自删
+    缓存重下全量）；
+  - 新增 `languageGuard.ts` 的 `isCjkDominant`：AI 级联入口整段跳过中文占优片段
+    （CJK 字母数 ≥ 拉丁字母数；混合文本如「请帮我联系 John Smith」保拉丁实体）——
+    对全盲模型喂中文只会 0.25–0.65 幻觉，跳过后中文退化为纯正则（固定形状目标
+    正则全覆盖，无实际检测损失），幻觉面被彻底消灭；
+  - 文案与说明诚实化：580→183MB、「半精度版」→「量化版」（扩展/站点双侧词典
+    四文件 + 代码注释），站点 FAQ 如实声明「当前模型仅识别英文实体，中文由正则档
+    负责，多语言在路线图」。
+- **文档**：spec §3 增 3c 语言守卫步骤、§1/§7/§10 模型行与配额回归 183MB 口径、
+  §13-3 改「中文 AI 不可用（回退终态）+ CJK 守卫」、§13-4 重写为完整换模证据链
+  （质量→内存→决策）、§14 基线标注改「模型未变仍有效」；TC-06-5 判据改
+  「D 案例就绪也不得多出占位符」；TODO 换模条目改终态与 1.1 路线；README 双语
+  模型行与测试基线同步。
+- 门禁：typecheck / 433 tests · 34 files（+languageGuard 8 +清扫不变式 2）/
+  双目标构建 / site:check·build / check:docs；产物验证：small-v2 双源、183MB
+  文案全仓无 580 残留、清扫常量不含现役 key。
 
 ## 2026-10-22
 

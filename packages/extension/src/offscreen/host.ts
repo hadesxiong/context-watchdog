@@ -105,7 +105,7 @@ const ensure = async (token: string): Promise<void> => {
   }
 
   try {
-    // 首次 ENSURE 可能持续数分钟（下载 580MB）；进度通过 storage.session 暴露，
+    // 首次 ENSURE 可能持续数分钟（下载 183MB）；进度通过 storage.session 暴露，
     // 因此这里刻意不设超时。
     await preloadModels(
       (percent, received, total) => {

@@ -78,7 +78,7 @@
       },
       {
         "title": "AI tier (optional)",
-        "body": "Entities with no fixed shape — names, addresses — go to a local GLiNER model (WASM), which only looks at spans the regex tier left uncovered and never redoes its work; you must enable it explicitly and download the half-precision model once (~580 MB). If the model is unavailable, the pipeline degrades to pure regex: no errors, no blocking."
+        "body": "Entities with no fixed shape — names, addresses — go to a local GLiNER model (WASM), which only looks at spans the regex tier left uncovered and never redoes its work; you must enable it explicitly and download the quantized model once (~183 MB). If the model is unavailable, the pipeline degrades to pure regex: no errors, no blocking. Note: the current model recognises English entities only — Chinese names and addresses are not AI-detected; fixed-shape Chinese targets (phone / ID / bank card / email) are fully covered by the regex tier. Multilingual support is on the roadmap."
       }
     ]
   },
@@ -127,7 +127,7 @@
       },
       {
         "q": "Do I have to download the AI model?",
-        "a": "No. The regex tier is always on and covers secrets, connection strings, phone numbers, national IDs, bank cards, IBANs and other fixed-shape targets — zero latency, offline. The AI tier only adds shapeless entities like names and addresses. The half-precision model is about 580 MB, downloaded once and then served from the browser cache; if it is unavailable the pipeline falls back to pure regex."
+        "a": "No. The regex tier is always on and covers secrets, connection strings, phone numbers, national IDs, bank cards, IBANs and other fixed-shape targets — zero latency, offline. The AI tier only adds shapeless entities like names and addresses. The quantized model is about 183 MB, downloaded once and then served from the browser cache; if it is unavailable the pipeline falls back to pure regex. The current model recognises English entities only — Chinese entities are handled by the regex tier, and multilingual support is on the roadmap."
       },
       {
         "q": "What if it flags something that is not sensitive?",
@@ -187,7 +187,7 @@
     ],
     "verifyTitle": "Verify it yourself",
     "thirdPartyTitle": "Third-party components",
-    "thirdParty": "The third-party components in use and their licences are listed in THIRD-PARTY-NOTICES.txt (both inside the bundle and in the repository). The model downloaded at runtime is onnx-community/gliner_multi-v2.1 (Apache-2.0).",
+    "thirdParty": "The third-party components in use and their licences are listed in THIRD-PARTY-NOTICES.txt (both inside the bundle and in the repository). The model downloaded at runtime is onnx-community/gliner_small-v2 (Apache-2.0).",
     "contactTitle": "Contact",
     "contact": "Open an issue for anything privacy-related.",
     "updated": "Last updated: 2026-10-19"

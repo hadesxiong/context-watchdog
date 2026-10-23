@@ -67,7 +67,7 @@ export const useDetectionStore = defineStore('detection', () => {
     const nerLoadProgress = ref(0)
     // 不定进度（服务端未返回 Content-Length 时为 true，进度条走循环动画）
     const nerIndeterminate = ref(false)
-    // 已下载字节 / 总字节：UI 进度始终并显「xx.x / 580 MB」（十进制口径，见 App.vue progressLabel）
+    // 已下载字节 / 总字节：UI 进度始终并显「xx.x / 183 MB」（十进制口径，见 App.vue progressLabel）
     const nerLoadBytes = ref(0)
     const nerLoadTotal = ref(0)
     // 另一窗口正在下载模型、本窗口等待中（UI 显示「另一窗口下载中」，见 modelDownload 的多窗口锁）
@@ -480,7 +480,7 @@ export const useDetectionStore = defineStore('detection', () => {
     // Firefox 回退：侧栏内加载（与 S2 之前一致）
     const initLocalNER = async () => {
         try {
-            // 停滞超时：只要下载进度还在更新就不算超时（580MB 模型慢网下可能需要数分钟）；
+            // 停滞超时：只要下载进度还在更新就不算超时（183MB 模型慢网下可能需要数分钟）；
             // 60 秒内无任何进度推进才判定超时
             const STALL_TIMEOUT = 60000
             let timeoutTimer: ReturnType<typeof setTimeout> | null = null

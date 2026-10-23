@@ -32,7 +32,7 @@ export interface ModelHostPingRequest {
   token: string
 }
 
-/** 幂等加载模型。加载可能持续数分钟（首次要下 580MB），因此**没有超时**。 */
+/** 幂等加载模型。加载可能持续数分钟（首次要下 183MB），因此**没有超时**。 */
 export interface ModelHostEnsureRequest {
   op: 'ENSURE'
   token: string

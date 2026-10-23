@@ -308,7 +308,7 @@ P6 content script 守卫（全部通过才替换）：
 
 **回归**
 
-- `npm run typecheck`、`npx vitest run`（当前基线 423 项）、`npm run build`（零警告）、`npm run probe:layout`（85 项）、`npm run probe:widget`（20 项）必须全绿。
+- `npm run typecheck`、`npx vitest run`（当前基线 433 项）、`npm run build`（零警告）、`npm run probe:layout`（85 项）、`npm run probe:widget`（20 项）必须全绿。
 - 新增探针断言（扩 `scripts/probe-layout.mjs` 或新脚本）：
   - 挂件在授权站点渲染、无授权站点不渲染；
   - 挂件不影响页面布局（不产生滚动条、不遮挡输入框，可用简易碰撞检测）。

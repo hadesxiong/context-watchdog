@@ -12,20 +12,19 @@ import type { ModelProgress } from '@engine/detector/backend'
 export type { ModelProgress } from '@engine/detector/backend'
 
 // 注意：模型文件在 onnx/ 子目录下（仓库根目录没有 model.onnx，直接请求会 404）。
-// 选 model_fp16.onnx（半精度，579,717,643 字节 ≈580MB）：全量 model.onnx 达 1.16GB 不适合
-// 浏览器扩展；**同仓 int8/uint8 量化版实测为坏文件，禁用**（取证见文件尾部「量化崩坏」注
-// 块与 spec §13-3——两种 8-bit 配方在所有语言上输出全负 logits，fp16 完好）。
+// 选 model_quantized.onnx（int8 量化，183,403,734 字节 ≈183MB）：fp16 版 580MB、
+// 全量 model.onnx 达 1.16GB，都不适合浏览器扩展。
 //
-// 为什么是 gliner_multi-v2.1（2026-10-23 换模，修复「中文 AI 召回为零」缺陷）：
-// 前代 gliner_small-v2 的骨干是 microsoft/deberta-v3-small（纯英文，128K SPM 词表），
-// 中文字符全部塌缩为 [UNK]，encoder 对中文内容全盲——实机表现为真召回为零 +
-// 0.25–0.65 区间单字乱指幻觉（形状门禁只能拦幻觉、救不了召回，见 spec §13-3）。
-// multi-v2.1 骨干为 microsoft/mdeberta-v3-base（多语言，中文在词表与训练语料内），
-// max_width 同为 12、同为 span-level 导出，推理接线零改动；切词 /\w+(?:[-_]\w+)*|\S/
-// 对中文逐字成词，恰好提供字级 span 边界。fp16 版实测中文召回（样例 D）：
-// 「李雷」0.90「韩梅梅」0.72「大街1号」0.52，推理 ~0.5s（ORT-WASM 实测）。
-// 代价：体积 183MB→580MB、推理计算量约 5–6 倍（基线见 spec §10/§14，
-// 旧缓存条目由 PREDECESSOR_* 常量清扫，本次 int8 条目另见 PREDECESSOR_MULTI_INT8）。
+// 模型选型史（2026-10-23，完整取证见 spec §13-3 与本文件尾注块）：
+// small-v2 骨干为纯英文 deberta-v3-small，中文塌缩 [UNK] → 中文 AI 召回为零；
+// 曾换多语言 gliner_multi-v2.1 试图修复——其模型能力已验证优秀（fp16 版中文姓名
+// 0.90 / 地址 0.52，推理 ~0.5s），但无可用的浏览器级字节：int8/uint8 量化导出为
+// 坏文件（span 头全负 logits，所有语言零召回）；fp16/q4f16 在 WASM 下无 fp16 算子，
+// 权重被迫升位双份驻留（实测建会话 RSS 3.2GB / 2.8GB，对比 small-v2 int8 仅 1.5GB），
+// 浏览器标签页内存海啸不可 ship。故回退 small-v2：中文 AI 召回转 1.1 路线
+//（自产量化 + 托管，见 TODO），期间由 languageGuard 在级联入口跳过中文占优片段
+//（对全盲模型喂中文只会幻觉），中文固定形状实体由正则档全覆盖。
+// 换模尝试遗留的 multi 系缓存条目（fp16 / int8）由 PREDECESSOR_MULTI_* 常量清扫。
 //
 // 模型源（按顺序轮换）：
 // 1. ModelScope（阿里云）：`/models/{id}/resolve/{rev}/{path}` 端点的 302 带完整 CORS 头
@@ -39,33 +38,30 @@ export type { ModelProgress } from '@engine/detector/backend'
 // 扩展页（manifest 未声明 host_permissions，只能走 CORS）会在第一跳直接抛
 // TypeError: Failed to fetch —— 界面上表现为「网络请求被阻止或模型下载失败」。
 export const MODEL_SOURCES = [
-  'https://modelscope.cn/models/onnx-community/gliner_multi-v2.1/resolve/main/onnx/model_fp16.onnx',
-  'https://huggingface.co/onnx-community/gliner_multi-v2.1/resolve/main/onnx/model_fp16.onnx'
+  'https://modelscope.cn/models/onnx-community/gliner_small-v2/resolve/main/onnx/model_quantized.onnx',
+  'https://huggingface.co/onnx-community/gliner_small-v2/resolve/main/onnx/model_quantized.onnx'
 ]
 
 // 当前模型文件字节数：① 缓存「期望字节数」守卫的比对基准（createBrowserModelCache
 // 的 match 自愈 / put 拒写）；② 文档参考。不再用作缓存版本号（版本由 1 字节探测
 // 三级比对 ETag / Last-Modified / 长度自动决定，见 probeRemoteVersion）
-export const MODEL_FILE_BYTES = 579717643
+export const MODEL_FILE_BYTES = 183403734
 
 export const MODEL_CACHE_NAME = 'contextwatchdog-models'
 // 缓存 key 固定（合成 URL，.invalid 永不解析、不参与网络请求）；
 // 版本信息（ETag / Last-Modified / 长度 / 时间）存进条目的响应头，由探测结果决定是否作废
-export const MODEL_CACHE_URL = 'https://contextwatchdog.invalid/models/gliner_multi-v2.1/model_fp16.onnx'
+export const MODEL_CACHE_URL = 'https://contextwatchdog.invalid/models/gliner_small-v2/model_quantized.onnx'
 // 未完成下载的部分文件（跨会话断点续传的落点）
 export const MODEL_PARTIAL_URL = `${MODEL_CACHE_URL}?partial`
 // 旧版缓存 key（带 ?v= 字节数）：命中时一次性搬迁，避免升级用户重下全量模型
 export const LEGACY_MODEL_CACHE_URL = `${MODEL_CACHE_URL}?v=${MODEL_FILE_BYTES}`
-// 前代模型（gliner_small-v2）的两种历史 key：换模（2026-10-23）后均为孤儿条目。
-// 其字节属于另一个模型，不能搬迁复用（搬进新 key 也会被探测按总长判 stale），
-// 由 migrateLegacy 一次性清扫，避免占着 ~183MB 缓存配额。
-// `?v=` 版是探测机制之前的旧 key 格式（当时的字节数，历史事实故写死）
-export const PREDECESSOR_MODEL_CACHE_URL =
-  'https://contextwatchdog.invalid/models/gliner_small-v2/model_quantized.onnx'
-export const PREDECESSOR_LEGACY_MODEL_CACHE_URL = `${PREDECESSOR_MODEL_CACHE_URL}?v=183403734`
-// FP16 换字节（2026-10-23）前的 multi-v2.1 int8 条目：int8/uint8 量化导出实测为坏文件
-// （span 头全负 logits，所有语言零召回），不能靠「同模型」复用——按旧 key 整体清扫，
-// 连同其未完成的 ?partial 一起删掉，让出 ~349MB 配额给 580MB 的 fp16
+// 换模尝试（2026-10-23 的 multi-v2.1，已回退）遗留的孤儿 key：其字节属于另一个
+// 模型且均不可用（int8 量化崩坏 / fp16 内存不可行，见文件尾注块），不能搬迁复用，
+// 由 migrateLegacy 一次性清扫让出配额（含各自未完成的 ?partial）。
+// ⚠️ 清扫清单严禁包含 MODEL_CACHE_URL / LEGACY_MODEL_CACHE_URL——回退后它们
+// 就是现役 key，误删会导致每次启动重下全量模型
+export const PREDECESSOR_MULTI_FP16_MODEL_CACHE_URL =
+  'https://contextwatchdog.invalid/models/gliner_multi-v2.1/model_fp16.onnx'
 export const PREDECESSOR_MULTI_INT8_MODEL_CACHE_URL =
   'https://contextwatchdog.invalid/models/gliner_multi-v2.1/model_quantized.onnx'
 
@@ -236,7 +232,7 @@ export const isWeakEtag = (etag: string | null): boolean => !etag || etag.trim()
 // 探测失败（离线 / 被限流 / 超时）→ 'unknown' → 沿用缓存（离线优先）
 // ⚠️ ETag / Last-Modified 只在同源（或任一侧来源未知）时才可比对：ModelScope 与
 // HuggingFace 各自生成，跨源直接比对必然不一致 → 误判 'stale' → 清缓存重下全量模型。
-// 跨源时退回比总字节数（两源对同一文件返回一致的 579,717,643 字节）
+// 跨源时退回比总字节数（两源对同一文件返回一致的 183,403,734 字节）
 // ⚠️ 浏览器跨源读不到非安全列表头（Fetch 规范只放行 Cache-Control / Content-Language /
 // Content-Length / Content-Type / Expires / Last-Modified / Pragma）：ModelScope CDN 不发
 // Access-Control-Expose-Headers → JS 里 ETag / Content-Range 恒为 null。故三级比对：
@@ -356,11 +352,11 @@ export const createBrowserModelCache = (): ModelCache | null => {
     migrateLegacy: async () => {
       try {
         const cache = await caches.open(MODEL_CACHE_NAME)
-        // 换模清扫（2026-10-23）：前代模型完整条目不属于当前模型，直接删除让出缓存配额。
-        // 清扫失败不阻塞主流程（孤儿条目只是占空间，不影响正确性）
+        // 换模清扫（2026-10-23 的 multi 系尝试，已回退）：孤儿条目字节不属于现役
+        // small-v2，直接删除让出缓存配额。清扫失败不阻塞主流程（只是占空间）
         try {
-          await cache.delete(PREDECESSOR_MODEL_CACHE_URL)
-          await cache.delete(PREDECESSOR_LEGACY_MODEL_CACHE_URL)
+          await cache.delete(PREDECESSOR_MULTI_FP16_MODEL_CACHE_URL)
+          await cache.delete(`${PREDECESSOR_MULTI_FP16_MODEL_CACHE_URL}?partial`)
           await cache.delete(PREDECESSOR_MULTI_INT8_MODEL_CACHE_URL)
           await cache.delete(`${PREDECESSOR_MULTI_INT8_MODEL_CACHE_URL}?partial`)
         } catch {
@@ -564,7 +560,7 @@ export const probeRemoteVersion = async (options: ProbeOptions = {}): Promise<Re
       // ⚠️ 总长只信两处：206 的 Content-Range（安全列表外，浏览器里可能读不到）或
       // 200（源站忽略 Range）的 Content-Length。206 的 Content-Length 是本次响应体长
       // （Range: 0-0 → 1 字节），读不到 Content-Range 时它绝不能当总长——曾导致
-      // 全量（580MB）≠ 1 误判 'stale' → 清缓存重下整包（见 test-cases TC-06-9）
+      // 全量（183MB）≠ 1 误判 'stale' → 清缓存重下整包（见 test-cases TC-06-9）
       const total = range && range.total > 0 ? range.total : response.status === 200 ? contentLength : 0
       const etag = response.headers.get('etag')
       // Last-Modified 在 CORS 安全列表内恒可见 → ETag 被隐藏时的替代比对信号
@@ -959,13 +955,20 @@ const createChromeProbeState = (): ProbeStateStore | null => {
   }
 }
 
-// ---------- 量化崩坏取证（2026-10-23，换用 model_fp16.onnx 的依据） ----------
-// 同仓 onnx/ 下 int8（model_int8 = model_quantized，349,120,924B）与 uint8
-// （349,120,961B）两套 quanto 静态量化导出均为坏文件：用 gliner 包 node 入口 +
-// 同一 span-level 接线实测，英文送分题（John Smith / 555-0100 / 123 Main Street）
-// 与中文样例全零召回，原始 logits 全负（max sigmoid 仅 0.15，正常应 >0.95），
-// 且两种位宽同崩 → 排除位宽敏感、是量化配方把 span 打分头算坏了。
-// fp16（579,717,643B）同 harness 英文 0.97 / 中文姓名 0.90 完好，
-// 且已用 gliner WEB 入口 + onnxruntime-web 1.19.2（WASM 内核）端到端复核通过
-// （中英文推理 ~0.5s，远在 8s 级联窗内）。故本包所有「量化」字样仅指历史沿革，
-// 当前下载源与 MODEL_FILE_BYTES 均为 fp16；详细见 spec §13-3 与 CHANGELOG ㉙。
+// ---------- 换模取证与回退决策记录（2026-10-23） ----------
+// 为修复「中文 AI 召回为零」曾换用 gliner_multi-v2.1，最终因无浏览器级可用字节而
+// 回退 small-v2。完整证据链（本地 harness = gliner 包 node/web 双入口 + 同一
+// span-level 接线 + ModelScope 真文件，ORT-WASM 1.19.2 内核）：
+// 1. 阳性对照：small-v2 同接线英文 0.95–0.98 全检出 → harness/接线无辜；
+//    multi-v2.1 分词器中文出真 id（李=95290 非 [UNK]）→ 词表无辜；
+// 2. int8（model_int8 = model_quantized，349,120,924B）与 uint8（349,120,961B）
+//    两套 quanto 静态量化导出均为坏文件：所有语言零召回、原始 logits 全负
+//    （max sigmoid 仅 0.15，正常 >0.95），双位宽同崩 → 量化配方算坏了 span 打分头；
+// 3. fp16（579,717,643B）质量完好：英文 0.97、中文「李雷」0.90「韩梅梅」0.72
+//    「大街1号」0.52，推理 ~0.5s；q4f16（471,795,362B）中文衰减（0.75/0.46/0.34）；
+// 4. 但 fp16/q4f16 在 WASM 下无 fp16 算子，权重全量升位双份驻留——实测建会话
+//    RSS 分别 3.2GB / 2.8GB（small-v2 int8 仅 1.5GB），浏览器标签页内存海啸、
+//    实机表现为「Initializing models 卡很久」→ 均不可 ship；
+// 5. 决策：回退 small-v2（本文件当前源），中文 AI 召回转 1.1 路线（自产量化
+//    + 托管），期间 languageGuard 在级联入口跳过中文占优片段（对全盲模型喂中文
+//    只会 0.25–0.65 幻觉）。详细见 spec §13-3 与 CHANGELOG ㉚。
