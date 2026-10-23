@@ -123,11 +123,13 @@ manifest.background.scripts = [manifest.background.service_worker]
 delete manifest.background.service_worker
 
 // 侧栏：side_panel → sidebar_action（路径不变，CRXJS 已按 side_panel 打包该页面）
+// 不写 default_position：MDN 的 sidebar_action 没有这个键，Firefox 载入时会报
+// 「An unexpected property」manifest warning。面板停靠位置由 Firefox 自身决定，
+// 扩展无法也不应指定。
 if (manifest.side_panel?.default_path) {
   manifest.sidebar_action = {
     default_title: 'ContextWatchdog - AI脱敏助手',
-    default_panel: manifest.side_panel.default_path,
-    default_position: 'right'
+    default_panel: manifest.side_panel.default_path
   }
   delete manifest.side_panel
 }
