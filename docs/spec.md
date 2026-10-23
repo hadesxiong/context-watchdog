@@ -312,7 +312,7 @@ Astro 静态站点（`output: 'static'`），产物是纯 HTML + 一个 CSS 文�
    `npm run site:evidence` 跑一遍真实套件后写入 `evidence.json`。
 3. **未上架的渠道不渲染成链接**。渠道 URL 为空时页面显示「即将上架」，而不是一个点了
    打不开的 URL。URL 来自 `apps/site/.env`（gitignored，模板 `.env.example`）——
-   这些是**部署身份**（域名 / 商店页 / 备案号 / 收款码），不进仓库，因为 fork 之后
+   这些是**部署身份**（域名 / 商店页 / 备案号），不进仓库，因为 fork 之后
    不该静默继承别人的它们。
 
 结构要点：`src/pages/{index,en/index,privacy,en/privacy,changelog,…}.astro` 双语四类页；
