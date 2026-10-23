@@ -18,14 +18,14 @@
   "engine_regex_name": "Pattern rules",
   "engine_regex_desc": "Pattern matching for credentials, connection strings and PII (phone / ID / bank card) · base engine, always on",
   "engine_ai_name": "AI model",
-  "engine_ai_desc": "Unstructured entities such as names and addresses, plus scene detection (downloads a ~350 MB model, one time only)",
+  "engine_ai_desc": "Unstructured entities such as names and addresses, plus scene detection (downloads a ~580 MB model, one time only)",
   "engine_load_failed": "Model failed to load; base detection is unaffected",
   "engine_caption_waiting": "Downloading in another window…",
   "engine_caption_downloading": "Downloading model…",
 
   "ner_downloading_other": "Downloading in another window, waiting to sync…",
   "ner_downloading": "Downloading the AI model…",
-  "ner_first_download": "First run downloads the model (~350 MB, quantized). Please wait.",
+  "ner_first_download": "First run downloads the model (~580 MB, half-precision). Please wait.",
   "ner_downloading_progress": "Downloading…",
   "ner_timeout": "AI model load timed out",
   "ner_failed": "AI model failed to load",
@@ -34,7 +34,7 @@
   "ner_ready_desc": "Enhanced detection is enabled",
 
   "onboarding_title": "Enable AI-enhanced detection?",
-  "onboarding_body": "AI enhancement recognises names, addresses and other unstructured content for fuller coverage. Enabling it downloads a ~350 MB quantized model (one time only; processed locally, nothing is uploaded). Pattern-based detection (keys, phone numbers, ID cards…) works fine without it.",
+  "onboarding_body": "AI enhancement recognises names, addresses and other unstructured content for fuller coverage. Enabling it downloads a ~580 MB half-precision model (one time only; processed locally, nothing is uploaded). Pattern-based detection (keys, phone numbers, ID cards…) works fine without it.",
   "onboarding_later": "Not now",
   "onboarding_enable": "Enable AI",
 

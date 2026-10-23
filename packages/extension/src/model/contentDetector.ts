@@ -77,7 +77,7 @@ const runLoad = async (
     ort.env.wasm.proxy = false
 
     // gliner 会把 onnxSettings 原样留在实例上（gliner/src/web/ONNXWebWrapper.ts:61 用 settings.modelPath 建会话），
-    // 内联传 modelBuffer 会让 349MB 引用在整个会话期可达 → 峰值内存接近翻倍。
+    // 内联传 modelBuffer 会让 580MB 引用在整个会话期可达 → 峰值内存接近翻倍。
     // 这里持本地引用，等 ORT 把数据拷进 wasm 堆后再断开（见下方释放）
     const onnxSettings: {
       modelPath: string | ArrayBufferLike
@@ -125,7 +125,7 @@ const runLoad = async (
 
     await glinerInstance.initialize()
 
-    // 释放 JS 侧 349MB 模型引用（ORT session 已持有 wasm 堆副本，推理不受影响）
+    // 释放 JS 侧 580MB 模型引用（ORT session 已持有 wasm 堆副本，推理不受影响）
     onnxSettings.modelPath = ''
     reportHeapSnapshot('初始化完成并释放模型引用')
 

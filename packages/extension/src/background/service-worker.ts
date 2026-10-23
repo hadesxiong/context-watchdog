@@ -467,7 +467,7 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
   if (!fromExtensionPage) return undefined
 
   if (request?.type === MODEL_HOST_ENSURE) {
-    // 立即回包：ENSURE 首次可能要下载 349MB，让消息通道挂着几分钟没有意义。
+    // 立即回包：ENSURE 首次可能要下载 580MB，让消息通道挂着几分钟没有意义。
     // 进度与结果统一经 storage.session 呈现（宿主写，SW 代转）。
     void ensureModelHost().then(result => {
       if (!result.supported || result.ok) return

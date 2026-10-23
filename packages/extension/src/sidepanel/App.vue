@@ -146,8 +146,8 @@ const engineStatusItems = computed(() => [
 
 // 模型加载进度文案：始终并显「百分比 + 已下/总长 MB」——大小是可核验信息，不该只给百分比；
 // 不定进度（无 Content-Length）时去掉百分比只留 MB。字节换算用十进制 MB（÷1e6），
-// 与 MODEL_FILE_BYTES「349,120,924 字节 ≈349MB」及全部文案口径一致
-// （旧实现 ÷1048576 会把总长显示成 333，与文案的 349 对不上）
+// 与 MODEL_FILE_BYTES「579,717,643 字节 ≈580MB」及全部文案口径一致
+// （旧实现 ÷1048576 会把总长显示成 553，与文案的 580 对不上）
 const progressLabel = computed(() => {
     const done = (store.nerLoadBytes / 1e6).toFixed(1)
     const all = Math.round(store.nerLoadTotal / 1e6)

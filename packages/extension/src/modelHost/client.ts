@@ -103,7 +103,7 @@ const nextToken = (): string => `${Date.now().toString(36)}-${Math.random().toSt
 
 /**
  * 发一个请求并等回包。
- * timeoutMs = 0 表示**不超时**（ENSURE 首次要下载 349MB，任何固定超时都会误杀）。
+ * timeoutMs = 0 表示**不超时**（ENSURE 首次要下载 580MB，任何固定超时都会误杀）。
  */
 const send = (port: chrome.runtime.Port, request: ModelHostRequest, timeoutMs: number): Promise<ModelHostReply> =>
   new Promise(resolve => {

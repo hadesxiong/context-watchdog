@@ -137,6 +137,32 @@
   错误文件」自洽常驻这一类故障（Content-Length 与探测比对都拦不住）。
 - 单测新增 `createBrowserModelCache` 守卫三例（伪 caches 实现）；423 tests · 33 files 全绿。
 
+### ㉙ 换用 FP16 模型字节 —— int8/uint8 量化导出取证为坏文件
+
+- **背景**：㉖ 换模 + ㉘ 修下载源落地后，真机 D 案例仍零召回。本地 harness
+  （`gliner` node 入口 + 同一 span-level 接线，ModelScope 真文件）取证定案：
+  - **阳性对照通过**：前代 small-v2 同接线英文 0.95–0.98 全检出 → harness/接线无辜；
+    multi-v2.1 分词器对中文出真 id（李=95290，非 [UNK]）→ 词表无辜；
+  - **坏在量化**：同仓 `model_int8`（= `model_quantized`，349,120,924B）与
+    `model_uint8`（349,120,961B）在**所有语言**上输出全负 logits（英文送分题
+    max sigmoid 仅 0.15、0.25 阈值全零）——双位宽同崩，quanto 静态量化配方把
+    span 打分头算坏了；
+  - **fp16 完好**：`model_fp16.onnx`（579,717,643B ≈580MB）同 harness 英文 0.97、
+    中文「李雷」0.90「韩梅梅」0.72「大街1号」0.52（样例 D 期望召回成立），
+    推理 ~0.5s；并以 gliner **web** 入口 + `onnxruntime-web` 1.19.2（WASM 内核）
+    端到端复核通过（生产同款路径，中英文各 ~0.5s，远在 8s 级联窗内）。
+- **变更**：`MODEL_SOURCES` → `onnx/model_fp16.onnx`（双源）；`MODEL_FILE_BYTES`
+  → 579717643；缓存 key → `.../model_fp16.onnx`，旧 int8 条目（含 `?partial`）纳入
+  `PREDECESSOR_MULTI_INT8_MODEL_CACHE_URL` 清扫，期望字清扫，期望字节数守卫（㉘）自动拒收
+  349MB 坏字节；文案口径 350→580MB、「量化版」→「半精度版」（扩展/站点双侧词典
+  四文件），代码注释 9 处数字跟随。
+- **文档**：spec §1/§7 模型行与清扫清单、§10 配额、§13-3 增「量化崩坏与 FP16
+  选型」取证条、§14 标注改 580MB 待复测；测试夹具字节数同步。
+- **代价与余项**：下载 580MB（+231MB）与内存上升；真机复验（TC-06-5 / TC-07-9 /
+  §14 基线）待执行——若浏览器实测再有异常，备选为自产量化或回退 small-v2（见
+  author-todo 复验清单）。
+- 门禁：typecheck / 423 tests · 33 files / 双目标构建 / site:check·build / check:docs。
+
 ## 2026-10-22
 
 ### ⑯ H-1 / H-2 与 TC-07-8/9 真机验收结案
