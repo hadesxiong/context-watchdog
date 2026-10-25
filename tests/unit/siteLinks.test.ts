@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   CHANNEL_ENV,
+  basePathFrom,
   channelStates,
   normalizeRepository,
   parseHttpsBase,
@@ -56,7 +57,7 @@ describe('parseHttpsBase', () => {
     expect(() => parseHttpsBase('example.com', 'X')).toThrow(/不是合法 URL/)
   })
 
-  it('站点地址不允许带路径（会让 new URL 把子路径整体丢掉）', () => {
+  it('站点地址默认仍是根地址（不带路径），渠道地址必须允许路径', () => {
     expect(() => parseHttpsBase('https://example.com/sub', 'SITE_URL')).toThrow(/不能带路径/)
     // 渠道地址是具体页面，必须允许路径
     expect(parseHttpsBase('https://chromewebstore.google.com/detail/x/abc', 'CWS_URL', { allowPath: true })).toBe(
@@ -64,9 +65,33 @@ describe('parseHttpsBase', () => {
     )
   })
 
+  it('显式允许子路径时接受带路径的站点地址，并归一化末尾斜杠', () => {
+    expect(parseHttpsBase('https://aa.bb.com/context-watchdog', 'SITE_URL', { allowSitePath: true })).toBe(
+      'https://aa.bb.com/context-watchdog'
+    )
+    expect(parseHttpsBase('https://aa.bb.com/context-watchdog/', 'SITE_URL', { allowSitePath: true })).toBe(
+      'https://aa.bb.com/context-watchdog'
+    )
+    expect(parseHttpsBase('https://example.com', 'SITE_URL', { allowSitePath: true })).toBe('https://example.com')
+    // 空段「//」派生出的子路径会以 // 开头 → 站内链接变成协议相对地址，必须挡住
+    expect(() => parseHttpsBase('https://aa.bb.com//ctx', 'SITE_URL', { allowSitePath: true })).toThrow(/空段/)
+  })
+
   it('拒绝查询串与锚点', () => {
     expect(() => parseHttpsBase('https://example.com/?a=1', 'X')).toThrow(/查询串/)
     expect(() => parseHttpsBase('https://example.com/#a', 'X', { allowPath: true })).toThrow(/查询串/)
+  })
+})
+
+describe('basePathFrom', () => {
+  it('未配置或根地址 → 空串（产物与根路径部署逐字节一致）', () => {
+    expect(basePathFrom('')).toBe('')
+    expect(basePathFrom('https://example.com')).toBe('')
+  })
+
+  it('带子路径 → /sub，且不带尾斜杠', () => {
+    expect(basePathFrom('https://aa.bb.com/context-watchdog')).toBe('/context-watchdog')
+    expect(basePathFrom('https://example.com/a/b')).toBe('/a/b')
   })
 })
 
@@ -83,6 +108,7 @@ describe('resolveSiteLinks', () => {
     )
 
     expect(links.siteUrl).toBe('https://contextwatchdog.example')
+    expect(links.basePath).toBe('')
     expect(links.github).toBe('https://github.com/hadesxiong/context-watchdog')
     expect(links.gitee).toBe('https://gitee.com/hadesxiong/context-watchdog')
     expect(links.channels.edge).toBe('https://microsoftedge.microsoft.com/addons/detail/x/abc')
@@ -92,6 +118,17 @@ describe('resolveSiteLinks', () => {
     expect(links.channels.mac).toBe('')
     expect(links.icp).toBe('粤ICP备2026000000号-1')
     expect(links.police).toBe('')
+  })
+
+  it('SITE_URL 带子路径时：siteUrl 保留路径，basePath 同步派生（同一来源）', () => {
+    const links = resolveSiteLinks({ SITE_URL: 'https://aa.bb.com/context-watchdog/' }, PKG)
+
+    expect(links.siteUrl).toBe('https://aa.bb.com/context-watchdog')
+    expect(links.basePath).toBe('/context-watchdog')
+    // canonical 的实际拼法（Base.astro 与 check:versions 同一套）：origin + 含 base 的站内路径
+    expect(`${new URL(links.siteUrl).origin}${links.basePath}/en/privacy/`).toBe(
+      'https://aa.bb.com/context-watchdog/en/privacy/'
+    )
   })
 
   it('渠道键与环境变量名的映射是唯一的', () => {

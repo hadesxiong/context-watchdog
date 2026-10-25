@@ -76,6 +76,10 @@ export default defineConfig({
   // 目录式输出：/en/ 而不是 /en.html（静态托管时路径更干净）
   build: { format: 'directory' },
   devToolbar: { enabled: false },
+  // 子路径部署：SITE_URL 形如 https://aa.bb.com/context-watchdog 时，pathname 派生出
+  // base（根部署为 '' → '/'）。Astro **不会**从 site 的 pathname 推导 base，必须显式配；
+  // 站内 href 的前缀来自 import.meta.env.BASE_URL（i18n.siteBase），与这里同源。
+  base: links.basePath || '/',
   // canonical / og:url / hreflang 统一由它派生；为空时保持相对路径
   site: links.siteUrl || undefined,
   vite: {

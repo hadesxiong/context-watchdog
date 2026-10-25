@@ -17,7 +17,7 @@
   由 `languageGuard.ts` 整段跳过（对全盲模型喂中文只会幻觉，判据 TC-06-5）。
   中文 AI 召回转 **1.1 路线**（本机 torch 重量化排除 span 头 + GitHub Release 托管；
   换模全程见 CHANGELOG ㉖–㉚ 与 spec §13-3/§13-4；作者侧清单自存仓外）。
-- **校验基线**：`npm run typecheck` 0 错误 / `npm test` **425 passed（33 文件）** /
+- **校验基线**：`npm run typecheck` 0 错误 / `npm test` **429 passed（33 文件）** /
   `npm run build` + `npm run build:firefox` 通过 / `npm run probe:layout` 全通过 /
   `npm run probe:widget` 全通过（20 项）/ `npm run site:check` 0 诊断 /
   `npm run site:build` 通过 / `npm run check:versions` 通过（2 项预期警告：SITE_URL 与渠道未配置）。
@@ -27,7 +27,7 @@
 ```bash
 npm run typecheck && npm test && npm run build && npm run build:firefox && npm run probe:layout && npm run probe:widget
 npm run site:check && npm run site:build && npm run check:versions
-# 期望：0 error / 425 passed / 双目标构建通过 / 布局与挂件探针全通过 / 站点 0 诊断且构建通过 /
+# 期望：0 error / 429 passed / 双目标构建通过 / 布局与挂件探针全通过 / 站点 0 诊断且构建通过 /
 #       check:versions 通过（SITE_URL 与渠道未配置时为 2 项警告）
 # Windows：probe:widget 需 CHROME_PATH 指向 Chromium / Chrome for Testing
 #       （正式版 Chrome 与新 Edge 会忽略 --load-extension，示例见 scripts/probe-widget.mjs 头注）

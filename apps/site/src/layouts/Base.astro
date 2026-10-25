@@ -11,7 +11,7 @@ import '@site/styles/global.css'
 // 与设计 token 同一套切换条件。
 import brandLogo from '../../../../public/icons/logo-1.svg'
 import brandLogoDark from '../../../../public/icons/logo-1-dark.svg'
-import { dict, localePath, otherLocale, localeLabel, type SiteLocale } from '@site/i18n'
+import { dict, localePath, siteBase, otherLocale, localeLabel, type SiteLocale } from '@site/i18n'
 import { extensionVersion } from '@site/data/version'
 import { releasesUrlFor, repoUrlFor, blobUrl, treeUrl, siteUrl, hasCanonicalOrigin, icp, police } from '@site/data/links'
 
@@ -34,8 +34,13 @@ const other = otherLocale(locale)
 const pagePath = (target: SiteLocale): string =>
   path === '' ? localePath(target) : `${localePath(target)}${path}/`
 
-// 部署后 siteUrl 填好就自动生效；为空时输出相对链接（不做假的 canonical）
-const absolute = (p: string): string => (hasCanonicalOrigin ? new URL(p, siteUrl).href : p)
+// 部署后 siteUrl 填好就自动生效；为空时输出相对链接（不做假的 canonical）。
+//
+// pagePath 已经含部署子路径（localePath 派生自 BASE_URL），所以这里**只补 origin**：
+// 不能用 new URL(p, siteUrl) —— p 以 / 开头时会把 siteUrl 里的子路径整体丢掉，
+// canonical 会静默错位到域名根（那正是 SITE_URL 曾经禁止带路径的唯一原因）。
+const origin = hasCanonicalOrigin ? new URL(siteUrl).origin : ''
+const absolute = (p: string): string => (origin ? origin + p : p)
 const canonical = absolute(pagePath(locale))
 
 const pageTitle = d.meta.title
@@ -48,7 +53,7 @@ const pageTitle = d.meta.title
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{pageTitle}</title>
     <meta name="description" content={d.meta.description} />
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href={`${siteBase}/favicon.svg`} type="image/svg+xml" />
     <link rel="canonical" href={canonical} />
 
     <!-- 两门语言互为 alternate；x-default 指向中文版（默认语言在根路径） -->

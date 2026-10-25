@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import zh from '../../apps/site/src/i18n/zh.json'
 import en from '../../apps/site/src/i18n/en.json'
-import { format, splitBold, localePath, otherLocale } from '../../apps/site/src/i18n'
+import { format, splitBold, localePath, otherLocale, siteBase } from '../../apps/site/src/i18n'
 
 // 落地页双语词典的防漂移护栏。
 //
@@ -114,9 +114,16 @@ describe('落地页词典：英文侧不该残留未翻译的中文', () => {
 })
 
 describe('落地页 i18n 工具函数', () => {
-  it('默认语言在根路径，其余在 /<locale>/', () => {
-    expect(localePath('zh')).toBe('/')
-    expect(localePath('en')).toBe('/en/')
+  it('默认语言在根路径，其余在 /<locale>/（且一律带部署子路径前缀）', () => {
+    expect(localePath('zh')).toBe(`${siteBase}/`)
+    expect(localePath('en')).toBe(`${siteBase}/en/`)
+    // siteBase 归一化：根部署为空串，子路径部署形如 /context-watchdog（无尾斜杠）
+    expect(siteBase.endsWith('/')).toBe(false)
+    expect(siteBase === '' || siteBase.startsWith('/')).toBe(true)
+    if (siteBase === '') {
+      expect(localePath('zh')).toBe('/')
+      expect(localePath('en')).toBe('/en/')
+    }
   })
 
   it('语言互切', () => {

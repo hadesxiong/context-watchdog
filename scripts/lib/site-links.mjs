@@ -28,14 +28,16 @@ const read = (env, key) => {
   return typeof value === 'string' ? value.trim() : ''
 }
 
-/** 去掉末尾斜杠（保留协议与主机；本项目不支持带 path 的部署，见下方校验） */
+/** 去掉末尾斜杠（保留协议与主机；子路径的归一化见下方校验与 basePathFrom） */
 const stripTrailingSlash = (value) => value.replace(/\/+$/, '')
 
 /**
  * 解析一个 https 基础地址；空值返回 ''（= 未配置，页面据此降级）。
  * @param {string} raw
  * @param {string} label 用于报错文案（环境变量名或「package.json 的 repository」）
- * @param {{ allowPath?: boolean }} [options]
+ * @param {{ allowPath?: boolean, allowSitePath?: boolean }} [options]
+ *   - allowPath：渠道 / 镜像地址本身是具体页面，允许任意路径
+ *   - allowSitePath：站点地址允许部署在子路径（由 pathname 派生 Astro 的 base）
  */
 export function parseHttpsBase(raw, label, options = {}) {
   const value = stripTrailingSlash(typeof raw === 'string' ? raw.trim() : '')
@@ -53,12 +55,31 @@ export function parseHttpsBase(raw, label, options = {}) {
   if (url.search || url.hash) {
     throw new Error(`${label} 不应带查询串或锚点：${raw}`)
   }
-  // 站点部署在根路径（格式为 directory 的静态产物）。允许 path 会让
-  // new URL('/privacy/', site) 把子路径整体丢掉，canonical 会静默错位。
-  if (!options.allowPath && url.pathname !== '/') {
-    throw new Error(`${label} 必须是站点根地址、不能带路径：${raw}`)
+  if (url.pathname !== '/' && !options.allowPath) {
+    if (!options.allowSitePath) {
+      // 根地址（格式为 directory 的静态产物）是默认形态。不显式允许子路径就报错，
+      // 免得 canonical / base 各自猜一个路径出来（见 basePathFrom）。
+      throw new Error(`${label} 必须是站点根地址、不能带路径：${raw}`)
+    }
+    // 空段「//」会让派生出的子路径以 // 开头，站内链接随即变成**协议相对地址**
+    // （//foo/... 会被浏览器理解成 host=foo），是最难查的一类坏链接，直接挡在建站前。
+    if (url.pathname.includes('//')) {
+      throw new Error(`${label} 的子路径不能包含空段「//」：${raw}`)
+    }
   }
   return stripTrailingSlash(url.href)
+}
+
+/**
+ * 从**已归一化**的站点地址派生部署子路径：根地址 → ''，带路径 → '/sub'（无尾斜杠）。
+ * astro.config.mjs 的 base 就来自它——SITE_URL 是 base 与 canonical 的唯一来源，
+ * 两者不可能不同步。未配置（''）时同样返回 ''，产物与根路径部署完全一致。
+ * @param {string} siteUrl parseHttpsBase 的返回值
+ */
+export function basePathFrom(siteUrl) {
+  if (!siteUrl) return ''
+  const pathname = new URL(siteUrl).pathname
+  return pathname === '/' ? '' : pathname.replace(/\/+$/, '')
 }
 
 /**
@@ -96,7 +117,8 @@ export function normalizeRepository(repository) {
  * @param {{ repository?: unknown }} pkg
  */
 export function resolveSiteLinks(env, pkg = {}) {
-  const siteUrl = parseHttpsBase(read(env, 'SITE_URL'), 'SITE_URL')
+  // 站点地址允许带子路径（如 https://aa.bb.com/context-watchdog）：pathname 派生 Astro 的 base
+  const siteUrl = parseHttpsBase(read(env, 'SITE_URL'), 'SITE_URL', { allowSitePath: true })
 
   const channels = {}
   for (const key of CHANNEL_KEYS) {
@@ -106,6 +128,7 @@ export function resolveSiteLinks(env, pkg = {}) {
 
   return {
     siteUrl,
+    basePath: basePathFrom(siteUrl),
     github: normalizeRepository(pkg.repository),
     gitee: parseHttpsBase(read(env, 'GITEE_URL'), 'GITEE_URL', { allowPath: true }),
     channels,

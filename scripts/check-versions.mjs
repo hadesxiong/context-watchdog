@@ -76,7 +76,10 @@ try {
 
 if (siteLinks) {
   if (siteLinks.siteUrl) {
-    pass(`落地页站点域名已配置：${siteLinks.siteUrl}`)
+    pass(
+      `落地页站点地址已配置：${siteLinks.siteUrl}` +
+        (siteLinks.basePath ? `（部署于子路径 ${siteLinks.basePath}）` : '')
+    )
   } else if (release) {
     fail('发布前必须配置 SITE_URL（apps/site/.env）—— 否则线上 canonical 是相对路径')
   } else {
@@ -201,11 +204,16 @@ if (existsSync(siteIndex)) {
   let canonicalProblems = 0
   let scriptProblems = 0
   const origins = new Set()
+  // 部署子路径（SITE_URL 的 pathname 派生，见 site-links.mjs）。
+  // 产物文件路径**不含**它（dist 整个挂到子路径下），而 canonical 的 pathname 含它：
+  // 比对时两边都要补上，且拼绝对地址时只能用 origin（siteUrl 已含子路径）。
+  const siteBase = siteLinks?.basePath ?? ''
+  const siteOrigin = siteLinks?.siteUrl ? new URL(siteLinks.siteUrl).origin : ''
   for (const file of htmlFiles) {
     const relative = file.slice(siteDist.length + 1)
     // 构建用 format: 'directory'，子页面服务的真实地址带尾斜杠
-    const expectedPath =
-      relative === 'index.html' ? '/' : `/${relative.replace(/index\.html$/, '')}`
+    const pagePath = relative === 'index.html' ? '/' : `/${relative.replace(/index\.html$/, '')}`
+    const expectedPath = `${siteBase}${pagePath}`
     const html = readFileSync(file, 'utf8')
 
     const canonical = /<link rel="canonical" href="([^"]*)"/.exec(html)?.[1]
@@ -232,10 +240,10 @@ if (existsSync(siteIndex)) {
       if (actualPath !== expectedPath) {
         fail(`落地页 ${relative} 的 canonical 应为 ${expectedPath}，实际为 ${actualPath}`)
         canonicalProblems += 1
-      } else if (isAbsolute && siteLinks?.siteUrl && canonical !== `${siteLinks.siteUrl}${expectedPath}`) {
+      } else if (isAbsolute && siteLinks?.siteUrl && canonical !== `${siteOrigin}${expectedPath}`) {
         // 产物里的域名与当前 env 不一致 = 改了 .env 却没重建，或构建时用的是另一份 .env
         fail(
-          `落地页 ${relative} 的 canonical 与 SITE_URL 不一致：${canonical} ≠ ${siteLinks.siteUrl}${expectedPath}` +
+          `落地页 ${relative} 的 canonical 与 SITE_URL 不一致：${canonical} ≠ ${siteOrigin}${expectedPath}` +
             `（env 改过？重新跑 npm run site:build）`
         )
         canonicalProblems += 1

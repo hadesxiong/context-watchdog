@@ -57,7 +57,7 @@
 
 | 键 | 留空时 |
 |---|---|
-| `SITE_URL` | canonical 输出相对路径（不影响本地构建，线上必须先填） |
+| `SITE_URL` | canonical 输出相对路径（不影响本地构建，线上必须先填）；可带子路径，如 `https://aa.bb.com/context-watchdog`，站内链接与静态资源随之加前缀 |
 | `EDGE_URL` 等渠道 | 该行显示「即将上架」，不渲染链接 |
 | `ICP_BEIAN` | 页脚不渲染备案行 |
 

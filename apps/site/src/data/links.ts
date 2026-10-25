@@ -18,7 +18,7 @@ import type { SiteLocale } from '@site/i18n'
 
 const config = __SITE_LINKS__
 
-/** 站点根地址；为空时 canonical 输出相对路径（仅本地预览 / fork） */
+/** 站点部署地址（可带子路径）；为空时 canonical 输出相对路径（仅本地预览 / fork） */
 export const siteUrl = config.siteUrl
 export const hasCanonicalOrigin = /^https:\/\//.test(siteUrl)
 

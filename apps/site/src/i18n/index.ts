@@ -2,7 +2,7 @@
 //
 // 与扩展的 i18n 是两套东西，但**术语保持一致**（同一件事在扩展里叫「粘贴自动拦截」，
 // 站点上不该叫别的）。这里不做运行时切换：静态站点每个语言一个页面
-// （/ 为中文，/en/ 为英文），语言在构建时就定死了，因此零客户端 JS。
+// （<base>/ 为中文，<base>/en/ 为英文；base 见下方 siteBase），语言在构建时就定死了，因此零客户端 JS。
 import zh from './zh.json'
 import en from './en.json'
 
@@ -24,8 +24,22 @@ export type SiteLocale = 'zh' | 'en'
 
 export const locales: SiteLocale[] = ['zh', 'en']
 
-/** 站点根路径：默认语言（中文）在 /，其余在 /<locale>/ */
-export const localePath = (locale: SiteLocale): string => (locale === 'zh' ? '/' : `/${locale}/`)
+/**
+ * 部署子路径：根部署为 ''，子路径部署为 '/context-watchdog'（无尾斜杠）。
+ *
+ * 取自 import.meta.env.BASE_URL（= astro.config 的 base，而 base 派生自 SITE_URL 的
+ * pathname），而不是注入的 __SITE_LINKS__：本模块被 tests/unit/siteI18n.test.ts 直接
+ * import，那里没有构建期 define，读全局会直接 ReferenceError。两者同源，不会漂移。
+ * 归一化是为了吃掉 BASE_URL 可能带的尾斜杠（形态取决于 trailingSlash 配置）。
+ */
+export const siteBase: string = (import.meta.env.BASE_URL || '/').replace(/\/+$/, '')
+
+/**
+ * 站内路径（**含**部署子路径）：默认语言（中文）在 <base>/，其余在 <base>/<locale>/。
+ * 页头 / 页脚 / 语言切换的 href 全由它派生，因此子路径部署时无需逐处手改。
+ */
+export const localePath = (locale: SiteLocale): string =>
+  `${siteBase}/${locale === 'zh' ? '' : `${locale}/`}`
 
 /** 另一门语言的路径（用于页头语言切换） */
 export const otherLocale = (locale: SiteLocale): SiteLocale => (locale === 'zh' ? 'en' : 'zh')

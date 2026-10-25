@@ -320,9 +320,15 @@ Astro 静态站点（`output: 'static'`），产物是纯 HTML + 一个 CSS 文�
 `src/i18n/{zh,en}.json` 两语言键集合一致由单测强制（部署前检查清单随发布 runbook
 移出仓库，作者自持）。
 
+部署路径（**可带子路径**）：`SITE_URL` 允许形如 `https://aa.bb.com/context-watchdog`。
+它的 pathname 派生 Astro 的 `base`（`scripts/lib/site-links.mjs` 的 `basePathFrom`），
+站内 href 的前缀取 `import.meta.env.BASE_URL`（`i18n.siteBase`），canonical / hreflang 取
+`origin + 含 base 的站内路径`——三者同源，不会漂移；未配置时 `base` 为 `/`，产物与根路径
+部署完全一致。托管时把 `dist` 整个挂到该子路径下（产物内不含前缀）。
+
 ## 12. 测试体系
 
-`npm test`：**425 断言 / 33 文件**（`npm run typecheck` 0 错误为另一道闸）：
+`npm test`：**429 断言 / 33 文件**（`npm run typecheck` 0 错误为另一道闸）：
 
 | 目录 | 内容 |
 |------|------|
