@@ -1,5 +1,4 @@
-// 中文混排偏移验证 - GLiNER 偏移体系风险的正则侧契约
-// span 必须与 original 严格一致，否则替换会错位切字
+// 中文混排偏移回归：span 必须与 original 严格一致，否则替换会错位切字
 import { describe, it, expect } from 'vitest'
 import { runDetect, applyReplace, assertSpansConsistent, assertNoOverlap } from '../helpers'
 

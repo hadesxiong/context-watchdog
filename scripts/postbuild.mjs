@@ -1,16 +1,6 @@
-// 构建后处理：按目标浏览器整理 manifest
-//
-//   node scripts/postbuild.mjs chrome    → dist/（无需处理）
-//   node scripts/postbuild.mjs firefox   → dist-firefox/（Chrome 键 → Firefox 键）
-//
-// 两个目标共用同一份输入 manifest（CRXJS 必须靠 side_panel / service_worker
-// 发现打包入口，分叉输入会漏打包），所以 Firefox 的键转换集中在这里做一次：
-//   - background.service_worker → background.scripts
-//     （Firefox MV3 不支持 service_worker；Chrome 形态的 service_worker 会让
-//      Firefox 报「background.scripts requires manifest version of 2 or lower」）
-//   - side_panel → sidebar_action（Firefox 不识别 side_panel）
-//   - 移除 sidePanel 权限（Firefox 未知权限，审核会标）
-//   - 补 browser_specific_settings.gecko id（本地加载与签名需要稳定 id）
+// 构建后处理：chrome → dist/（manifest 原样）；firefox → dist-firefox/（Chrome 键 → Firefox 键）。
+// 两个目标共用同一份输入 manifest（CRXJS 必须靠 side_panel / service_worker 发现打包入口，
+// 分叉输入会漏打包），所以 Firefox 的键转换集中在这里做一次，清单与理由见 docs/spec.md §11。
 import { readFileSync, writeFileSync, copyFileSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
@@ -22,28 +12,19 @@ const here = dirname(fileURLToPath(import.meta.url))
 const outDir = target === 'firefox' ? 'dist-firefox' : 'dist'
 const manifestPath = resolve(here, `../${outDir}/manifest.json`)
 
-// 两个目标都必须随附第三方许可声明（Apache-2.0 §4(c)、MIT 的版权与许可通知要求）。
-// 运行时下载的模型不在包内，不计入分发组件，但在清单末尾单独列出以供透明度审查。
+// 许可声明随包分发（Apache-2.0 §4(c)、MIT 通知义务）；运行时下载的模型不入包，只在清单末尾列出备查
 const notices = renderThirdPartyNotices()
 writeFileSync(resolve(here, '../THIRD-PARTY-NOTICES.txt'), notices)
 copyFileSync(resolve(here, '../THIRD-PARTY-NOTICES.txt'), resolve(here, `../${outDir}/THIRD-PARTY-NOTICES.txt`))
-// LICENSE 一并入包：商店与用户都能在产物内直接核验许可全文
 copyFileSync(resolve(here, '../LICENSE'), resolve(here, `../${outDir}/LICENSE`))
-// NOTICE 必须一并入包。这不是「顺手多带一个文件」：Apache-2.0 §4(d) 明确要求
-// 分发衍生作品时随附 NOTICE 里的署名声明。本项目恰好有 NOTICE（作者署名 + 商标
-// 声明 + 专利声明），漏了它就是漏了一条许可义务 —— 而且漏得毫无症状：
-// 构建照样成功，只有真的去看产物才会发现。因此 check-versions 里有一条硬护栏。
+// NOTICE 必须一并入包（Apache-2.0 §4(d) 署名义务）：漏了构建照样成功，check-versions 有硬护栏盯着
 copyFileSync(resolve(here, '../NOTICE'), resolve(here, `../${outDir}/NOTICE`))
 console.log('[postbuild] 第三方许可、LICENSE 与 NOTICE 已写入 →', outDir)
 
-// manifest 用的是 __MSG_ext_name__ / __MSG_ext_description__，需要 _locales 才能被
-// 浏览器替换掉；service worker 的 chrome.i18n.getMessage 也读这里。
-// 两者与本扩展的 UI 字典同源（见 scripts/generate-locales.mjs 的头注释）。
+// __MSG_*__ 与 SW 的 chrome.i18n.getMessage 都读 _locales，词条与 UI 字典同源（见 scripts/generate-locales.mjs）
 console.log('[postbuild] _locales 已生成 →', writeLocales(resolve(here, `../${outDir}`)).join(', '))
 
-// manifest 里的 __MSG_xxx__ 由浏览器在加载时替换，产物里保留原样是对的。
-// 但这意味着**少一个 key 不会被构建报错**——浏览器会直接把 __MSG_ext_name__
-// 当成名字显示出来。所以这里反过来校验 _locales 里确实存在被引用的 key。
+// __MSG_xxx__ 缺 key 不会让构建报错——浏览器会直接把 __MSG_ext_name__ 当名字显示出来，所以反过来校验 _locales 里确实存在被引用的 key。
 const builtManifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
 const referencedKeys = new Set()
 const collectMsgRefs = (value) => {
@@ -65,10 +46,8 @@ if (missingMsgKeys.length) {
 }
 console.log(`[postbuild] manifest 本地化键可解析 ✓  (${[...referencedKeys].join(', ')} → ${defaultLocale})`)
 
-// 设计 token 内联护栏。
-// Tailwind 4 的 @import 解析器只内联同目录/别名可达的路径，会静默丢弃它不认识的
-// @import —— 结果是产物 CSS 里完全没有 :root 变量，所有颜色失效，而构建**零警告**。
-// 这里把该回归变成硬失败。token 唯一来源：packages/design-tokens/tokens.css。
+// 设计 token 内联护栏：Tailwind 4 的 @import 解析器会静默丢弃它不认识的路径，产物 CSS 于是没有
+// :root 变量、所有颜色失效，而构建零警告——这里变成硬失败。token 唯一来源 packages/design-tokens/tokens.css。
 const cssFiles = readdirSync(resolve(here, `../${outDir}/assets`)).filter((f) => f.endsWith('.css'))
 const cssBundle = cssFiles.map((f) => readFileSync(resolve(here, `../${outDir}/assets/${f}`), 'utf8')).join('\n')
 for (const token of ['--background:', '--foreground:', '--primary:', '--radius:']) {
@@ -80,12 +59,8 @@ for (const token of ['--background:', '--foreground:', '--primary:', '--radius:'
 }
 console.log('[postbuild] 设计 token 已内联（亮色 + 暗色）✓')
 
-// Tailwind 内容扫描范围护栏。
-// Tailwind 4 按 vite root 决定要扫哪些文件；root 一旦指向错的地方（或扩展目录被
-// 排除），产物里就一个 utility 都不剩——UI 全文失去样式，而构建**零警告**。
-// 这里抽查几个模板里确实用到的 utility，把「扫描失效」变成硬失败。
-// （反过来，扫描范围过宽也会把 package-lock.json 里的英文单词当成类名，多出
-//  .container / .static 这类无用规则；那属于体积问题，不在这里拦截。）
+// Tailwind 内容扫描范围护栏：root 指错地方（或扩展目录被排除）时产物一个 utility 都不剩、构建零
+// 警告，这里抽查模板实际用到的 utility，把「扫描失效」变成硬失败（扫描过宽属体积问题，不在此拦）。
 const requiredUtilities = ['.gap-2', '.text-xs', '.w-full', '.mb-1']
 const missingUtilities = requiredUtilities.filter((u) => !cssBundle.includes(u))
 if (missingUtilities.length) {
@@ -95,10 +70,7 @@ if (missingUtilities.length) {
 }
 console.log('[postbuild] Tailwind 扫描范围正常 ✓  (' + requiredUtilities.join(' ') + ')')
 
-// ONNX Runtime 单例护栏。
-// ORT 的 wasm 后端依赖共享内存信号（SharedArrayBuffer）做多线程；产物里出现多份
-// ort-wasm-*.wasm 通常意味着依赖树里存在两个不同版本的 onnxruntime-web，会让两个
-// 实例各自建内存、丢掉共享信号。这里把它变成构建期硬失败，而不是运行时怪报错。
+// ORT wasm 单例护栏：多份 ort-wasm-*.wasm 说明依赖树里有两个 onnxruntime-web，两个实例各自建内存、丢掉共享信号（SharedArrayBuffer 多线程），构建期硬失败
 const ortWasm = readdirSync(resolve(here, `../${outDir}/assets`)).filter((f) => f.endsWith('.wasm'))
 if (ortWasm.length !== 1) {
   console.error(`[postbuild] ✗ 产物中 ort-wasm 文件数 = ${ortWasm.length}，应恰好为 1`)
@@ -114,7 +86,7 @@ if (target !== 'firefox') {
 }
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
 
-// 后台：service_worker → scripts（CRXJS 已输出 service-worker-loader.js）
+// 后台：service_worker → scripts（Firefox 不接受 MV3 的 service_worker 键；CRXJS 已输出 service-worker-loader.js）
 if (!manifest.background?.service_worker) {
   console.warn('[postbuild] 未找到 background.service_worker，跳过转换')
   process.exit(0)
@@ -122,10 +94,8 @@ if (!manifest.background?.service_worker) {
 manifest.background.scripts = [manifest.background.service_worker]
 delete manifest.background.service_worker
 
-// 侧栏：side_panel → sidebar_action（路径不变，CRXJS 已按 side_panel 打包该页面）
-// 不写 default_position：MDN 的 sidebar_action 没有这个键，Firefox 载入时会报
-// 「An unexpected property」manifest warning。面板停靠位置由 Firefox 自身决定，
-// 扩展无法也不应指定。
+// 侧栏：side_panel → sidebar_action（路径不变，CRXJS 已按 side_panel 打包该页面）。不写
+// default_position：MDN 的 sidebar_action 没有该键，Firefox 会报「An unexpected property」。
 if (manifest.side_panel?.default_path) {
   manifest.sidebar_action = {
     default_title: 'ContextWatchdog · AI脱敏助手',
@@ -134,9 +104,8 @@ if (manifest.side_panel?.default_path) {
   delete manifest.side_panel
 }
 
-// 权限：移除 Firefox 未知的 sidePanel 与 offscreen
-// （Firefox 没有 offscreen API，未知权限会被 AMO 审核标出来；S1 的宿主在 Firefox 上
-//  不生效，回退到侧栏内加载）
+// 权限：移除 Firefox 未知的 sidePanel / offscreen（Firefox 没有 offscreen API，AMO 审核会标）；
+// S1 的宿主在 Firefox 上不生效，回退到侧栏内加载
 if (Array.isArray(manifest.permissions)) {
   manifest.permissions = manifest.permissions.filter((p) => p !== 'sidePanel' && p !== 'offscreen')
 }

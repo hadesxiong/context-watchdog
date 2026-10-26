@@ -1,5 +1,4 @@
-// Golden 用例 - 代码开发（code）Profile
-// 语义：密钥全开，高熵 loose（20 字符/熵 3.0），PII 默认 keep（store 层），不做置信度分层
+// Golden 用例 - 代码开发（code）Profile：密钥全开、高熵 loose（20 字符/熵 3.0）、PII 默认 keep（store 层）、不做置信度分层
 import { describe, it, expect } from 'vitest'
 import { runDetect, applyReplace, assertNoOverlap, assertSpansConsistent } from '../helpers'
 
@@ -23,13 +22,11 @@ describe('code profile - 开发场景', () => {
     expect(items.some(i => i.original === 'R00tP@ss!2024')).toBe(true)
     expect(items.some(i => i.original === 'cachePass')).toBe(true)
     expect(items.some(i => i.original.includes('sk-proj-'))).toBe(true)
-    // 端口不误报
     expect(items.some(i => i.original === '8080')).toBe(false)
 
     const out = applyReplace(text, items)
     expect(out).not.toContain('R00tP@ss!2024')
     expect(out).not.toContain('cachePass')
-    // 结构完好：YAML key 保留
     expect(out).toContain('DB_PASSWORD: <<')
     expect(out).toContain('APP_PORT: 8080')
   })
@@ -65,8 +62,8 @@ describe('code profile - 开发场景', () => {
   })
 
   it('注释中的假密码（GLiNER 场景，正则路径下允许误报，记录现状）', async () => {
-    // 现状：KEY= 在注释行仍会被 env 规则命中（^ 锚定行首）
-    // 该行为在 Phase 2+ 由模型级联修正；此处锁定当前行为防止意外变化
+    // 现状：KEY= 在注释行仍会被 env 规则命中（^ 锚定行首），Phase 2+ 交给模型级联修正；
+    // 此处锁定当前行为防止意外变化
     const text = '# PASSWORD=test1234 示例（注意：test1234 含数字后缀会被弱口令过滤）'
     const { items } = await runDetect(text, 'code')
     // test1234 → 剥后缀 test → 弱口令 → 不检出

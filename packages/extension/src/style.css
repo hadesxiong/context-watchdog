@@ -31,9 +31,7 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
-/* ============================================================
-   基础样式
-   ============================================================ */
+/* 基础样式 */
 :root {
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;

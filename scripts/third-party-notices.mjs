@@ -1,10 +1,6 @@
-// 生成 THIRD-PARTY-NOTICES.txt（分发产物必须随附的第三方许可与署名）
-//
-//   node scripts/third-party-notices.mjs           → 写入仓库根 THIRD-PARTY-NOTICES.txt
-//
-// 由 postbuild.mjs 在构建后自动调用，并复制进 dist/ 与 dist-firefox/。
-// 组件名、版本、许可标识一律从 node_modules 中**实际安装的** package.json 读取，
-// 避免手写清单与 node_modules 漂移；版权行无法从机器可读字段获得，手工维护在 COPYRIGHTS 中。
+// 生成 THIRD-PARTY-NOTICES.txt（分发产物必须随附的第三方许可与署名）。由 postbuild.mjs 构建后
+// 调用并复制进 dist/ 与 dist-firefox/。组件名、版本、许可标识从 node_modules 中**实际安装的**
+// package.json 读取，避免手写清单漂移；版权行取不到，手工维护在 COPYRIGHTS 中。
 import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
@@ -49,7 +45,6 @@ const HOMEPAGES = {
   'onnx-community/gliner_small-v2': 'https://huggingface.co/onnx-community/gliner_small-v2'
 }
 
-// 已知的许可标识差异：说明"以什么为准"，比简单罗列更可核查。
 const LICENSE_NOTES = {
   gliner:
     '包内 LICENSE 文件为 Apache-2.0 全文，而 package.json 的 license 字段声明为 MIT。' +

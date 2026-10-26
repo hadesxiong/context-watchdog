@@ -6,8 +6,7 @@ import { useI18n } from '../i18n'
 
 const { t } = useI18n()
 
-// 粘贴自动拦截设置：逐站授权（optional_host_permissions），
-// 只有授权站点才由 service worker 注入粘贴监听
+// 粘贴自动拦截：逐站授权（optional_host_permissions），仅授权站点才注入粘贴监听（详见 docs/spec.md §8）
 const sites = ref<string[]>([])
 const siteInput = ref('')
 const busy = ref(false)
@@ -43,8 +42,7 @@ const addSite = async () => {
 
     busy.value = true
     try {
-        // 必须由用户手势触发：浏览器会弹出「读取 https://xxx 上的数据」授权框。
-        // 带路径的条目要精确路径 + 子树两条；写 http 的条目协议不限，http/https 都要
+        // 授权须用户手势触发；带路径条目要「精确路径 + 子树」两条 origin，http 条目 http/https 各一条
         const origins = sitePermissionOrigins(pattern)
         const granted = await chrome.permissions.request({ origins })
         if (!granted) {
@@ -64,10 +62,10 @@ const addSite = async () => {
 const removeSite = async (pattern: string) => {
     await persist(sites.value.filter(site => site !== pattern))
     try {
-        // 申请时可能给了多条 origin（路径 + 子树、http + https），撤销也要一次给全
+        // 撤销必须与申请时同一份 origin 清单（路径 + 子树、http + https 多条）
         await chrome.permissions.remove({ origins: sitePermissionOrigins(pattern) })
     } catch {
-        // 权限可能仍被列表中其他条目共享，忽略
+        // 权限可能被其他条目共享，忽略
     }
     setNotice(t('paste_ok_removed'))
 }
@@ -76,18 +74,15 @@ onMounted(loadSites)
 </script>
 
 <template>
-    <!-- 与引擎卡片同规格的全宽贴边区块（p-4 = 内容到面板边框 16px），
-         块内分隔统一走 padding，不用 margin -->
+    <!-- 全宽贴边区块（p-4），块内分隔一律走 padding 不用 margin（与引擎卡片同规格） -->
     <div class="p-4 bg-muted/50">
         <div>
             <p class="text-sm font-medium text-foreground">{{ t('paste_section_title') }}</p>
-            <!-- 描述：最多 2 行，超出省略 -->
             <p class="text-xs text-muted-foreground pt-0.5 line-clamp-2">
                 {{ t('paste_section_desc') }}</p>
         </div>
 
-        <!-- 输入与按钮等高 32px（Input h-8 = Button sm 档 h-8）；按钮 shrink-0 防被压窄
-             导致文字换行，输入 min-w-0 允许收缩 -->
+        <!-- 输入与按钮等高 32px；按钮 shrink-0 防压窄换行，输入 min-w-0 允许收缩 -->
         <div class="pt-4 flex items-center gap-2">
             <Input v-model="siteInput" :placeholder="t('paste_input_placeholder')" :disabled="busy"
                 class="h-8 min-w-0 input-fixed" @keyup.enter="addSite" />

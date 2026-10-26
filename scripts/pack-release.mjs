@@ -1,13 +1,7 @@
 #!/usr/bin/env node
-// 打包发布产物（F5）
-//
-// 解决的问题：CWS / AMO / Edge 都要求上传**内容位于 zip 根目录**的压缩包
-// （manifest.json 不能藏在一个外层文件夹里）。手动 `zip -r` 很容易把目录结构
-// 一起压进去，而症状是商店后台报一句很难懂的「找不到 manifest」。
-// 这里固定做法，并在打包后回读 zip 条目验证根目录里确实有 manifest.json。
-//
-// 同时生成 SHA256SUMS：Release 页面附上它，用户下载后可以自己核验。
-//
+// 打包发布产物：CWS / AMO / Edge 都要求 zip 的**内容位于根目录**（manifest.json 不能藏在外层
+// 文件夹里），手动 `zip -r` 很容易压错，症状是商店后台一句难懂的「找不到 manifest」。
+// 这里固定做法，打包后回读条目验证；同时生成 SHA256SUMS 供用户核验。
 // 用法：node scripts/pack-release.mjs
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -21,7 +15,6 @@ const abs = (p) => `${root}${p}`
 const manifest = JSON.parse(readFileSync(abs('packages/extension/src/manifest.json'), 'utf8'))
 const version = manifest.version
 
-/** 打包一个目标目录；返回 { file, bytes } */
 const pack = (label, sourceDir, suffix) => {
   if (!existsSync(abs(sourceDir))) {
     throw new Error(`[pack] ${label} 产物不存在（${sourceDir}/）——先跑 npm run build${suffix}`)
@@ -36,8 +29,7 @@ const pack = (label, sourceDir, suffix) => {
   const file = `${outDir}/contextwatchdog-${version}-${label}.zip`
   rmSync(file, { force: true })
 
-  // -r 递归；-X 去掉多余的文件属性（可复现性更好）；在源目录内运行，保证
-  // 压出来的是「目录内容」而不是「目录本身」。
+  // -r 递归、-X 去掉多余文件属性（可复现性更好）；在源目录内运行，压出来的才是「目录内容」
   execFileSync('zip', ['-r', '-X', '-q', file, '.'], { cwd: abs(sourceDir) })
 
   // 回读验证：根目录里必须有 manifest.json，且不能有外层文件夹

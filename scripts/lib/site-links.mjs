@@ -1,16 +1,5 @@
-// 落地页「部署身份」的解析与校验（astro.config.mjs 与单测共用）
-//
-// 为什么这些值不进仓库：源码是公开的，而它们描述的是**这份部署**——
-// 域名、商店上架状态、备案号。别人 fork 之后不应该静默继承它们：
-//   · 域名被人继承 → canonical / hreflang 指向作者的站；
-//   · 商店链接被继承 → fork 的用户被导流到作者的插件页；
-//   · 备案号被继承 → 属于冒用备案（法律问题）。
-//
-// 与之相对，**产品事实**（有哪些渠道、什么顺序、什么文案）留在仓库里，
-// 因为护栏要能校验它，而且 fork 也应该看到它。
-//
-// 校验集中在这里而不是散落在模板里：一个拼错的 https 地址应该在建站时
-// 就炸掉，而不是等用户点出一个 404。
+// 落地页「部署身份」（域名 / 商店页 / 备案号）的解析与校验：不进仓库——fork 不应静默
+// 继承作者的部署身份；校验集中在此，拼错的地址建站时即报错，而不是等用户点出 404。
 
 /** 渠道键 → 环境变量名。顺序与页面行序无关（那是 links.ts 的事）。 */
 export const CHANNEL_ENV = {
@@ -28,16 +17,12 @@ const read = (env, key) => {
   return typeof value === 'string' ? value.trim() : ''
 }
 
-/** 去掉末尾斜杠（保留协议与主机；子路径的归一化见下方校验与 basePathFrom） */
 const stripTrailingSlash = (value) => value.replace(/\/+$/, '')
 
 /**
  * 解析一个 https 基础地址；空值返回 ''（= 未配置，页面据此降级）。
- * @param {string} raw
  * @param {string} label 用于报错文案（环境变量名或「package.json 的 repository」）
- * @param {{ allowPath?: boolean, allowSitePath?: boolean }} [options]
- *   - allowPath：渠道 / 镜像地址本身是具体页面，允许任意路径
- *   - allowSitePath：站点地址允许部署在子路径（由 pathname 派生 Astro 的 base）
+ * @param {{ allowPath?: boolean, allowSitePath?: boolean }} [options] allowPath 允许任意路径（渠道页本身是具体页面），allowSitePath 允许站点部署在子路径
  */
 export function parseHttpsBase(raw, label, options = {}) {
   const value = stripTrailingSlash(typeof raw === 'string' ? raw.trim() : '')
@@ -57,12 +42,10 @@ export function parseHttpsBase(raw, label, options = {}) {
   }
   if (url.pathname !== '/' && !options.allowPath) {
     if (!options.allowSitePath) {
-      // 根地址（格式为 directory 的静态产物）是默认形态。不显式允许子路径就报错，
-      // 免得 canonical / base 各自猜一个路径出来（见 basePathFrom）。
+      // 产物默认是根地址形态；不显式允许子路径就报错，免得 canonical 与 base 各自猜路径
       throw new Error(`${label} 必须是站点根地址、不能带路径：${raw}`)
     }
-    // 空段「//」会让派生出的子路径以 // 开头，站内链接随即变成**协议相对地址**
-    // （//foo/... 会被浏览器理解成 host=foo），是最难查的一类坏链接，直接挡在建站前。
+    // 空段「//」会让站内链接变成协议相对地址（//foo/... 被浏览器读成 host=foo），是最难查的一类坏链接，挡在建站前
     if (url.pathname.includes('//')) {
       throw new Error(`${label} 的子路径不能包含空段「//」：${raw}`)
     }
@@ -71,9 +54,8 @@ export function parseHttpsBase(raw, label, options = {}) {
 }
 
 /**
- * 从**已归一化**的站点地址派生部署子路径：根地址 → ''，带路径 → '/sub'（无尾斜杠）。
- * astro.config.mjs 的 base 就来自它——SITE_URL 是 base 与 canonical 的唯一来源，
- * 两者不可能不同步。未配置（''）时同样返回 ''，产物与根路径部署完全一致。
+ * 从已归一化的站点地址派生部署子路径：根地址 → ''，带路径 → '/sub'（无尾斜杠）。astro.config.mjs
+ * 的 base 取自它：SITE_URL 是 base 与 canonical 的唯一来源，两者不会不同步。
  * @param {string} siteUrl parseHttpsBase 的返回值
  */
 export function basePathFrom(siteUrl) {
@@ -83,8 +65,8 @@ export function basePathFrom(siteUrl) {
 }
 
 /**
- * 把 package.json 的 repository 归一成 https 地址。
- * 支持 `git+https://host/o/r.git`、`https://host/o/r`、`git@host:o/r.git`。
+ * 把 package.json 的 repository 归一成 https 地址（接受 `git+https://host/o/r.git`、
+ * `https://host/o/r`、`git@host:o/r.git` 三种写法）。
  * @param {unknown} repository package.json 的 repository 字段（对象或字符串）
  */
 export function normalizeRepository(repository) {
@@ -111,13 +93,8 @@ export function normalizeRepository(repository) {
   return stripTrailingSlash(url.href)
 }
 
-/**
- * 解析全部部署身份。空值一律折叠成 ''（调用方据此降级），非法值直接抛错。
- * @param {Record<string, string | undefined>} env
- * @param {{ repository?: unknown }} pkg
- */
+/** 解析全部部署身份；空值一律折叠成 ''（调用方据此降级），非法值直接抛错。 */
 export function resolveSiteLinks(env, pkg = {}) {
-  // 站点地址允许带子路径（如 https://aa.bb.com/context-watchdog）：pathname 派生 Astro 的 base
   const siteUrl = parseHttpsBase(read(env, 'SITE_URL'), 'SITE_URL', { allowSitePath: true })
 
   const channels = {}
@@ -138,10 +115,8 @@ export function resolveSiteLinks(env, pkg = {}) {
 }
 
 /**
- * 解析访问统计（可选，自托管 Umami）的部署参数；同属部署身份，留空即不注入。
- * 启用对缺一抛错；WEBSITE_ID 原样进 HTML 属性，禁空白与引号/尖括号；
- * 修饰项（HOST_URL / DNT）配了没启用只警告。
- * @param {Record<string, string | undefined>} env
+ * 解析可选的自托管 Umami 统计参数；留空不注入，启用后缺一抛错。WEBSITE_ID 会原样进入
+ * HTML 属性，因此禁空白与引号/尖括号。
  * @returns {{ enabled: boolean, websiteId: string, scriptUrl: string, hostUrl: string, dnt: boolean, warnings: string[] }}
  */
 export function resolveUmami(env) {

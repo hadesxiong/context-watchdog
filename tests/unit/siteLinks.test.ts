@@ -9,10 +9,8 @@ import {
   resolveUmami
 } from '../../scripts/lib/site-links.mjs'
 
-// 落地页部署身份的解析护栏。
-//
-// 这些值来自 env，**没有构建期类型兜底**（.env 里的字符串就是字符串）。所以规则
-// 必须在这层钉死：拼错的协议、被当成站点地址的带路径 URL、少写的 repository，
+// 落地页部署身份的解析护栏。这些值来自 env，**没有构建期类型兜底**（.env 里的字符串就是
+// 字符串），规则必须在这层钉死：拼错的协议、被当成站点地址的带路径 URL、少写的 repository，
 // 都要在建站前就报错，而不是等线上出现一个指向别处的 canonical。
 
 const PKG = { repository: 'git+https://github.com/hadesxiong/context-watchdog.git' }

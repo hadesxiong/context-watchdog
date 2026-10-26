@@ -1,14 +1,10 @@
 ---
-// 页面外壳：<head>（含 hreflang）、页头导航、页脚
-//
-// hreflang 是手写的，不是 Astro 生成的：两门语言各是一个独立页面
-// （/ 与 /en/），互相之间必须有 alternate 声明，否则搜索引擎会把它们
-// 当成重复内容。多语言站点最容易漏掉的一环。
+// 页面外壳：<head>（含 canonical / hreflang）、页头导航、页脚
+// hreflang 与 canonical 是手写的（Astro 不生成）：两门语言各是一个独立页面（/ 与 /en/），
+// 互相必须有 alternate 声明，否则搜索引擎当成重复内容 —— 多语言站最容易漏的一环。
 import '@site/styles/global.css'
-// 品牌锁标（图形 + 字）：与扩展共用仓库根 public/icons 里那一份。
-// 站点自己的 public/ 只放 favicon/robots，所以这里按 URL 资源引入，
-// 由构建打进 dist/assets（带内容哈希）；暗色变体走 prefers-color-scheme，
-// 与设计 token 同一套切换条件。
+// 品牌锁标与扩展共用仓库根 public/icons 那一份（站点自己的 public/ 只放 favicon/robots），
+// 故按 URL 资源引入、构建打进 dist/assets；暗色变体走 prefers-color-scheme（与 token 同源）。
 import brandLogo from '../../../../public/icons/logo-1.svg'
 import brandLogoDark from '../../../../public/icons/logo-1-dark.svg'
 import { dict, localePath, siteBase, otherLocale, localeLabel, type SiteLocale } from '@site/i18n'
@@ -35,20 +31,14 @@ const { locale, path = '' } = Astro.props
 const d = dict(locale)
 const other = otherLocale(locale)
 
-// 每个语言下的页面路径。canonical 与 hreflang 必须指向**当前这一页**，
-// 而不是恒指向首页——隐私政策页若声明 canonical 为 /，等于告诉搜索引擎
-// 这一页是首页的副本，它会直接不收录。
-//
-// 子页面带尾斜杠：构建用 format: 'directory'，服务的真实地址就是 /privacy/，
-// canonical 写的必须是实际地址，否则又变成另一种形式的「指向别处」。
+// canonical / hreflang 指向**当前这一页**而非恒指首页：隐私页若写 canonical / 等于自认
+// 首页副本，会被直接不收录；子页面带尾斜杠 —— format: 'directory' 下真实地址就是 /privacy/。
 const pagePath = (target: SiteLocale): string =>
   path === '' ? localePath(target) : `${localePath(target)}${path}/`
 
-// 部署后 siteUrl 填好就自动生效；为空时输出相对链接（不做假的 canonical）。
-//
-// pagePath 已经含部署子路径（localePath 派生自 BASE_URL），所以这里**只补 origin**：
-// 不能用 new URL(p, siteUrl) —— p 以 / 开头时会把 siteUrl 里的子路径整体丢掉，
-// canonical 会静默错位到域名根（那正是 SITE_URL 曾经禁止带路径的唯一原因）。
+// 站内路径已含部署子路径（localePath 派生自 BASE_URL），这里**只补 origin**：
+// 不能用 new URL(p, siteUrl) —— p 以 / 开头时会丢掉 siteUrl 里的子路径，
+// canonical 静默错位到域名根。siteUrl 为空时输出相对链接（不做假的 canonical）。
 const origin = hasCanonicalOrigin ? new URL(siteUrl).origin : ''
 const absolute = (p: string): string => (origin ? origin + p : p)
 const canonical = absolute(pagePath(locale))
@@ -56,7 +46,7 @@ const canonical = absolute(pagePath(locale))
 const pageTitle = d.meta.title
 
 // 属性全部由 UMAMI_* env 派生，enabled=false 时不渲染；
-// is:inline：要原样输出的外链标签，不让 Astro 打包处理
+// is:inline：外链标签原样输出，不让 Astro 打包处理
 const umamiScriptAttrs: Record<string, string | boolean> | null = umami.enabled
   ? {
       src: umami.scriptUrl,
@@ -94,7 +84,6 @@ const umamiScriptAttrs: Record<string, string | boolean> | null = umami.enabled
     <meta property="og:locale" content={d.meta.ogLocale} />
     <meta name="twitter:card" content="summary" />
 
-    <!-- 主题色跟随系统，与扩展一致（token 文件里就是媒体查询切换） -->
     <meta name="color-scheme" content="light dark" />
 
     {
@@ -109,8 +98,7 @@ const umamiScriptAttrs: Record<string, string | boolean> | null = umami.enabled
       <div class="pg-shell pg-header-inner">
         <a class="pg-brand" href={localePath(locale)}>
           <picture>
-            {/* Astro 把 .svg 导入解析成 ImageMetadata（含 src / width / height），
-                尺寸直接取自文件本身，不会与源文件漂移 */}
+            {/* Astro 把 .svg 导入解析成 ImageMetadata（含 src / width / height），尺寸取自文件本身 */}
             <source media="(prefers-color-scheme: dark)" srcset={brandLogoDark.src} />
             <img
               src={brandLogo.src}

@@ -1,6 +1,5 @@
-// 单元用例 - 检测管线配置（正则恒开 / 场景识别内部化 / AI 开关接线）
-// 正则为基础引擎无关闭入口（SW 粘贴拦截仅依赖此档）；场景识别只喂给 GLiNER 提示词，
-// 已并入 AI 分支（pipeline 内部处理，不再暴露 config 键）
+// 单元用例 - 检测管线配置：正则为基础引擎无关闭入口（SW 粘贴拦截仅依赖此档）；
+// 场景识别已并入 AI 分支（只喂 GLiNER 提示词，pipeline 内部处理，不暴露 config 键）。
 import { describe, it, expect } from 'vitest'
 import { detect } from '@engine/detector/pipeline'
 import { getProfileById } from '@engine/detector/profiles'
@@ -17,8 +16,8 @@ describe('pipeline 引擎配置', () => {
   })
 
   it('enableContentDetection 开/关均不影响正则检出（场景识别只服务 AI 提示词）', async () => {
-    // 单测环境无 GLiNER 模型（isContentModelReady=false），AI 分支本就不跑 →
-    // 该键只应影响 AI 分支，正则档结果必须稳定
+    // 单测环境无 GLiNER 模型（isContentModelReady=false），AI 分支本就不跑 → 该键只应影响
+    // AI 分支，正则档结果必须稳定
     const off = await detect(text, profile, { enableContentDetection: false })
     const on = await detect(text, profile, { enableContentDetection: true })
     expect(off.items.some(i => i.original === '13812345678')).toBe(true)

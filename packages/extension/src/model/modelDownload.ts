@@ -1,65 +1,32 @@
-// GLiNER 模型下载器
-// 职责：多源回退 → Range 断点续传（会话内 + 跨会话）→ 指数退避重试（尊重 Retry-After）→
-//       停滞看门狗 → 传输完整性校验 → Cache Storage 落盘 → 多窗口去重（storage 锁）→
-//       缓存版本自动失效（1 字节探测）
-// 独立成模块的原因：fetch / cache / partial / lock / sleep 全部可注入，便于在 node 环境下单测
-// （见 tests/unit/modelDownload.test.ts）
+// GLiNER 模型下载器：多源回退、断点续传、退避重试、停滞看门狗、完整性校验、Cache 落盘、多窗口
+// 去重、版本自动失效（1 字节探测）；依赖全可注入，node 可单测（tests/unit/modelDownload.test.ts）。
 
 import type { ModelProgress } from '@engine/detector/backend'
 
-// 下载进度回调：percent < 0 表示未知总长（UI 走不定进度动画）；received/total 供 UI 展示 MB
-// 契约定义在引擎的 backend.ts（检测管线的 preload 也用同一个类型），此处再导出供调用点直接取用
+// 下载进度回调（契约在引擎 backend.ts，preload 同用）：percent < 0 = 未知总长，received/total 供 UI 展示 MB
 export type { ModelProgress } from '@engine/detector/backend'
 
-// 注意：模型文件在 onnx/ 子目录下（仓库根目录没有 model.onnx，直接请求会 404）。
-// 选 model_quantized.onnx（int8 量化，183,403,734 字节 ≈183MB）：fp16 版 580MB、
-// 全量 model.onnx 达 1.16GB，都不适合浏览器扩展。
-//
-// 模型选型史（2026-10-23，完整取证见 spec §13-3 与本文件尾注块）：
-// small-v2 骨干为纯英文 deberta-v3-small，中文塌缩 [UNK] → 中文 AI 召回为零；
-// 曾换多语言 gliner_multi-v2.1 试图修复——其模型能力已验证优秀（fp16 版中文姓名
-// 0.90 / 地址 0.52，推理 ~0.5s），但无可用的浏览器级字节：int8/uint8 量化导出为
-// 坏文件（span 头全负 logits，所有语言零召回）；fp16/q4f16 在 WASM 下无 fp16 算子，
-// 权重被迫升位双份驻留（实测建会话 RSS 3.2GB / 2.8GB，对比 small-v2 int8 仅 1.5GB），
-// 浏览器标签页内存海啸不可 ship。故回退 small-v2：中文 AI 召回转 1.1 路线
-//（自产量化 + 托管，见 TODO），期间由 languageGuard 在级联入口跳过中文占优片段
-//（对全盲模型喂中文只会幻觉），中文固定形状实体由正则档全覆盖。
-// 换模尝试遗留的 multi 系缓存条目（fp16 / int8）由 PREDECESSOR_MULTI_* 常量清扫。
-//
-// 模型源（按顺序轮换）：
-// 1. ModelScope（阿里云）：`/models/{id}/resolve/{rev}/{path}` 端点的 302 带完整 CORS 头
-//    （Access-Control-Allow-Origin: *，Allow-Headers 含 Range），末端 cdn-lfs-cn-1.modelscope.cn
-//    与 HuggingFace 同字节数，国内实测（前代模型）约 14MB/s。
-//    ⚠️ 不要换回 `/api/v1/models/{id}/repo?FilePath=...`：它的 302 没有 ACAO，同样会被 CORS 判死。
-// 2. HuggingFace 官方源：302 会回显请求 Origin（CORS 通过），作为 ModelScope 镜像缺失时的兜底。
-//
-// ❌ 不要再用 hf-mirror.com：它已改为 308 跳转到 huggingface.co，且该 308 响应不带
-// Access-Control-Allow-Origin。Fetch 规范对重定向链上的每一跳都要做 CORS 校验，
-// 扩展页（manifest 未声明 host_permissions，只能走 CORS）会在第一跳直接抛
-// TypeError: Failed to fetch —— 界面上表现为「网络请求被阻止或模型下载失败」。
+// 模型文件在 onnx/ 子目录（仓库根没有 model.onnx，直接请求 404），选 model_quantized.onnx（int8 ≈183MB；
+// fp16 580MB、全量 1.16GB 不适合扩展）。源按序轮换：① ModelScope `/models/{id}/resolve/...` 的 302 带
+// 完整 CORS 头，⚠️ 别换回 `/repo?FilePath=...`（302 无 ACAO 判死）；② HuggingFace 官方源兜底；❌ 不要用
+// hf-mirror.com（308 且不带 ACAO，Fetch 逐跳校验）。选型与换模取证见 docs/spec.md §13-3、§13-4。
 export const MODEL_SOURCES = [
   'https://modelscope.cn/models/onnx-community/gliner_small-v2/resolve/main/onnx/model_quantized.onnx',
   'https://huggingface.co/onnx-community/gliner_small-v2/resolve/main/onnx/model_quantized.onnx'
 ]
 
-// 当前模型文件字节数：① 缓存「期望字节数」守卫的比对基准（createBrowserModelCache
-// 的 match 自愈 / put 拒写）；② 文档参考。不再用作缓存版本号（版本由 1 字节探测
-// 三级比对 ETag / Last-Modified / 长度自动决定，见 probeRemoteVersion）
+// 当前模型字节数：缓存「期望字节数」守卫的比对基准（match 自愈 / put 拒写）；版本另由 1 字节探测三级比对决定
 export const MODEL_FILE_BYTES = 183403734
 
 export const MODEL_CACHE_NAME = 'contextwatchdog-models'
-// 缓存 key 固定（合成 URL，.invalid 永不解析、不参与网络请求）；
-// 版本信息（ETag / Last-Modified / 长度 / 时间）存进条目的响应头，由探测结果决定是否作废
+// 缓存 key 固定（合成 URL，.invalid 永不解析、不参与网络请求）；版本信息存进条目响应头
 export const MODEL_CACHE_URL = 'https://contextwatchdog.invalid/models/gliner_small-v2/model_quantized.onnx'
 // 未完成下载的部分文件（跨会话断点续传的落点）
 export const MODEL_PARTIAL_URL = `${MODEL_CACHE_URL}?partial`
 // 旧版缓存 key（带 ?v= 字节数）：命中时一次性搬迁，避免升级用户重下全量模型
 export const LEGACY_MODEL_CACHE_URL = `${MODEL_CACHE_URL}?v=${MODEL_FILE_BYTES}`
-// 换模尝试（2026-10-23 的 multi-v2.1，已回退）遗留的孤儿 key：其字节属于另一个
-// 模型且均不可用（int8 量化崩坏 / fp16 内存不可行，见文件尾注块），不能搬迁复用，
-// 由 migrateLegacy 一次性清扫让出配额（含各自未完成的 ?partial）。
-// ⚠️ 清扫清单严禁包含 MODEL_CACHE_URL / LEGACY_MODEL_CACHE_URL——回退后它们
-// 就是现役 key，误删会导致每次启动重下全量模型
+// 前代 multi-v2.1 换模遗留的孤儿 key，由 migrateLegacy 一次性清扫让出配额；⚠️ 清扫清单严禁包含
+// MODEL_CACHE_URL / LEGACY_MODEL_CACHE_URL——现役 key 误删会每次启动重下全量模型
 export const PREDECESSOR_MULTI_FP16_MODEL_CACHE_URL =
   'https://contextwatchdog.invalid/models/gliner_multi-v2.1/model_fp16.onnx'
 export const PREDECESSOR_MULTI_INT8_MODEL_CACHE_URL =
@@ -72,11 +39,8 @@ export const RETRY_BASE_DELAY_MS = 1_000
 export const RETRY_MAX_DELAY_MS = 16_000
 // 版本探测的超时（1 字节请求，给足但别拖慢启动）
 export const PROBE_TIMEOUT_MS = 5_000
-// 版本探测节流窗口：距上次成功探测不足该时长直接沿用缓存（跨标签共享计时，
-// 存 chrome.storage.local）。模型极少更新，换取每次打开零探测延迟；
-// 离线（navigator.onLine === false）则完全跳过探测，不再白等超时
+// 版本探测节流窗口：不足该时长或离线（navigator.onLine === false）都跳过探测直接沿用缓存（时间戳跨标签共享，存 PROBE_STAMP_KEY）
 export const PROBE_THROTTLE_MS = 24 * 60 * 60 * 1000
-// 探测时间戳的持久化 key（两个标签页/侧栏共享，24h 内只探一次）
 export const PROBE_STAMP_KEY = 'contextwatchdog.lastModelProbe'
 
 // 多窗口去重：锁键 + 心跳 TTL + 等待方轮询节奏（默认 1.5s × 200 轮 ≈ 5 分钟）
@@ -94,27 +58,22 @@ const discardBody = (response: Response): void => {
   try {
     void response.body?.cancel().catch(() => undefined)
   } catch {
-    // 忽略
   }
 }
 
 // ---------- 数据结构 ----------
 
-// 远端当前版本（来自 1 字节探测）
 export interface RemoteVersion {
   etag: string | null
-  // Last-Modified：CORS 安全列表头（浏览器恒可见）；ModelScope CDN 不暴露
-  // Access-Control-Expose-Headers → 浏览器里 ETag/Content-Range 恒为 null，靠它比对版本
+  // Last-Modified 是 CORS 安全列表头（恒可见）；ModelScope CDN 不暴露 ETag/Content-Range，靠它比对版本
   lastModified?: string | null
   total: number
   source: string
 }
 
-// 本地完整缓存条目
 export interface CachedModel {
   buffer: ArrayBuffer
   etag: string | null
-  // 下载时远端的 Last-Modified（安全列表头，浏览器里读得到也存得下）
   lastModified?: string | null
   total: number
   savedAt: number
@@ -127,7 +86,7 @@ export interface PartialModelMeta {
   total: number
   etag: string | null
   source: string | null
-  // 续传完成后写入完整条目时保住版本身份（旧部分文件无此字段 → 缺席，比对自然降级）
+  // 续传完成时保住版本身份（旧部分文件无此字段 → 比对自然降级）
   lastModified?: string | null
   savedAt: number
 }
@@ -228,15 +187,9 @@ export const mergeChunks = (chunks: Uint8Array[], total?: number): ArrayBuffer =
 // 弱校验 ETag（`W/` 开头）按 RFC 7233 不能用于 If-Range，此时跳过该头、只靠总长兜底
 export const isWeakEtag = (etag: string | null): boolean => !etag || etag.trim().startsWith('W/')
 
-// 本地缓存与远端版本比对：'stale' 才需要重新下载；
-// 探测失败（离线 / 被限流 / 超时）→ 'unknown' → 沿用缓存（离线优先）
-// ⚠️ ETag / Last-Modified 只在同源（或任一侧来源未知）时才可比对：ModelScope 与
-// HuggingFace 各自生成，跨源直接比对必然不一致 → 误判 'stale' → 清缓存重下全量模型。
-// 跨源时退回比总字节数（两源对同一文件返回一致的 183,403,734 字节）
-// ⚠️ 浏览器跨源读不到非安全列表头（Fetch 规范只放行 Cache-Control / Content-Language /
-// Content-Length / Content-Type / Expires / Last-Modified / Pragma）：ModelScope CDN 不发
-// Access-Control-Expose-Headers → JS 里 ETag / Content-Range 恒为 null。故三级比对：
-// ETag → Last-Modified（安全列表头，恒可见）→ 总长；三级都无信息才 'unknown' → 沿用缓存。
+// 本地缓存与远端版本比对：'stale' 才需重下；探测失败（离线/限流/超时）→ 'unknown' → 沿用缓存。
+// ⚠️ ETag / Last-Modified 仅同源可比，跨源各自生成必不一致 → 误判 'stale' → 重下全量，故跨源退回比
+// 总字节数，且跨源读不到非安全列表头 → 三级比对 ETag → Last-Modified → 总长（docs/spec.md §7）。
 export const compareCachedVersion = (
   cached: { etag: string | null; total: number; source?: string | null; lastModified?: string | null },
   remote: RemoteVersion | null
@@ -250,8 +203,7 @@ export const compareCachedVersion = (
   return 'unknown'
 }
 
-// 探测节流判定：离线直接跳过（沿用缓存，省掉超时假等待）；
-// 距上次成功探测不足 PROBE_THROTTLE_MS 也跳过（时间戳存 storage，跨标签共享）
+// 探测节流判定：离线直接跳过（沿用缓存，省掉超时假等待）；距上次成功探测不足窗口也跳过
 export const shouldProbeRemote = (
   options: { online: boolean; lastProbeAt: number; now: number; throttleMs?: number }
 ): boolean => {
@@ -275,9 +227,9 @@ const buildModelHeaders = (
     'X-Model-Saved-At': String(Date.now())
   }
   if (etag) headers.ETag = etag
-  // 记录下载来源（host）：版本探测跨源比对时据此只退回比总长，防止 ETag 误判清缓存
+  // 下载来源（host）：跨源比对时据此只退回比总长，防止 ETag 误判清缓存
   if (source) headers['X-Model-Source'] = source
-  // Last-Modified 是 CORS 安全列表头：浏览器里 ETag 读不到时靠它完成版本比对
+  // 安全列表头：浏览器里 ETag 读不到时靠它完成版本比对
   if (lastModified) headers['X-Model-Last-Modified'] = lastModified
   return headers
 }
@@ -296,10 +248,7 @@ export const createBrowserModelCache = (): ModelCache | null => {
         // 写入被中断会表现为声明长度与实际不符 → 作废重下
         const declared = Number(response.headers.get('content-length')) || 0
         if (declared > 0 && declared !== buffer.byteLength) return null
-        // 期望字节数守卫（污染自愈）：上游装错文件（源站 URL 漂移 / 镜像不同步）时
-        // Content-Length 自洽、探测两侧也自洽，唯独不是本模型——2026-10-23 实机踩过：
-        // 前代 183MB 文件被存进新 key，版本探测两侧同为 183,403,734 永远「current」，
-        // 错模型静默常驻。此处本地直判、不依赖探测，故 24h 节流或离线时也立即作废重下
+        // 期望字节数守卫（污染自愈）：上游装错文件时两侧自洽但字节不对，故本地直判、不依赖探测，节流或离线时也立即作废重下
         if (buffer.byteLength !== MODEL_FILE_BYTES) {
           console.warn(
             `[ContextWatchdog] 缓存字节数 ${buffer.byteLength} ≠ 期望 ${MODEL_FILE_BYTES}，判定为污染条目，删除重下`
@@ -321,9 +270,7 @@ export const createBrowserModelCache = (): ModelCache | null => {
       }
     },
     put: async (buffer, meta) => {
-      // 期望字节数守卫（拒写）：下载器的「传输完整性校验」只验「完整下完」，
-      // 验不出「完整下完的是错的」——与 MODEL_FILE_BYTES 比对兜底，错误文件不落盘；
-      // 抛出走下载流程的失败重试（换源），最终失败带详情浮出，绝不静默用错模型
+      // 期望字节数守卫（拒写）：完整性校验只验「完整下完」、验不出「下完的是错的」——与 MODEL_FILE_BYTES 比对兜底，错误文件不落盘、抛错换源重试
       if (buffer.byteLength !== MODEL_FILE_BYTES) {
         throw new Error(`拒绝写入模型缓存：字节数 ${buffer.byteLength} ≠ 期望 ${MODEL_FILE_BYTES}`)
       }
@@ -352,23 +299,20 @@ export const createBrowserModelCache = (): ModelCache | null => {
     migrateLegacy: async () => {
       try {
         const cache = await caches.open(MODEL_CACHE_NAME)
-        // 换模清扫（2026-10-23 的 multi 系尝试，已回退）：孤儿条目字节不属于现役
-        // small-v2，直接删除让出缓存配额。清扫失败不阻塞主流程（只是占空间）
+        // 前代模型的孤儿条目直接删除让出缓存配额；清扫失败不阻塞主流程（只是占空间）
         try {
           await cache.delete(PREDECESSOR_MULTI_FP16_MODEL_CACHE_URL)
           await cache.delete(`${PREDECESSOR_MULTI_FP16_MODEL_CACHE_URL}?partial`)
           await cache.delete(PREDECESSOR_MULTI_INT8_MODEL_CACHE_URL)
           await cache.delete(`${PREDECESSOR_MULTI_INT8_MODEL_CACHE_URL}?partial`)
         } catch {
-          // 忽略
         }
         const legacy = await cache.match(LEGACY_MODEL_CACHE_URL)
         if (!legacy) return false
         const buffer = await legacy.arrayBuffer()
         await cache.delete(LEGACY_MODEL_CACHE_URL)
         if (buffer.byteLength === 0) return false
-        // 旧 key 里可能不是当前模型的字节（历史换模残留）：大小不符不迁移、走正常重下
-        //（match() 的期望字节数守卫是最终兜底，此处只是省一次无谓的大文件写读）
+        // 旧 key 里可能不是当前模型的字节：大小不符不迁移、走正常重下（match() 的字节数守卫是最终兜底）
         if (buffer.byteLength !== MODEL_FILE_BYTES) return false
         await cache.put(MODEL_CACHE_URL, new Response(buffer, { headers: buildModelHeaders(buffer.byteLength) }))
         console.log('[ContextWatchdog] 已将旧版模型缓存迁移到新 key，无需重新下载')
@@ -446,7 +390,6 @@ export const createBrowserPartialStore = (): PartialStore | null => {
         const cache = await open()
         await cache.delete(MODEL_PARTIAL_URL)
       } catch {
-        // 忽略
       }
     }
   }
@@ -516,8 +459,7 @@ export interface SingleFlight {
   isRunning: () => boolean
 }
 
-// 用于修复「加载卡住后点重试立刻 resolve（假成功）／永久卡 loading」：
-// 重试一律复用在飞的那次加载，其 resolve/reject 就是真实结果
+// 修复「卡住后点重试立刻 resolve（假成功）／永久卡 loading」：重试复用在飞的那次加载，其结果才是真实结果
 export const createSingleFlight = (): SingleFlight => {
   let inflight: Promise<unknown> | null = null
   return {
@@ -535,8 +477,7 @@ export const createSingleFlight = (): SingleFlight => {
 
 // ---------- 版本探测（1 字节） ----------
 
-// 用 `Range: bytes=0-0` 探一次远端版本，只读响应头、正文立即丢弃。
-// 返回 null 表示两个源都不可用（离线 / 被限流 / 超时）→ 调用方应沿用本地缓存
+// 用 `Range: bytes=0-0` 探一次远端版本，只读响应头、正文立即丢弃；返回 null = 两源都不可用 → 沿用本地缓存
 export const probeRemoteVersion = async (options: ProbeOptions = {}): Promise<RemoteVersion | null> => {
   const fetchImpl =
     options.fetchImpl ?? ((input: string, init?: RequestInit) => globalThis.fetch(input, init))
@@ -557,10 +498,8 @@ export const probeRemoteVersion = async (options: ProbeOptions = {}): Promise<Re
       }
       const range = parseContentRange(response.headers.get('content-range'))
       const contentLength = Number(response.headers.get('content-length')) || 0
-      // ⚠️ 总长只信两处：206 的 Content-Range（安全列表外，浏览器里可能读不到）或
-      // 200（源站忽略 Range）的 Content-Length。206 的 Content-Length 是本次响应体长
-      // （Range: 0-0 → 1 字节），读不到 Content-Range 时它绝不能当总长——曾导致
-      // 全量（183MB）≠ 1 误判 'stale' → 清缓存重下整包（见 test-cases TC-06-9）
+      // ⚠️ 总长只信两处：206 的 Content-Range 或 200（源站忽略 Range）的 Content-Length；206 的
+      // Content-Length 是本次响应体长（Range: 0-0 → 1 字节），绝不能当总长，否则误判 'stale' 重下整包（TC-06-9）
       const total = range && range.total > 0 ? range.total : response.status === 200 ? contentLength : 0
       const etag = response.headers.get('etag')
       // Last-Modified 在 CORS 安全列表内恒可见 → ETag 被隐藏时的替代比对信号
@@ -578,7 +517,6 @@ export const probeRemoteVersion = async (options: ProbeOptions = {}): Promise<Re
 
 // ---------- 下载 ----------
 
-// 探测节流状态（上次成功探测时间戳）：跨标签共享，存 chrome.storage.local
 export interface ProbeStateStore {
   getLastProbeAt: () => Promise<number>
   setLastProbeAt: (timestamp: number) => Promise<void>
@@ -594,8 +532,7 @@ export interface DownloadModelOptions {
   onProgress?: ModelProgress
   // 另一窗口正在下载、本窗口处于等待（UI 显示「另一窗口下载中」）
   onWaiting?: (waiting: boolean) => void
-  // 确认走网络下载（缓存未命中或已过期作废）：UI 据此才显示下载提示；
-  // 缓存命中全程静默（仅控制台日志），不打扰用户
+  // 确认走网络下载才触发：UI 据此显示下载提示；缓存命中全程静默，不打扰用户
   onDownloadStart?: () => void
   // 探测节流状态存取（缺省 chrome.storage.local；node/测试注入内存实现或 null）
   probeState?: ProbeStateStore | null
@@ -635,9 +572,7 @@ export const downloadModel = async (options: DownloadModelOptions = {}): Promise
     console.log('[ContextWatchdog] 旧版缓存已迁移，无需重新下载')
   }
 
-  // 1) 完整缓存命中 → 1 字节探测确认版本（探测失败 = 离线等 → 直接用缓存，离线优先）。
-  //    离线或 24h 内已探测过（节流，跨标签共享计时）→ 跳过探测直接沿用缓存；
-  //    探测成功（无论结论）刷新节流时间戳，失败不刷新（下次打开还会再试）
+  // 1) 缓存命中 → 1 字节探测确认版本；探测失败或 24h 内已探测过则跳过、沿用缓存（离线优先），探测成功才刷新时间戳
   const cached = await cache?.match()
   if (cached) {
     let remote: RemoteVersion | null = null
@@ -664,8 +599,7 @@ export const downloadModel = async (options: DownloadModelOptions = {}): Promise
     await cache?.clear()
   }
 
-  // 走到此处 = 缓存未命中或已作废，接下来必然是网络下载（本窗口或等待另一窗口）→
-  // 通知 UI 显式提示；缓存命中路径在上面已静默返回，不触发本回调
+  // 到这里必然是网络下载（本窗口或等待另一窗口）→ 通知 UI 显式提示；缓存命中路径在上面已静默返回
   onDownloadStart?.()
 
   // 2) 多窗口去重：抢不到锁就等另一窗口完成；等不到（对方失败/锁过期/超时）则接管
@@ -776,8 +710,7 @@ export const downloadModel = async (options: DownloadModelOptions = {}): Promise
       const headers: Record<string, string> = {}
       if (received > 0) {
         headers.Range = `bytes=${received}-`
-        // If-Range 只在"回到同一源且拿到强 etag"时才发：
-        // 不同源的 etag 形态不同，跨源带了必然被判为不匹配 → 白白重下
+        // If-Range 只在回到同一源且拿到强 etag 时才发：跨源 etag 形态不同，带了必被判不匹配
         if (!isWeakEtag(resumeEtag) && resumeSource && new URL(url).host === resumeSource) {
           headers['If-Range'] = resumeEtag as string
         }
@@ -811,9 +744,7 @@ export const downloadModel = async (options: DownloadModelOptions = {}): Promise
         const responseLastModified = response.headers.get('last-modified')
         if (responseLastModified) resumeLastModified = responseLastModified
 
-        // 本次响应没有给出新 etag 时，重置分支必须把旧的 (etag, 源) 归属一并作废，
-        // 否则残留的旧 etag 会随部分文件/缓存条目流传，让版本探测比对错对象；
-        // Last-Modified 同理：本次响应没带就不留，防比对错对象
+        // 本次响应没给新 etag / Last-Modified 时必须一并作废旧归属，否则残留旧值随条目流传、版本探测比对错对象
         const dropStaleEtag = (): void => {
           if (!responseEtag) {
             resumeEtag = null
@@ -923,7 +854,7 @@ export const downloadModel = async (options: DownloadModelOptions = {}): Promise
   throw new Error(`模型下载失败（已尝试 ${maxAttempts} 次）：${failures.join('；')}`)
 }
 
-// chrome.storage.local 适配（无 chrome 时返回 null → 锁退化为不加锁）
+// chrome.storage.local 适配（无 chrome 返回 null → 锁退化为不加锁）
 const createChromeStorageCompat = (): {
   get: (key: string) => Promise<Record<string, unknown>>
   set: (items: Record<string, unknown>) => Promise<void>
@@ -938,8 +869,7 @@ const createChromeStorageCompat = (): {
   }
 }
 
-// 探测节流状态的默认实现：时间戳存 chrome.storage.local（两个标签页/侧栏共享计时）；
-// 无 chrome（node/测试环境）返回 null → 每次打开都探测（保持旧行为）
+// 探测节流状态的默认实现：时间戳存 chrome.storage.local；无 chrome（node/测试）返回 null → 每次都探测
 const createChromeProbeState = (): ProbeStateStore | null => {
   const compat = createChromeStorageCompat()
   if (!compat) return null
@@ -954,21 +884,3 @@ const createChromeProbeState = (): ProbeStateStore | null => {
     }
   }
 }
-
-// ---------- 换模取证与回退决策记录（2026-10-23） ----------
-// 为修复「中文 AI 召回为零」曾换用 gliner_multi-v2.1，最终因无浏览器级可用字节而
-// 回退 small-v2。完整证据链（本地 harness = gliner 包 node/web 双入口 + 同一
-// span-level 接线 + ModelScope 真文件，ORT-WASM 1.19.2 内核）：
-// 1. 阳性对照：small-v2 同接线英文 0.95–0.98 全检出 → harness/接线无辜；
-//    multi-v2.1 分词器中文出真 id（李=95290 非 [UNK]）→ 词表无辜；
-// 2. int8（model_int8 = model_quantized，349,120,924B）与 uint8（349,120,961B）
-//    两套 quanto 静态量化导出均为坏文件：所有语言零召回、原始 logits 全负
-//    （max sigmoid 仅 0.15，正常 >0.95），双位宽同崩 → 量化配方算坏了 span 打分头；
-// 3. fp16（579,717,643B）质量完好：英文 0.97、中文「李雷」0.90「韩梅梅」0.72
-//    「大街1号」0.52，推理 ~0.5s；q4f16（471,795,362B）中文衰减（0.75/0.46/0.34）；
-// 4. 但 fp16/q4f16 在 WASM 下无 fp16 算子，权重全量升位双份驻留——实测建会话
-//    RSS 分别 3.2GB / 2.8GB（small-v2 int8 仅 1.5GB），浏览器标签页内存海啸、
-//    实机表现为「Initializing models 卡很久」→ 均不可 ship；
-// 5. 决策：回退 small-v2（本文件当前源），中文 AI 召回转 1.1 路线（自产量化
-//    + 托管），期间 languageGuard 在级联入口跳过中文占优片段（对全盲模型喂中文
-//    只会 0.25–0.65 幻觉）。详细见 spec §13-3 与 CHANGELOG ㉚。

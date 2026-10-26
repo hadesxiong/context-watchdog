@@ -1,7 +1,5 @@
-// 单元用例 - 模型下载器
-// 覆盖：多源回退 / 会话内+跨会话断点续传 / 指数退避与 Retry-After / 传输完整性校验 /
-//       Cache Storage 落盘 / 缓存版本探测（1 字节）与离线降级 / 多窗口锁与等待方 /
-//       停滞看门狗 / 单飞门闩（重试复用在飞加载）
+// 单元用例 - 模型下载器：多源回退 / 断点续传 / 退避与 Retry-After / 传输完整性校验 /
+// Cache 落盘、版本探测（1 字节）与离线降级、多窗口锁与等待方、停滞看门狗、单飞门闩
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import {
   MODEL_SOURCES,
@@ -258,15 +256,13 @@ describe('纯函数', () => {
   })
 
   it('compareCachedVersion：CORS 隐藏 ETag 时用 Last-Modified 三级比对（修复二次打开误判重下）', () => {
-    // ModelScope 浏览器实况：CDN 不发 Access-Control-Expose-Headers → 两侧 etag 均读不到（null），
-    // 只有安全列表头 Last-Modified 可见可比
+    // ModelScope 浏览器实况：CDN 不发 Access-Control-Expose-Headers → 两侧 etag 都读不到，只剩安全列表头 Last-Modified
     const cached = {
       etag: null,
       lastModified: 'Wed, 11 Dec 2024 14:46:20 GMT',
       total: 183403734,
       source: 'modelscope.cn'
     }
-    // 探测侧 total=0（206 读不到 Content-Range）也必须能判 current，不依赖总长
     expect(
       compareCachedVersion(cached, {
         etag: null,
@@ -275,7 +271,6 @@ describe('纯函数', () => {
         source: 'modelscope.cn'
       })
     ).toBe('current')
-    // 远端换了文件 → Last-Modified 变 → stale（即便总长未知，也不放行）
     expect(
       compareCachedVersion(cached, {
         etag: null,
@@ -308,15 +303,12 @@ describe('纯函数', () => {
     const remoteMs: RemoteVersion = { etag: '"ms-xyz"', total: 183403734, source: 'modelscope.cn' }
     expect(compareCachedVersion(cached, remoteMs)).toBe('current')
 
-    // 跨源且总长也变了 → 真过期
     const changed: RemoteVersion = { etag: '"ms-new"', total: 999, source: 'modelscope.cn' }
     expect(compareCachedVersion(cached, changed)).toBe('stale')
 
-    // 跨源但任一侧总长未知 → unknown（沿用缓存）
     const unknownTotal: RemoteVersion = { etag: '"ms-x"', total: 0, source: 'modelscope.cn' }
     expect(compareCachedVersion({ etag: '"hf"', total: 0, source: 'huggingface.co' }, unknownTotal)).toBe('unknown')
 
-    // 同源仍然比 ETag（总长相同但 ETag 变 → stale）
     const sameSource: RemoteVersion = { etag: '"ms-new"', total: 183403734, source: 'modelscope.cn' }
     expect(compareCachedVersion({ etag: '"ms-old"', total: 183403734, source: 'modelscope.cn' }, sameSource)).toBe('stale')
 
@@ -326,15 +318,11 @@ describe('纯函数', () => {
 
   it('shouldProbeRemote：离线跳过、24h 节流、过期再探', () => {
     const now = 1_000_000_000_000
-    // 离线 → 永不探测（即便从未探过）
     expect(shouldProbeRemote({ online: false, lastProbeAt: 0, now })).toBe(false)
-    // 从未探测过 → 探
     expect(shouldProbeRemote({ online: true, lastProbeAt: 0, now })).toBe(true)
-    // 刚探过（不足节流窗口）→ 跳过
     expect(
       shouldProbeRemote({ online: true, lastProbeAt: now - PROBE_THROTTLE_MS + 60_000, now })
     ).toBe(false)
-    // 节流窗口已过 → 再探
     expect(
       shouldProbeRemote({ online: true, lastProbeAt: now - PROBE_THROTTLE_MS - 1, now })
     ).toBe(true)
@@ -368,9 +356,8 @@ describe('版本探测（1 字节）', () => {
   })
 
   it('浏览器视角（CORS 未暴露）：206 读不到 Content-Range/ETag 时 content-length(1) 不当总长', async () => {
-    // ModelScope CDN 实测无 Access-Control-Expose-Headers → JS 只剩安全列表头：
-    // content-length=1（Range:0-0 的响应体长）可见、Content-Range 与 ETag 不可见、Last-Modified 可见。
-    // 曾把 183MB ≠ 1 误判为 stale → 清缓存重下整包（实机现象：第二次打开必重下、第三次起正常）
+    // ModelScope CDN 实测无 Access-Control-Expose-Headers → JS 只剩安全列表头：content-length=1
+    // 不是总长。曾把 183MB ≠ 1 误判为 stale → 清缓存重下整包（实机第二次打开必重下）
     const { fetchImpl } = createFakeFetch(() =>
       makeResponse(206, { 'content-length': '1', 'last-modified': 'Wed, 11 Dec 2024 14:46:20 GMT' }, [
         new Uint8Array(1)
@@ -578,7 +565,6 @@ describe('downloadModel', () => {
     const tail = sample.slice(40)
     const { fetchImpl, calls } = createFakeFetch((_call, index) =>
       index === 0
-        // 声称 100 字节却只吐 40 → 判定为截断
         ? makeResponse(200, { 'content-length': '100' }, [head])
         : makeResponse(206, { 'content-length': '60', 'content-range': 'bytes 40-99/100' }, [tail])
     )
@@ -617,8 +603,7 @@ describe('downloadModel', () => {
       buffer: head.buffer as ArrayBuffer,
       meta: { total: 100, etag: '"old"', source: 'huggingface.co', savedAt: Date.now() }
     })
-    // 第 1 次落到 ModelScope：206 声称总长 999 ≠ 已存 100 → 判定上游换了文件 → 重置
-    // 第 2 次从头 200 下全
+    // 第 1 次 206 声称总长 999 ≠ 已存 100 → 上游换文件 → 重置，第 2 次从头下全
     const { fetchImpl, calls } = createFakeFetch((_call, index) =>
       index === 0
         ? makeResponse(206, { 'content-length': '60', 'content-range': 'bytes 40-1098/999' }, [sample.slice(40)])
@@ -652,7 +637,6 @@ describe('downloadModel', () => {
     const { fetchImpl, calls } = createFakeFetch((_call, index) =>
       index === 0
         ? makeResponse(200, { 'content-length': '100' }, [head])
-        // 服务器无视我们的偏移，从 0 开始返回 206
         : makeResponse(206, { 'content-length': '100', 'content-range': 'bytes 0-99/100' }, [sample])
     )
 
@@ -700,7 +684,6 @@ describe('downloadModel', () => {
     const tail = sample.slice(40)
     const { fetchImpl, calls } = createFakeFetch((_call, index, signal) =>
       index === 0
-        // 吐 40 字节后一直挂起 → 看门狗 abort
         ? makeHangingResponse({ 'content-length': '100' }, [head], signal)
         : makeResponse(206, { 'content-length': '60', 'content-range': 'bytes 40-99/100' }, [tail])
     )
@@ -870,7 +853,6 @@ describe('downloadModel', () => {
     })
     expect(downloadStarts).toBe(0)
 
-    // 真下载 → 触发一次
     const { fetchImpl } = createFakeFetch(() =>
       makeResponse(200, { 'content-length': '5' }, [toBytes('hello')])
     )
@@ -955,7 +937,6 @@ describe('downloadModel', () => {
   })
 
   it('探测节流：窗口过期 → 重新探测并刷新时间戳；探测失败不刷新', async () => {
-    // 节流过期 → 探测成功 → 时间戳刷新
     const probeState = createMemoryProbeState(Date.now() - PROBE_THROTTLE_MS - 1)
     const { cache } = createMemoryCache(toBytes('cached-model').buffer as ArrayBuffer, '"v1"')
     let probes = 0
@@ -998,10 +979,8 @@ describe('downloadModel', () => {
   })
 })
 
-// 浏览器缓存实现的期望字节数守卫：
-// 2026-10-23 实机缺陷——上游源 URL 漂移，前代 183MB 模型被「完整下完」存进新 key，
-// 版本探测两侧同为 183,403,734 永远判定「current」，错模型静默常驻。
-// 不变式：缓存层只允许 MODEL_FILE_BYTES 字节永久化（match 自愈删除 / put 拒写抛错）
+// 期望字节数守卫：缓存层只允许 MODEL_FILE_BYTES 字节永久化（match 自愈删除 / put 拒写抛错）
+// —— 否则上游源 URL 漂移后两侧同为旧字节数，版本探测永远判 current，错模型静默常驻。
 describe('createBrowserModelCache 期望字节数守卫', () => {
   interface FakeStored {
     bytes: ArrayBuffer
@@ -1066,9 +1045,8 @@ describe('createBrowserModelCache 期望字节数守卫', () => {
   })
 })
 
-// 换模清扫不变式（2026-10-23 回退 small-v2 后的关键陷阱）：
-// MODEL_CACHE_URL 已回到 small-v2——清扫清单里若残留同名 key，每次启动都会
-// 自删现役缓存 → 用户每次打开都重下全量模型。
+// 换模清扫不变式：MODEL_CACHE_URL 已回到 small-v2 —— 清扫清单里若残留同名 key，
+// 每次启动都会自删现役缓存，用户每次打开都重下全量模型。
 describe('migrateLegacy 换模清扫', () => {
   const SWEEP_KEYS = [
     PREDECESSOR_MULTI_FP16_MODEL_CACHE_URL,
@@ -1110,7 +1088,6 @@ describe('migrateLegacy 换模清扫', () => {
     const cache = createBrowserModelCache()
     expect(cache).not.toBeNull()
     await cache!.migrateLegacy?.()
-    // 孤儿全清
     for (const key of SWEEP_KEYS) expect(store.has(key)).toBe(false)
     // 现役缓存（= 回退后的 small-v2 key）必须还在，否则每次启动重下 183MB
     expect(store.has(MODEL_CACHE_URL)).toBe(true)

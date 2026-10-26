@@ -1,8 +1,5 @@
-// 站点字典与语言切换
-//
-// 与扩展的 i18n 是两套东西，但**术语保持一致**（同一件事在扩展里叫「粘贴自动拦截」，
-// 站点上不该叫别的）。这里不做运行时切换：静态站点每个语言一个页面
-// （<base>/ 为中文，<base>/en/ 为英文；base 见下方 siteBase），语言在构建时就定死了，因此零客户端 JS。
+// 站点字典与语言切换。与扩展的 i18n 是两套东西，但**术语保持一致**；静态站点每语言一个
+// 页面（<base>/ 中文、<base>/en/ 英文，base 见下方 siteBase），语言构建期定死，零客户端 JS。
 import zh from './zh.json'
 import en from './en.json'
 
@@ -15,7 +12,7 @@ type Widen<T> = T extends string
 
 export type SiteDict = Widen<typeof zh>
 
-// 这行是**类型层面的**翻译完整性检查：en.json 少任何一条、或类型对不上，都编译不过。
+// 类型层面的翻译完整性检查：en.json 少任何一条、或类型对不上，都编译不过。
 // 多出来的键由 tests/unit/siteI18n.test.ts 兜住（类型系统不管多余属性）。
 const enChecked: SiteDict = en
 
@@ -25,19 +22,13 @@ export type SiteLocale = 'zh' | 'en'
 export const locales: SiteLocale[] = ['zh', 'en']
 
 /**
- * 部署子路径：根部署为 ''，子路径部署为 '/context-watchdog'（无尾斜杠）。
- *
- * 取自 import.meta.env.BASE_URL（= astro.config 的 base，而 base 派生自 SITE_URL 的
- * pathname），而不是注入的 __SITE_LINKS__：本模块被 tests/unit/siteI18n.test.ts 直接
- * import，那里没有构建期 define，读全局会直接 ReferenceError。两者同源，不会漂移。
- * 归一化是为了吃掉 BASE_URL 可能带的尾斜杠（形态取决于 trailingSlash 配置）。
+ * 部署子路径：根部署为 ''，子路径部署为 '/context-watchdog'（无尾斜杠，归一化为吃掉 BASE_URL
+ * 可能带的尾斜杠）。取自 import.meta.env.BASE_URL（= astro.config 的 base）而非注入的
+ * __SITE_LINKS__：本模块被单测直接 import，那里没有构建期 define，读全局会 ReferenceError。
  */
 export const siteBase: string = (import.meta.env.BASE_URL || '/').replace(/\/+$/, '')
 
-/**
- * 站内路径（**含**部署子路径）：默认语言（中文）在 <base>/，其余在 <base>/<locale>/。
- * 页头 / 页脚 / 语言切换的 href 全由它派生，因此子路径部署时无需逐处手改。
- */
+/** 站内路径（**含**部署子路径）：中文在 <base>/，其余在 <base>/<locale>/；页头页脚与语言切换的 href 全由它派生 */
 export const localePath = (locale: SiteLocale): string =>
   `${siteBase}/${locale === 'zh' ? '' : `${locale}/`}`
 
@@ -49,10 +40,7 @@ export const localeLabel = (locale: SiteLocale): string => (locale === 'zh' ? '�
 
 export const dict = (locale: SiteLocale): SiteDict => dictionaries[locale]
 
-/**
- * 极简插值：把 {name} 换成值。
- * 用 split/join 而不是 replaceAll —— 与扩展侧同一个理由，避开 lib 版本问题。
- */
+/** 极简插值：把 {name} 换成值；用 split/join 而非 replaceAll（与扩展侧同理，避开 lib 版本问题） */
 export const format = (template: string, params: Record<string, string | number>): string => {
   let text = template
   for (const [name, value] of Object.entries(params)) {

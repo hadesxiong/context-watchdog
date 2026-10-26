@@ -1,13 +1,7 @@
-// 「等一帧画出来」屏障的顺序护栏。
-//
-// 这条用例守的是一个**顺序**，不是一个数值：屏障必须在 rAF 之后**再让出一个宏任务**。
-// 原因见 lib/paintBarrier.ts —— rAF 回调发生在绘制之前，如果屏障在 rAF 回调里就
-// 兑现，长文本检测（同步长任务，实测 516KB ≈ 1.6s）会把那一帧的绘制整段跳过，
-// 用户看到的就是「遮罩没出现 / 卡死不转」。
-//
-// 退化写法（曾经就是它）：
-//     requestAnimationFrame(finish); setTimeout(finish, 100)
-// 在下面第二条用例里会红：rAF 触发后、定时器尚未推进时它就兑现了。
+// 「等一帧画出来」屏障的顺序护栏：守的是一个**顺序**，不是一个数值 —— 屏障必须在 rAF 之后
+// **再让出一个宏任务**。原因见 lib/paintBarrier.ts：rAF 回调发生在绘制前，屏障若在 rAF 回调里
+// 就兑现，长文本检测的同步长任务（实测 516KB ≈ 1.6s）会把该帧绘制整段跳过，表现为「遮罩没出现」。
+// 退化写法 requestAnimationFrame(finish) + setTimeout(finish, 100) 会在下面第二条用例里红。
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { waitForPaint } from '@/lib/paintBarrier'
@@ -62,7 +56,6 @@ describe('waitForPaint：必须等到「rAF 之后再让出一个宏任务」', 
 
     runFrames()
     await Promise.resolve()
-    // 旧写法（rAF 里直接 finish）会在这里就 resolved=true —— 即上面注释里的退化写法
     expect(resolved).toBe(false)
 
     await vi.advanceTimersByTimeAsync(0)

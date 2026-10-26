@@ -1,12 +1,6 @@
-// 模型宿主状态的归并（纯函数）。
-//
-// 为什么要有这一层：宿主在 offscreen 文档里，UI 在侧栏里，两者只能通过
-// storage.session 交换"现在到哪一步了"。把这几个字段的迁移写成纯函数，是为了
-// 能在 node 里把「下载中 → 等待中 → 就绪」以及「失败后重试要清掉 error」这些
-// 分支钉死 —— 它们在浏览器里只能靠肉眼观察，回归成本很高。
-//
-// 字段与既有 store 一一对应（S2 直接把 UI 接到这里，组件不改）。
-// percent = -1 表示未知总长（沿用下载器的约定）。
+// 模型宿主状态的归并（纯函数）：宿主在 offscreen、UI 在侧栏，只能靠 storage.session 交换「到哪一步
+// 了」；写成纯函数便于在 node 里钉死「下载中 → 就绪」「重试清 error」等分支（浏览器里只能肉眼观察）。
+// 字段与既有 store 一一对应。
 
 export type ModelHostPhase = 'idle' | 'loading' | 'ready' | 'error'
 
@@ -14,7 +8,6 @@ export interface ModelHostState {
   phase: ModelHostPhase
   /** 0–100；-1 = 未知总长 */
   percent: number
-  /** 已接收字节 */
   received: number
   /** 总字节；0 = 未知 */
   total: number

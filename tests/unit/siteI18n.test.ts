@@ -3,11 +3,8 @@ import zh from '../../apps/site/src/i18n/zh.json'
 import en from '../../apps/site/src/i18n/en.json'
 import { format, splitBold, localePath, otherLocale, siteBase } from '../../apps/site/src/i18n'
 
-// 落地页双语词典的防漂移护栏。
-//
-// 落地页是**构建期**定语言的静态站点，没有运行时回退（不像扩展的 t() 还能回退到
-// 另一门语言）。也就是说：某一门语言漏了一条，页面上就是一段空白，且构建不会报错。
-// 因此这里必须在构建期就把这类问题挡下来。
+// 落地页双语词典的防漂移护栏。落地页是**构建期**定语言的静态站点，没有运行时回退（不像扩展的
+// t() 还能退回另一门语言）：某一门语言漏一条，页面上就是一段空白，且构建不报错 —— 必须在这里挡下来。
 
 type Json = string | number | boolean | null | Json[] | { [key: string]: Json }
 
@@ -87,8 +84,7 @@ describe('落地页词典：结构完整性', () => {
 })
 
 describe('落地页词典：英文侧不该残留未翻译的中文', () => {
-  // 唯一允许的例外：FAQ 里**故意**举出中文占位符 `<<手机号>>` 作为对照，
-  // 说明界面语言会决定占位符用词。
+  // 唯一允许的例外：FAQ 里**故意**举出中文占位符 `<<手机号>>` 作为对照（界面语言决定占位符用词）。
   const ALLOWED = new Set(['faq.items[5].a'])
 
   it('含汉字的英文词条只有已知的那一条', () => {

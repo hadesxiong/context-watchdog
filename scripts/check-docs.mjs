@@ -1,21 +1,6 @@
 #!/usr/bin/env node
-// 文档结构一致性检查（相对链接 / 锚点 / 三处地图 / 基线数字）
-//
-// 为什么需要它：文档的「结构正确」原先全靠人工记规则（CONTRIBUTING 的文档索引
-// 与跨文档联动清单）。人会漏——2026-10-22 建这份脚本的模式表时对账，当场抓到 ⑱
-// 漏同步的四处测试基线（README 双语/spec §12/设计稿仍写 403）。把可机器判定的
-// 部分固化成脚本，让漂移在 `npm run check:docs` 下报红，而不是等读者发现。
-//
-// 检查什么：
-//   1. 相对链接：全仓 tracked *.md 里 `](...)` 的相对目标必须存在；
-//   2. 锚点：`#...` 与 `md#...` 按 GitHub slug 规则对目标文件标题求证；
-//   3. 反引号路径：`` `docs/*.md` `` 文字提及也必须在仓——CHANGELOG 豁免，
-//      它如实记录「哪些文档被移出仓库」，历史提及不是断链；
-//   4. 三处地图：README.md / README.zh-CN.md 文档地图、CONTRIBUTING 索引行
-//      与 docs/ 实际文件集三方一致（缺行、双语互差、幽灵路径都报）；
-//   5. 基线数字：测试数/文件数在各「当前基线」提及处必须一致——CHANGELOG 是
-//      历史流水不参与；模式未命中只警告（写法改了记得同步本表），不硬拦。
-//
+// 文档结构一致性检查：相对链接 / 锚点 / 反引号路径 / 三处文档地图 / 测试基线数字。
+// 人工规则见 CONTRIBUTING.md「文档索引与更新触发」；这里把可机器判定的部分变成硬失败。
 // 用法：npm run check:docs（无参数；失败 exit 1，纳入回归）
 import { execSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
@@ -49,7 +34,7 @@ const githubSlug = (heading) =>
     .replace(/[^\p{L}\p{N}\s\-_]/gu, '')
     .replace(/\s+/g, '-')
 
-const slugCache = new Map() // key: 绝对路径
+const slugCache = new Map()
 const headingsOf = (abs) => {
   if (slugCache.has(abs)) return slugCache.get(abs)
   const slugs = new Set()

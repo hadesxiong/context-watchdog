@@ -10,7 +10,6 @@ import {
 } from '@engine/detector/userProfiles'
 import { BUILTIN_PROFILES, getProfileById } from '@engine/detector/profiles'
 
-// 内存 mock 存储
 const createMockStorage = () => {
   const data: Record<string, unknown> = {}
   const storage: KeyValueStorage = {
@@ -86,17 +85,14 @@ describe('UserProfileManager', () => {
     const mgr = new UserProfileManager(storage)
     await mgr.load()
 
-    // 创建
     const base = getProfileById('text')
     const created = await mgr.create(base, '工单专用')
     expect(mgr.getAll()).toHaveLength(BUILTIN_PROFILES.length + 1)
     expect(mgr.isUserOwned(created.id)).toBe(true)
     expect(data[USER_PROFILES_KEY]).toHaveLength(1)
 
-    // 重名拒绝
     await expect(mgr.create(base, '工单专用')).rejects.toThrow('重复')
 
-    // 更新
     const updated = await mgr.update({
       ...created,
       name: '客服工单',
@@ -112,7 +108,6 @@ describe('UserProfileManager', () => {
     expect(mgr2.get(created.id)?.name).toBe('客服工单')
     expect(mgr2.get(created.id)?.enabledCategories).toEqual(['pii'])
 
-    // 删除
     await mgr2.remove(created.id)
     expect(mgr2.isUserOwned(created.id)).toBe(false)
 

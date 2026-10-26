@@ -1,11 +1,6 @@
-// 模型宿主的客户端（SW 侧）。
-//
-// 职责只有三件：把 offscreen 文档拉起来、在上面跑一个请求、在不需要时销毁它。
-// 不持有模型、不做推理 —— 那是 host.ts 的事。
-//
-// Firefox 没有 chrome.offscreen：isModelHostSupported() 为 false，调用方回退到
-// 侧栏内加载（现状）。**能力差异必须显式返回**，不能靠"调用失败再看"，否则
-// Firefox 上每次开 AI 都会先抛一个异常。
+// 模型宿主的客户端（SW 侧）：拉起/销毁 offscreen 文档并在其上跑请求；不持有模型也不做推理
+// （那是 offscreen/host.ts 的事）。Firefox 无 chrome.offscreen：isModelHostSupported() 显式返回
+// false 供调用方回退，不能靠"调用失败再看"。
 import type { DetectionItem, ProfileConfig } from '@engine/types'
 import {
   MODEL_HOST_CLOSED_REASON,
@@ -71,8 +66,7 @@ export const attachModelHostPort = (port: chrome.runtime.Port): void => {
   for (const resolve of portWaiters.splice(0)) resolve(port)
 }
 
-// 主动关闭期间，所有在途请求的失败原因统一标成「已关闭」：
-// 调用方（SW）据此知道这不是故障，不该往 storage.session 写 error 状态。
+// 主动关闭期间在途请求的失败原因统一标成「已关闭」：调用方据此知道这不是故障，不写 error 状态。
 let closing = false
 
 const failPending = (error: string): void => {
@@ -143,8 +137,7 @@ export interface EnsureResult {
   error?: string
 }
 
-// 单飞：并发调用（面板初始化 + 用户点重试 + 粘贴路径）只应创建一次文档、
-// 只应发一次 ENSURE。SW 重启会丢这个 promise，但 hasDocument() 会兜住。
+// 单飞：并发调用（面板初始化 + 点重试 + 粘贴路径）只应创建一次文档、发一次 ENSURE；SW 重启会丢这个 promise，但 hasDocument() 兜住。
 let ensuring: Promise<EnsureResult> | null = null
 
 export const ensureModelHost = (): Promise<EnsureResult> => {
@@ -166,14 +159,12 @@ const doEnsure = async (): Promise<EnsureResult> => {
     try {
       await api.createDocument({
         url: MODEL_HOST_URL,
-        // WORKERS：宿主内跑 WASM 编译/推理。当前 numThreads=1 不起 Worker，
-        // 但用 WORKERS 是为将来切 proxy=true 时不至于再来改权限与理由。
+        // WORKERS：宿主内跑 WASM 编译/推理（当前 numThreads=1 不起 Worker，留给将来切 proxy=true）。
         reasons: ['WORKERS'],
         justification: '在本机运行 GLiNER/onnxruntime 模型推理，避免占用 service worker 与页面主线程'
       })
     } catch (error) {
-      // 并发 createDocument 会抛 "Only a single offscreen document may be created"；
-      // 此时文档其实已经存在，复查后继续
+      // 并发 createDocument 会抛 "Only a single offscreen document may be created"，此时文档其实已存在，复查后继续
       if (!(await api.hasDocument?.())) {
         return {
           ok: false,
@@ -242,11 +233,11 @@ export const closeModelHost = async (): Promise<void> => {
   try {
     await chrome.storage.session.remove(MODEL_HOST_STATE_KEY)
   } catch {
-    // 清理失败不影响文档已销毁这一事实
+    // 清理失败不影响文档已销毁
   }
 }
 
-/** 读宿主持久化的状态（S1 用于验收；S2 面板订阅 onChanged） */
+/** 读宿主持久化的状态（面板订阅 storage.onChanged 渲染） */
 export const readModelHostState = async (): Promise<unknown> => {
   try {
     const stored = await chrome.storage.session.get(MODEL_HOST_STATE_KEY)

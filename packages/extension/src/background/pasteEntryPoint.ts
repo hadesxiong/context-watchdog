@@ -1,16 +1,9 @@
-// 注入到页面的粘贴监听器
-//
-// chrome.scripting.executeScript({ func, args }) 会把函数序列化后在页面的扩展隔离世界里执行，
-// 因此该函数必须自包含：不能引用任何模块作用域的标识符（import 的常量/函数都会 ReferenceError）。
-// 这也是界面文案**只能靠 args 传进来**的原因——函数里读不到 i18n 模块，
-// 由 service worker（chrome.i18n.getMessage）取好再作为参数递进来。
-//
-// 规则与守卫逻辑的可测版本见 src/content/pasteText.ts（有单测），改动需两边同步；
-// 消息类型常量见 @engine/messages。
+// 注入到页面的粘贴监听器：经 executeScript 序列化执行，必须自包含——读不到模块作用域与 i18n，
+// 文案由 SW 取好经 args 传入。可测版本见 src/content/pasteText.ts，改动需两边同步。
 export const contextWatchdogEntryPoint = (messages?: {
   toastRedacted?: string
   toastAi?: string
-  /** 看门狗 mark 的 SVG 原文（SW 侧已染白）：注入函数读不到模块，只能随 args 传 */
+  /** 看门狗 mark 的 SVG 原文：注入函数读不到模块，只能随 args 传 */
   mark?: string
   widget?: {
     ai?: string
@@ -26,16 +19,13 @@ export const contextWatchdogEntryPoint = (messages?: {
     collapse?: string
   }
 }): void => {
-  // 语言模板（含 {count} 占位），缺失时退化为「只显示数字」，不至于报错或空白
   const toastTemplate = messages?.toastRedacted ?? '{count}'
   const toastAiTemplate = messages?.toastAi ?? '{count}'
   const globalRef = window as unknown as Record<string, unknown>
   if (globalRef.__contextWatchdogInstalled) return
   globalRef.__contextWatchdogInstalled = true
 
-  // 主题：跟随宿主页面（OS 级 prefers-color-scheme，与设计 token 同一个开关条件）。
-  // 注入侧不能写 <style>（宿主页面 style-src 会拦），色板只能在 JS 里取值，
-  // 切换时整体重绘。toast 与站点挂件共用这一套。
+  // 主题跟随宿主页面的 prefers-color-scheme：注入侧不能写 <style>（宿主 style-src 拦），色板只能在 JS 里取值、切换时整体重绘。
   const darkQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null
   let darkMode = darkQuery?.matches === true
   const palette = () =>
@@ -68,27 +58,21 @@ export const contextWatchdogEntryPoint = (messages?: {
           toggleOff: 'rgba(24, 24, 27, 0.18)'
         }
 
-  // 超长粘贴守卫上限（与 service-worker.ts / content/pasteText.ts 的 MAX_PASTE_CHARS
-  // 保持一致；注入函数必须自包含，只能内联副本）
+  // 与 service-worker.ts / content/pasteText.ts 的 MAX_PASTE_CHARS 保持一致（注入函数自包含，只能内联）
   const MAX_PASTE_CHARS = 20000
 
-  // 处理单行/多行文本输入与 contenteditable 富文本区域；
-  // password 的值绝不外发（双保险，下面还有类型判断）
+  // 处理单行/多行与 contenteditable；password 等绝不处理（下方类型判断为双保险）
   const isTextEditable = (el: EventTarget | null): boolean => {
     if (el instanceof HTMLTextAreaElement) return !el.disabled && !el.readOnly
     if (el instanceof HTMLInputElement) {
       if (el.disabled || el.readOnly) return false
       return el.type === 'text' || el.type === 'search'
     }
-    // isContentEditable 覆盖 contenteditable="" / "true" / "plaintext-only" 及继承
-    // 可编辑；选区落在子节点上时 event.target 可能是编辑宿主的后代，此判断同样为真
+    // isContentEditable 覆盖各种写法与继承；选区落在子节点时 target 是编辑宿主后代，同样为真
     return el instanceof HTMLElement && el.isContentEditable
   }
 
-  // 用原型原生 setter 赋值：el.value = x 会经过 React 覆写的 value tracker，
-  // 导致「DOM 显示脱敏文、React state 仍是原文」（发送时把未脱敏原文发出去，
-  // 比不替换更危险）。原生 setter 绕开 tracker，再补 InputEvent 让框架感知。
-  // （与 pasteText.ts 的 applySanitized 语义同步；油猴社区对 React 站点均用此写法）
+  // 必须用原型原生 setter 赋值：直接 el.value = x 会经过 React 的 value tracker（DOM 显示脱敏文、state 仍是原文）；绕开后补 InputEvent 让框架感知（与 pasteText.ts 的 applySanitized 同步）。
   const setNativeValue = (el: HTMLInputElement | HTMLTextAreaElement, next: string): void => {
     const proto = el instanceof HTMLTextAreaElement
       ? HTMLTextAreaElement.prototype
@@ -99,14 +83,11 @@ export const contextWatchdogEntryPoint = (messages?: {
     } else {
       el.value = next
     }
-    // 与油猴社区对 React textarea 的验证写法一致：纯 input 事件即可触发 React onChange；
-    // 不带伪造的 data/inputType（避免 Lexical 类编辑器按 data 重建内容时被干扰）
+    // 纯 input 事件即可触发 React onChange；不伪造 data/inputType，避免 Lexical 类编辑器按 data 重建内容被干扰
     el.dispatchEvent(new Event('input', { bubbles: true }))
   }
 
-  // 「已脱敏 N 处」轻提示：拦截改写生效时在视口右上角短暂显示（2s 自动消失、
-  // pointer-events:none 不挡操作）。纯内联样式：注入目标是宿主页面，不能依赖
-  // 页面 CSS/主题，也不能引入 class 污染宿主页面
+  // 「已脱敏 N 处」轻提示：2s 自消、pointer-events:none、纯内联样式——不依赖宿主页面 CSS，也不引入 class 污染它
   const showToast = (count: number, template = toastTemplate): void => {
     document.getElementById('context-watchdog-toast')?.remove()
     const colors = palette()
@@ -132,8 +113,7 @@ export const contextWatchdogEntryPoint = (messages?: {
     setTimeout(() => toast.remove(), 2000)
   }
 
-  // ---------- AI 二次升级（正则先落地，AI 是增量） ----------
-  // 只对 input/textarea 路径生效；contenteditable 本期保持正则档（见 handleContentEditablePaste）。
+  // ---------- AI 二次升级（正则先落地，AI 是增量）：仅 input/textarea，contenteditable 保持正则档 ----------
   interface PendingAiUpgrade {
     token: string
     el: HTMLInputElement | HTMLTextAreaElement
@@ -147,8 +127,7 @@ export const contextWatchdogEntryPoint = (messages?: {
   // 与 content/pasteText.ts 的 AI_UPGRADE_TTL 一致（注入函数不能 import）
   const AI_UPGRADE_TTL = 8000
 
-  // 四道守卫全部通过才替换：用户没继续输入 / 正则结果仍在原位 /
-  // AI 确有增量 / 未超时。任何一条不通过都保留正则结果，绝不回退原文。
+  // 四道守卫全部通过才替换（定义见 docs/site-ai-offscreen-host.md §3.5 P6）；任一不过都保留正则结果，绝不回退原文。
   chrome.runtime.onMessage.addListener((message: unknown) => {
     const result = message as
       | { type?: string; token?: string; sanitized?: string; count?: number }
@@ -193,14 +172,8 @@ export const contextWatchdogEntryPoint = (messages?: {
     console.log('[ContextWatchdog] AI 二次升级完成，共脱敏', result.count ?? 0, '处')
   })
 
-  // contenteditable 改写：富文本区域做不了「先插入后就地替换」的逐字校验——innerText
-  // 与 Range.toString() 对 <div>/<br> 的换行建模互不一致，且 Lexical/ProseMirror 类
-  // 编辑器会重排 DOM。改为「阻止默认 → 选区快照 → 异步检测 → execCommand 插入」：
-  // - 快照 Range 会随后续 DOM 编辑自动调整，检测期间的并发输入不会把插入点写歪
-  //（语义等价于 input/textarea 路径的「文本发散即放弃」守卫，且更稳）
-  // - execCommand('insertText') 走编辑器标准输入管线（beforeinput/input + 撤销栈），
-  // 框架感知与原生粘贴一致；返回 false 则放弃，不伪造 DOM
-  // - 任一异常路径都补插原文，绝不吞掉用户的粘贴
+  // contenteditable 改写：富文本做不了逐字校验（换行建模不一致、Lexical/ProseMirror 会重排 DOM）→ 阻止
+  // 默认 → 选区快照 → 异步检测 → execCommand 插入（异常路径一律补插原文、绝不吞粘贴）。见 docs/spec.md §8。
   const handleContentEditablePaste = (
     el: HTMLElement,
     pasted: string,
@@ -258,16 +231,13 @@ export const contextWatchdogEntryPoint = (messages?: {
     (event: ClipboardEvent) => {
       const target = event.target
       if (!isTextEditable(target)) return
-      // 换行归一化：textarea.value 按规范把 \r\n/\r 归一化为 \n，而剪贴板原始文本
-      //（尤其 Windows）常带 \r\n——不归一化则多行粘贴的逐字校验必然失配，整条链路静默失效
+      // 换行归一化：textarea.value 按规范把 \r\n 归一成 \n，剪贴板（尤其 Windows）常带 \r\n——不归一则逐字校验必然失配，链路静默失效
       const pasted = (event.clipboardData?.getData('text/plain') ?? '').replace(/\r\n?/g, '\n')
       if (!pasted) return
 
-      // 超长守卫：直接原样放行（不发检测消息；contenteditable 顺带保住富文本粘贴形态）。
-      // 此前仅靠 SW 侧 slice 截断——超限粘贴会被「截断后的脱敏结果」整体改写吞掉尾部
+      // 超长直接原样放行、不发检测消息：仅靠 SW 侧 slice 截断会用「截断后的脱敏结果」整体改写、吞掉尾部
       if (pasted.length > MAX_PASTE_CHARS) return
 
-      // contenteditable 走独立策略（见 handleContentEditablePaste 注释）
       if (target instanceof HTMLElement && target.isContentEditable) {
         handleContentEditablePaste(target, pasted, event)
         return
@@ -275,8 +245,7 @@ export const contextWatchdogEntryPoint = (messages?: {
 
       const el = target as HTMLInputElement | HTMLTextAreaElement
 
-      // 不阻止默认粘贴（先插入原文，用户体验不被网络/检测阻塞），
-      // 下一宏任务读到插入后的值，检测回来再就地替换
+      // 不阻止默认：先插入原文（不被检测阻塞），下一宏任务读到插入后的值，检测回来再就地替换
       setTimeout(() => {
         const value = el.value
         const caret = el.selectionStart ?? value.length
@@ -314,8 +283,7 @@ export const contextWatchdogEntryPoint = (messages?: {
             showToast(result.count ?? 1)
           }
 
-          // 无论正则是否命中都记快照：AI 可能补出正则漏掉的实体。
-          // 只保留最近一次粘贴；TTL 过后清掉，避免长期持有元素引用。
+          // 无论正则是否命中都记快照（AI 可能补出正则漏掉的实体）；只留最近一次，TTL 后清掉以免长期持有元素引用
           pendingUpgrade = {
             token,
             el,
@@ -334,9 +302,8 @@ export const contextWatchdogEntryPoint = (messages?: {
     true
   )
 
-  // ---------- 站点挂件（控制面） ----------
-  // 只挂顶层文档：粘贴监听需要 allFrames，但挂件出现在广告/嵌入 iframe 里只会制造噪音。
-  // 所有样式内联 + Shadow DOM 隔离：既不依赖宿主页面 CSS，也不污染宿主页面。
+  // ---------- 站点挂件（控制面，设计见 docs/site-ai-offscreen-host.md §3.4） ----------
+  // 只挂顶层文档（挂件出现在 iframe 里只是噪音）；样式全内联 + Shadow DOM，不依赖也不污染宿主 CSS。
   const mountSiteWidget = (): void => {
     const t = {
       ai: messages?.widget?.ai ?? 'AI enhancement',
@@ -346,8 +313,7 @@ export const contextWatchdogEntryPoint = (messages?: {
       openFailed: messages?.widget?.openFailed ?? 'Could not open the side panel, click the toolbar icon',
       needAi: messages?.widget?.needAi ?? 'Enable AI in the side panel first',
       loading: messages?.widget?.loading ?? 'AI model is still loading',
-      // 本站开关已开、宿主正在预热（模型文件已在本地）：这不是"没就绪"，
-      // 是"马上就好"——文案分开，用户才不会以为检验出错
+      // 本站开关已开、宿主正在预热（模型文件已在本地）：是"马上就好"而非"没就绪"，文案分开
       preparing: messages?.widget?.preparing ?? 'AI model is starting…',
       cost: messages?.widget?.cost ?? 'First paste may take 1–2s longer',
       collapse: messages?.widget?.collapse ?? 'Collapse'
@@ -361,25 +327,19 @@ export const contextWatchdogEntryPoint = (messages?: {
     let globalEnabled = false
     let siteEnabled = false
     let hostReady = false
-    // 侧栏当前是否开着（SW 的 readPanelState 查真实状态：Chrome getContexts、
-    // Firefox sidebarAction.isOpen + 弹窗自追踪，别处关掉也能同步回来）
+    // 侧栏是否开着由 SW 的 readPanelState 查真实状态，别处关掉也能同步回来
     let panelOpen = false
-    // 开着的形态：真侧栏用 opened 文案，弹窗兜底面板用 openedPopup 文案——
-    // Firefox 点击必然开弹窗（手势死路），文案跟着事实走，不冒充侧栏
+    // 开着的形态：真侧栏用 opened、弹窗兜底用 openedPopup——Firefox 点击必然开弹窗，文案不许冒充侧栏
     let panelKind: 'sidebar' | 'popup' | undefined
-    // 打开侧栏的请求在途、失败提示的 3s 窗口：两者都是局部 UI 态，
-    // 由 render 一起重建，避免"点一次就永久卡在灰态 + 转圈光标"
+    // 打开在途与失败提示的 3s 窗口都是局部 UI 态，由 render 一起重建
     let opening = false
     let openFailed = false
 
     const host = document.createElement('div')
     host.id = ROOT_ID
 
-    // 内嵌看门狗 mark：SW 把 public/icons/logo.svg 原文随 args 递进来，这里按当前
-    // 主题染色（暗色用前景色，亮色用墨色）。既不能用 <img src>（宿主页面 CSP 的
-    // img-src 会拦），也不能 fetch 扩展资源（要 web_accessible_resources，且多一次
-    // 请求）；DOMParser 解析字符串零请求。染色必须整串替换：逐个 path 改 fill 会把
-    // 描边层填成实心，图标就花了。
+    // 内嵌看门狗 mark：SVG 原文随 args 传入、按主题染色；不能用 <img src>（宿主 CSP img-src 拦）也不能
+    // fetch 扩展资源。染色必须整串替换 #18181b，逐 path 改 fill 会填实描边。
     const makeMark = (size: number, color: string): Element | null => {
       const raw = messages?.mark
       if (!raw) return null
@@ -419,7 +379,6 @@ export const contextWatchdogEntryPoint = (messages?: {
       display: 'none'
     })
 
-    // 收起态：44px 的圆角矩形（12px 圆角与面板/卡片同一规格），不是圆钮
     const fab = document.createElement('button')
     fab.type = 'button'
     fab.setAttribute('aria-label', 'ContextWatchdog')
@@ -451,7 +410,6 @@ export const contextWatchdogEntryPoint = (messages?: {
     shadow.appendChild(root)
     document.documentElement.appendChild(host)
 
-    // 主题变化：色板全量重涂（mark 颜色也在内），面板内容交给 render 重建
     const paintTheme = (): void => {
       const colors = palette()
       Object.assign(root.style, { color: colors.ink })
@@ -475,8 +433,7 @@ export const contextWatchdogEntryPoint = (messages?: {
       paintTheme()
     })
 
-    // 常驻：挂上就显示，状态回包只更新内容。页面重渲染 / 站点脚本清 DOM 时自动重挂；
-    // 3s 心跳兜住 document.open/write 与 documentElement 被整体替换（观察器会随旧节点失效）。
+    // 挂件常驻：MutationObserver 防站点清 DOM，3s 心跳兜住 document.open/write 与 documentElement 被整体替换（观察器会随旧节点失效）
     const reattach = (): void => {
       if (!document.documentElement) return
       if (!document.documentElement.contains(host)) document.documentElement.appendChild(host)
@@ -510,9 +467,7 @@ export const contextWatchdogEntryPoint = (messages?: {
       })
     }
 
-    // 一次状态同步：全局/逐站开关、宿主就绪、侧栏开没开。
-    // 展开期间每 2s 来一次——在别的窗口关掉侧栏、模型宿主刚跑起来，
-    // 都要能立刻反映到面板上；收起就停掉，不空转打扰 SW。
+    // 一次状态同步：开关、宿主就绪、侧栏开没开。展开期间每 2s 一次，收起即停、不空转打扰 SW
     const syncState = (): void => {
       send({ type: 'SITE_AI_GET' }, response => {
         const result = response as
@@ -533,8 +488,7 @@ export const contextWatchdogEntryPoint = (messages?: {
         globalEnabled = result.state.globalEnabled === true
         siteEnabled = result.state.siteEnabled === true
         hostReady = result.state.hostReady === true
-        // panelOpen 缺省（浏览器查不到状态）时按「没开」处理，按钮照常可点；
-        // 开着但缺 kind 的旧回包按侧边栏文案兜底
+        // panelOpen 缺省按「没开」处理（按钮照常可点）；开着但缺 kind 的旧回包按侧栏文案兜底
         panelOpen = result.state.panelOpen === true
         panelKind = panelOpen ? result.state.panelKind ?? 'sidebar' : undefined
         ready = true
@@ -543,9 +497,7 @@ export const contextWatchdogEntryPoint = (messages?: {
       })
     }
 
-    // 轮询节奏：展开 2s；收起后若「本站已开、宿主还没就绪」仍在收敛（SW 已预热），
-    // 放慢到 4s 继续问到就绪为止。少了这条，模型下载完后的第一屏永远停在
-    // 「尚未就绪」——用户不展开面板就看不到它已经好了。
+    // 轮询：展开 2s；收起后若「本站已开、宿主未就绪」以 4s 续询到就绪（否则首屏永远停在「尚未就绪」）
     let pollTimer: ReturnType<typeof setInterval> | null = null
     let pollInterval = 0
 
@@ -564,11 +516,8 @@ export const contextWatchdogEntryPoint = (messages?: {
       applySyncSchedule()
     }
 
-    // 侧栏开/关的实时推送（SW 转发 Chrome 141+ 的 onOpened / 142+ 的 onClosed，
-    // 以及打开动作成功后的主动同步）。「别处关掉侧栏 → 按钮复位」不再等下一个轮询
-    // 周期，事件一到立即生效。Firefox 没有这类原生事件，这条通道收不到消息，
-    // 2s 轮询照常兜底（isOpen + 弹窗自追踪都在轮询里）。推送不动 opening/openFailed
-    // ——那是本页「打开请求」自己的生命周期，由 OPEN_SIDE_PANEL 的回包负责收尾。
+    // 侧栏开/关实时推送（SW 转发 141+ onOpened / 142+ onClosed）：别处关掉立即复位，Firefox 无此事件靠
+    // 2s 轮询兜底；推送不动 opening / openFailed，那由 OPEN_SIDE_PANEL 回包收尾。
     chrome.runtime.onMessage.addListener((message: unknown) => {
       const push = message as { type?: string; panelOpen?: boolean; panelKind?: 'sidebar' | 'popup' } | null
       if (push?.type !== 'SITE_AI_PANEL_STATE') return
@@ -585,8 +534,7 @@ export const contextWatchdogEntryPoint = (messages?: {
       // 状态回包前（或 SW 瞬时不可用）一律禁用：宁可晚一点可点，也不能显示错的状态
       if (!ready) return t.loading
       if (!globalEnabled) return t.needAi
-      // 本站开关开着但宿主还没就绪：SW 已在预热（模型文件已在本地则秒级就绪，
-      // 首次则在下载），说"正在启动"比"尚未就绪"更准确
+      // 本站已开但宿主未就绪：SW 已在预热（模型在本地则秒级就绪），说"正在启动"比"尚未就绪"准确
       if (!hostReady) return siteEnabled ? t.preparing : t.loading
       return ''
     }
@@ -702,12 +650,9 @@ export const contextWatchdogEntryPoint = (messages?: {
         color: reason ? colors.warning : colors.muted
       })
 
-      // 「在侧边栏中打开」：三种态由渲染重建，绝不在 DOM 上留下残留的
-      // 灰态/转圈光标——上一版点成功后没人把 disabled/cursor 复位，
-      // 表现就是"点了就失效、悬浮还转圈"
+      // 「在侧边栏中打开」：三种态由渲染重建，绝不在 DOM 上残留灰态/转圈光标
       const openButton = document.createElement('button')
       openButton.type = 'button'
-      // 已打开态按形态选文案：真侧栏说「侧边栏已打开」，弹窗兜底面板说「面板已打开」
       openButton.textContent = openFailed
         ? t.openFailed
         : panelOpen
@@ -735,8 +680,7 @@ export const contextWatchdogEntryPoint = (messages?: {
           opening = false
           const result = response as { ok?: boolean; panelKind?: 'sidebar' | 'popup' } | undefined
           if (result?.ok) {
-            // 打开成功就切成「已打开」态（形态以回包为准，免得等一轮轮询
-            // 才把「侧边栏已打开」纠正成「面板已打开」），交给轮询去发现别处的关闭
+            // 打开成功即切「已打开」（形态以回包为准，免得等一轮轮询才纠正）；别处的关闭交给轮询
             panelOpen = true
             panelKind = result.panelKind ?? 'sidebar'
             render()

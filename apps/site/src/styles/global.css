@@ -1,13 +1,6 @@
-/* ============================================================
-   落地页样式
-
-   设计 token 直接 @import 自 packages/design-tokens/tokens.css——
-   与扩展同一个源，因此配色/圆角/灰阶结构上不可能漂移。
-
-   这里不引 Tailwind：站点是单页静态站点，样式量很小，直接写普通 CSS
-   比再配一套构建链（content 扫描范围、postcss、@import 顺序坑）更省事，
-   也更符合「无 CDN、无依赖」的取向。类名用语义化的 .pg-* 前缀。
-   ============================================================ */
+/* 落地页样式。设计 token 直接 @import 自 packages/design-tokens/tokens.css——与扩展同一个源，
+   配色/圆角/灰阶结构上不可能漂移；不引 Tailwind（单页小样式量，配一套构建链不划算），
+   类名用语义化的 .pg-* 前缀。站点整体约束见 docs/spec.md §11.1 */
 
 @import '@tokens/tokens.css';
 
@@ -75,9 +68,7 @@ pre {
   padding: 0 1.25rem;
 }
 
-/* 每节一条 1px 单色细线（--border 同源 token，即 shadcn 的 border-border 惯例）：
-   长页 + 多卡片网格靠它分组，纯留白不够。此前一条 :first-of-type 豁免是死规则
-   （<main> 里首个 <section> 是 .pg-hero 而非 .pg-section），评估后删除。 */
+/* 每节一条 1px 单色细线（--border 同源 token）：长页 + 多卡片网格靠它分组，纯留白不够 */
 .pg-section {
   padding: 3.5rem 0;
   border-top: 1px solid var(--border);
@@ -156,11 +147,8 @@ pre {
   color: var(--foreground);
 }
 
-/* 窄屏页头：<768px 隐藏锚点导航，只留品牌与语言切换（页脚保留全部入口）。
-   实测：4 个 tab 时 500px 视口下两语种导航均被挤成竖排单字并溢出 56px 固定
-   页头（英文 414px 更导致整页横向滚动），768px 起两语种均单行干净——768 取
-   实测下界。margin-left:auto 要补给 .pg-lang，否则导航一隐藏，语言切换会
-   紧贴 logo。 */
+/* 窄屏页头：<768px 隐藏锚点导航（实测 4 个 tab 在 500px 视口下两语种都会溢出），
+   页脚保留全部入口；margin-left:auto 要补给 .pg-lang，否则语言切换紧贴 logo */
 @media (max-width: 767px) {
   .pg-nav {
     display: none;
@@ -259,8 +247,7 @@ pre {
   margin-top: 0.75rem;
   font-size: 0.9375rem;
   color: var(--muted-foreground);
-  /* 两端对齐：卡片列里长段落左右边缘都齐（CJK 按字对齐、拉丁拉伸词距），
-     与隐私承诺 / FAQ 的描述同一口径 */
+  /* 两端对齐：长段落左右边缘都齐（CJK 按字对齐、拉丁拉伸词距） */
   text-align: justify;
 }
 
@@ -278,8 +265,7 @@ pre {
   grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
 }
 
-/* 步骤头：序号徽章 + 标题同行一条基线，正文另起一行；
-   头行与正文的间距 = 0.75rem，与全站卡片「标题→内容」口径一致 */
+/* 步骤头：序号徽章 + 标题同行一条基线，正文间距 0.75rem 与全站卡片口径一致 */
 .pg-step-head {
   display: flex;
   align-items: center;
@@ -290,7 +276,6 @@ pre {
   margin-top: 0.75rem;
 }
 
-/* 步骤序号：既是装饰也是顺序信息 */
 .pg-step-index {
   display: inline-flex;
   align-items: center;
@@ -307,11 +292,8 @@ pre {
 
 /* ---------- 安装：下载按钮 + 下拉面板 ---------- */
 
-/* VS Code / GitHub 式下载按钮：动作区（↓ + 分组名）与 caret 区（▾）以细线分隔——
-   分体按钮的视觉语言；但整枚 summary 都是开合热区（details/summary，零 JS，
-   与 FAQ 同一套开合语言）。两枚按钮等宽长条（flex-basis 22rem，宽屏等分一行）。
-   面板是绝对定位浮层：与按钮同宽同弧度，悬在按钮下方内容之上、不占页面高度
-   （开合不动排版）；代价是零 JS 下点外面不自动关闭，需再点按钮收起。 */
+/* VS Code / GitHub 式下载按钮：动作区与 caret 区以细线分隔，整枚 summary 是开合热区
+   （details/summary，零 JS）；面板为绝对定位浮层、不占页面高度，代价是零 JS 下点外面不自动关闭 */
 .pg-install {
   display: flex;
   flex-wrap: wrap;
@@ -320,7 +302,6 @@ pre {
   align-items: flex-start;
 }
 
-/* 浮层的定位锚：相对按钮列，从按钮下缘悬出 */
 .pg-dl {
   position: relative;
   flex: 1 1 22rem;
@@ -349,7 +330,6 @@ pre {
   background: var(--muted);
 }
 
-/* 动作区吃掉整枚长按钮的余宽，caret 区钉在右缘——长条仍保持分体比例 */
 .pg-dl-main {
   display: inline-flex;
   flex: 1;
@@ -358,7 +338,6 @@ pre {
   padding: 0.55rem 1rem;
 }
 
-/* 主按钮图标：复合含义 SVG（拼图+↓ = 插件；显示器+↓ = 应用），currentColor 随文字 */
 .pg-dl-icon {
   display: inline-flex;
   flex: none;
@@ -383,9 +362,7 @@ pre {
   transform: rotate(180deg);
 }
 
-/* 面板：GitHub 下拉的形——描边卡片，浮在按钮下方内容之上（不占页面高度）；
-   与按钮同宽同弧度，行是 ghost（不带第二圈描边）。z-index 低于吸顶头部（20），
-   滚动时从头部下方穿过 */
+/* 面板：描边卡片浮在按钮下方内容之上，行是 ghost（不带第二圈描边）；z-index 低于吸顶头部（20） */
 .pg-dl-panel {
   position: absolute;
   top: calc(100% + 0.5rem);
@@ -403,7 +380,6 @@ pre {
   gap: 0.15rem;
 }
 
-/* 渠道行（ghost）：名称贴左、状态标签贴右，hover 整行给底色 */
 .pg-channel {
   display: flex;
   align-items: center;
@@ -431,8 +407,7 @@ a.pg-channel:hover {
   font-size: 0.9375rem;
 }
 
-/* 渠道行：图标 + 名称同组靠左（space-between 只分隔「名称组 | 状态标签」两块）；
-   文字类徽记（Octocat / Apple）走 currentColor 灰阶，几何徽记自带品牌主色 */
+/* 渠道行：图标 + 名称同组靠左（space-between 只分隔「名称组 | 状态标签」两块） */
 .pg-channel-label {
   display: inline-flex;
   align-items: center;
@@ -486,7 +461,6 @@ a.pg-channel:hover {
   padding: 1.1rem;
 }
 
-/* 案例之间的分隔：与卡片边框同色的虚线，弱于实线分节 */
 .pg-demo-case + .pg-demo-case {
   border-top: 1px dashed var(--border);
 }
@@ -572,7 +546,6 @@ a.pg-channel:hover {
 }
 
 .pg-faq summary {
-  /* 下内边距即「标题→内容」间距，与全站卡片的 0.75rem 口径一致 */
   padding: 0.9rem 1.1rem 0.75rem;
   cursor: pointer;
   font-weight: 550;
@@ -607,9 +580,8 @@ a.pg-channel:hover {
 
 /* ---------- 更新记录 ---------- */
 
-/* 单列版本条目：卡片沿用 pg-card 的描边与弧度，头部一行「版本号 + 日期」
-   （等宽数字防跳动），要点列表跟在标题后。条目少时不引入时间线竖轴——
-   一根线只有在 ≥3 个节点时才读得出顺序，两个版本时纯属装饰。 */
+/* 单列版本条目：头部一行「版本号 + 日期」（等宽数字防跳动）；不引入时间线竖轴 —— 一根线
+   只有在 ≥3 个节点时才读得出顺序 */
 .pg-log {
   display: grid;
   gap: 1rem;
@@ -640,11 +612,9 @@ a.pg-channel:hover {
   font-variant-numeric: tabular-nums;
 }
 
-/* 入口标题做成右端 tag（复用 .pg-tag 的胶囊外观）：
-   版本+日期钉左、标题钉右，同一条基线上两端对齐 */
+/* 入口标题做成右端 tag：版本+日期钉左、标题钉右，同一基线两端对齐；padding 比 .pg-tag 略松 */
 .pg-log-tag {
   margin-left: auto;
-  /* 比通用 .pg-tag 略松一点：它要与版本号在同一行平起平坐，块感需要更明确 */
   padding: 0.2rem 0.7rem;
 }
 
@@ -685,8 +655,7 @@ a.pg-channel:hover {
   font-variant-numeric: tabular-nums;
 }
 
-/* 备案号：中国境内托管站点的法定义务，必须可点（链到工信部 / 公安备案查询）。
-   值来自 .env，留空则整行不渲染 —— fork 不会继承别人的备案号。 */
+/* 备案号：境内托管站点的法定义务，必须可点（链到工信部 / 公安备案查询）；值来自 .env，留空整行不渲染 */
 .pg-footer-beian {
   margin-top: 0.5rem;
   display: flex;

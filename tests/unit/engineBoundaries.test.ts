@@ -1,11 +1,6 @@
-// 引擎边界护栏（结构约束，改坏会直接红）
-//
-// packages/engine 要能同时服务浏览器扩展与后续的 Node 本地代理服务。
-// 这条约束不是风格偏好，是那两个宿主能复用同一份代码的**唯一前提**：
-// 一旦引擎里出现 chrome.* 或 onnxruntime 的静态引用，Node 侧就再也起不来。
-//
-// 因此：引擎内任何 import 都必须是引擎自身的相对路径，
-// 宿主能力一律由宿主通过 backend.ts 注入（setInferenceBackend）。
+// 引擎边界护栏（结构约束，改坏会直接红）：packages/engine 要同时服务浏览器扩展与后续的 Node
+// 代理服务 —— 引擎里一旦出现 chrome.* 或 onnxruntime 的静态引用，Node 侧就再也起不来；因此
+// 引擎内 import 只能是自身相对路径，宿主能力由宿主经 backend.ts 注入。禁用清单见 docs/spec.md §15。
 
 import { describe, it, expect } from 'vitest'
 import { readFileSync, readdirSync, existsSync } from 'node:fs'

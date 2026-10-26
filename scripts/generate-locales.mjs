@@ -1,13 +1,6 @@
-// 从单一 catalog 生成 Chrome 的 _locales/*/messages.json
-//
-// 为什么要有这一层生成：
-//   · UI 走 packages/extension/src/i18n（需要运行时切换语言，因此字典必须进包）；
-//   · manifest 的 __MSG_*__ 与 service worker 的 chrome.i18n.getMessage 只能读
-//     _locales/*/messages.json（Chrome 原生机制，且不必把字典打进 SW 包）。
-// 两者共用同一份 JSON —— 生成而不是手抄，就不会漂移。
-//
-// 键名约束：Chrome 只接受 [a-zA-Z0-9_@]，因此 catalog 一律用 snake_case。
-// 值里的 $ 在 messages.json 里是占位符语法，必须转义成 $$。
+// 从单一 catalog 生成 Chrome 的 _locales/*/messages.json：UI 与 manifest / service worker 共用
+// 一份词条，生成而非手抄才不会漂移（两个消费方与键名约束见 docs/spec.md §16）。
+// 值里的 $ 是 messages.json 的占位符语法，写入时转义成 $$。
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
@@ -41,7 +34,6 @@ export const toChromeMessages = (catalog) => {
   return out
 }
 
-/** 把全部 locale 写进 <outDir>/_locales/<locale>/messages.json */
 export const writeLocales = (outDir) => {
   const written = []
   for (const locale of listCatalogLocales()) {

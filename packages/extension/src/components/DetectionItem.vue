@@ -26,7 +26,7 @@ const isReplace = computed({
 })
 
 const confidenceConfig = computed(() => {
-    // 颜色语义 = 风险等级（红=高风险/黄=中/绿=低），与「高=分析认为是敏感信息」的直觉一致
+    // 颜色语义 = 风险等级（红=高/黄=中/绿=低），与「高置信更该处理」的直觉一致
     switch (props.item.confidence) {
         case 'high':
             return { variant: 'danger' as const, label: t('confidence_high') }
@@ -46,10 +46,9 @@ const detectionTypesDisplay = computed(() => {
 </script>
 
 <template>
-    <!-- 宽度交给网格轨道分配：minmax(0,1fr) 不会撑破；min-w 会在窄面板/多列时溢出并被 Accordion 裁切 -->
+    <!-- 宽度交给网格轨道（minmax(0,1fr)）：此处加 min-w 会在窄面板/多列下溢出并被 Accordion 裁切 -->
     <Card hover class="transition-all duration-200">
         <div class="flex flex-col gap-3">
-            <!-- 头部: 标题 + 功能 -->
             <div class="flex items-center justify-between gap-4">
                 <div class="flex items-center gap-2">
                     <Badge :variant="confidenceConfig.variant" size="sm">
@@ -59,7 +58,6 @@ const detectionTypesDisplay = computed(() => {
                         {{ detectionTypesDisplay }}
                     </span>
                 </div>
-                <!-- 切换: 保留/替换 -->
                 <div class="flex items-center gap-2 shrink-0 pt-1">
                     <span class="text-xs font-medium text-foreground/80">
                         {{ isReplace ? t('common_replace') : t('common_keep') }}
@@ -67,14 +65,12 @@ const detectionTypesDisplay = computed(() => {
                     <Switch v-model="isReplace" type="square" />
                 </div>
             </div>
-            <!-- 原文 -->
             <div class="flex flex-col gap-1.5">
                 <span class="text-xs text-muted-foreground">{{ t('item_original') }}</span>
                 <p class="text-sm font-mono text-foreground truncate bg-muted/50 rounded px-2 py-1">
                     {{ item.original }}
                 </p>
             </div>
-            <!-- 替换 -->
             <div class="flex flex-col gap-1.5">
                 <span class="text-xs text-muted-foreground">{{ t('item_replacement') }}</span>
                 <p class="text-sm font-mono text-primary bg-primary/10 rounded px-2 py-1 mt-1">

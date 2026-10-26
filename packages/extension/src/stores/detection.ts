@@ -18,31 +18,26 @@ import {
 import type { ModelHostState } from '@/modelHost/state'
 import { AI_ENABLED_KEY } from '@engine/settings'
 
-// 模型状态类型
 type ModelStatus = 'idle' | 'loading' | 'success' | 'error' | 'timeout' | 'disabled'
 
-// 检测引擎状态
 interface DetectionEngineStatus {
     sceneModel: boolean        // 场景识别（启发式）
     contentModel: boolean      // 内容检测模型
     regexRules: boolean        // 正则规则
 }
 
-// Profile 持久化 key
 const PROFILE_STORAGE_KEY = 'contextwatchdog.activeProfile'
-// AI 增强首启引导弹窗「已展示」标记（展示过一次后永不再弹，无论用户是否开启）
+// AI 增强首启引导「已展示」标记（展示过一次后永不再弹）
 const AI_ONBOARDING_KEY = 'contextwatchdog.aiOnboardingSeen'
 
-// 默认替换动作（keep/replace）的判定已上收到 engine 的 profiles.ts：
-// 侧栏、粘贴正则首答、AI 二次升级三条链路共用同一份策略，避免各说各话。
-// 侧栏 → SW 的单次请求（SW 再转给 offscreen 宿主）。
-// SW 未响应/不可用时返回 null，调用方自行降级——绝不抛异常打断检测。
+// 默认替换动作（keep/replace）判定在 engine/profiles.ts：侧栏、粘贴首答、AI 二次升级共用同一份策略
+// 侧栏 → SW → offscreen 宿主的单次请求；SW 无响应时返回 null 由调用方降级，绝不抛异常打断检测
 const sendRuntimeMessage = <T>(message: unknown): Promise<T | null> => {
     if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return Promise.resolve(null)
     return new Promise(resolve => {
         try {
             chrome.runtime.sendMessage(message, (response: T) => {
-                // 读 lastError 抑制 "Unchecked runtime.lastError" 噪音
+                // 读 lastError，抑制 "Unchecked runtime.lastError" 告警
                 if (chrome.runtime.lastError) {
                     resolve(null)
                     return
@@ -56,37 +51,32 @@ const sendRuntimeMessage = <T>(message: unknown): Promise<T | null> => {
 }
 
 export const useDetectionStore = defineStore('detection', () => {
-    // 状态
     const originalText = ref('')
     const detections = ref<DetectionItem[]>([])
     const replaceConfigs = ref<ReplaceConfig[]>([])
     const isProcessing = ref(false)
 
-    // 模型状态（向后兼容旧变量名）
     const nerStatus = ref<ModelStatus>('disabled')
     const nerLoadProgress = ref(0)
     // 不定进度（服务端未返回 Content-Length 时为 true，进度条走循环动画）
     const nerIndeterminate = ref(false)
-    // 已下载字节 / 总字节：UI 进度始终并显「xx.x / 183 MB」（十进制口径，见 App.vue progressLabel）
+    // 已下/总字节：UI 并显「xx.x / 183 MB」（十进制口径，见 App.vue progressLabel）
     const nerLoadBytes = ref(0)
     const nerLoadTotal = ref(0)
-    // 另一窗口正在下载模型、本窗口等待中（UI 显示「另一窗口下载中」，见 modelDownload 的多窗口锁）
+    // 另一窗口正在下载模型、本窗口等待中（见 modelDownload 的多窗口锁）
     const nerWaitingOtherWindow = ref(false)
-    // 确认正在走网络下载（缓存未命中/已作废）：UI 据此显示下载提示；
-    // 缓存命中全程静默（仅控制台日志），不再弹「已命中缓存」之类的提示打扰用户
+    // 确认正在走网络下载才置位，UI 据此显示下载提示；缓存命中全程静默（详见 docs/spec.md §7）
     const nerDownloadStarted = ref(false)
     const nerError = ref<string | null>(null)
     // AI 增强检测开关（用户显式启用后才会下载模型）
     const aiEnabled = ref(false)
-    // 首启引导弹窗是否已展示过（持久化；展示即置位，与用户选择无关）
     const aiOnboardingSeen = ref(false)
     // storage 恢复是否完成（App 侧据此避免在恢复前误判「从未展示过」而误弹引导）
     const onboardingRestored = ref(false)
 
-    // 激活的检测配置档案（Tab 切换，持久化）
     const activeProfileId = ref<string>(DEFAULT_PROFILE_ID)
 
-    // 用户自定义档案管理器（内置 + 用户，CRUD 持久化于 chrome.storage.local）
+    // 用户档案管理器（内置 + 用户，CRUD 持久化于 chrome.storage.local）
     const profileManager = new UserProfileManager(createChromeStorage())
     const userProfilesVersion = ref(0)
 
@@ -100,7 +90,6 @@ export const useDetectionStore = defineStore('detection', () => {
         return profileManager.get(activeProfileId.value) || getProfileById(activeProfileId.value)
     })
 
-    // 从 chrome.storage 恢复上次选择（用户档案加载完成后校验 id 仍存在）
     const storageLocal = typeof chrome !== 'undefined' ? chrome.storage?.local : undefined
     let pendingActiveId: string | null = null
     storageLocal?.get(PROFILE_STORAGE_KEY, (result: Record<string, unknown>) => {
@@ -113,7 +102,7 @@ export const useDetectionStore = defineStore('detection', () => {
         }
     })
 
-    // 异步加载用户档案，完成后二次校验激活 id（防止已删除档案残留）
+    // 用户档案异步加载完成后二次校验激活 id（防止已删除档案残留）
     profileManager.load().then(() => {
         userProfilesVersion.value++
         if (pendingActiveId && profileManager.get(pendingActiveId)) {
@@ -121,7 +110,7 @@ export const useDetectionStore = defineStore('detection', () => {
         }
     })
 
-    // 恢复 AI 增强开关与首启引导标记：仅在用户此前显式启用时才加载模型（默认零网络请求）
+    // 仅在用户此前显式启用时才加载模型（默认零网络请求）
     if (storageLocal) {
         storageLocal.get([AI_ENABLED_KEY, AI_ONBOARDING_KEY], (result: Record<string, unknown>) => {
             aiOnboardingSeen.value = result?.[AI_ONBOARDING_KEY] === true
@@ -136,22 +125,19 @@ export const useDetectionStore = defineStore('detection', () => {
         onboardingRestored.value = true
     }
 
-    // 是否应展示首启引导：storage 已恢复 + 从未展示过 + 当前未启用 AI
-    //（已启用过 AI 的老用户不弹——尊重既有选择）
+    // 首启引导展示条件：storage 已恢复 + 从未展示 + 未启用 AI（已选过 AI 的老用户不弹）
     const shouldShowOnboarding = computed(
         () => onboardingRestored.value && !aiOnboardingSeen.value && !aiEnabled.value
     )
 
-    // 检测引擎状态
     const engineStatus = ref<DetectionEngineStatus>({
         sceneModel: false,
         contentModel: false,
         regexRules: true
     })
 
-    // ---- 模型宿主（Chrome / Edge）----
-    // 侧栏只是客户端：模型跑在唯一的 offscreen 文档里，状态由 SW 代写 storage.session。
-    // Firefox 没有 chrome.offscreen：hostMode=false，继续走本地加载（initLocalNER）。
+    // ---- 模型宿主（Chrome/Edge）：侧栏只是客户端，模型跑在唯一 offscreen 文档、状态由 SW 写 storage.session；
+    // Firefox 无 chrome.offscreen → 走本地加载（initLocalNER）。详见 docs/site-ai-offscreen-host.md §3.3
     const HOST_STALL_TIMEOUT = 60000
     let hostCheck: Promise<boolean> | null = null
     let stallTimer: ReturnType<typeof setTimeout> | null = null
@@ -164,7 +150,7 @@ export const useDetectionStore = defineStore('detection', () => {
         }
     }
 
-    // 宿主侧停滞超时：只要还有进度推进就重新计时（与本地路径的 60s 语义一致）
+    // 停滞超时：有进度推进就重新计时（与本地路径同为 60s）
     const armStallTimer = (): void => {
         clearStallTimer()
         stallTimer = setTimeout(() => {
@@ -188,7 +174,7 @@ export const useDetectionStore = defineStore('detection', () => {
         nerError.value = null
     }
 
-    // 把 storage.session 里的宿主状态映射到既有 UI 字段（组件零改动）
+    // 把 storage.session 的宿主状态映射到既有 UI 字段
     const applyHostState = (raw: unknown): void => {
         if (!raw || typeof raw !== 'object') return
         const state = raw as ModelHostState
@@ -233,7 +219,7 @@ export const useDetectionStore = defineStore('detection', () => {
         }
     }
 
-    // 能力探测：Chrome/Edge true，Firefox false。成功结果缓存；失败不缓存（下次再问）
+    // 能力探测：Chrome/Edge true，Firefox false；成功结果缓存，失败下次再问
     const detectHostMode = async (): Promise<boolean> => {
         if (hostCheck) return hostCheck
         const result = await sendRuntimeMessage<ModelHostStatusResponse>({ type: MODEL_HOST_STATUS })
@@ -242,7 +228,7 @@ export const useDetectionStore = defineStore('detection', () => {
         return hostCheck
     }
 
-    // 宿主状态变化 → 立即反映到面板。AI 关闭时忽略，避免"已关闭却显示就绪"。
+    // 宿主状态变化即时反映到面板；AI 关闭时忽略，避免「已关闭却显示就绪」
     storageApi?.onChanged.addListener((changes, areaName) => {
         if (areaName !== 'session') return
         const change = changes[MODEL_HOST_STATE_KEY]
@@ -250,7 +236,7 @@ export const useDetectionStore = defineStore('detection', () => {
         applyHostState(change.newValue)
     })
 
-    // 引擎开关持久化已移除：正则为基础引擎恒开、场景识别并入 AI 分支（pipeline 内部处理）
+    // 正则为基础引擎恒开、场景识别并入 AI 分支，不设独立引擎开关（详见 docs/spec.md §3）
 
     // 计算属性
     const isNERReady = computed(() => nerStatus.value === 'success')
@@ -270,7 +256,6 @@ export const useDetectionStore = defineStore('detection', () => {
         return result
     })
 
-    // 映射表由检测结果 + 替换配置派生（纯计算，修复原先在 apply 之前读取旧值的时序问题）
     const mappingTable = computed<MappingTable>(() => {
         if (!originalText.value || detections.value.length === 0) {
             return {}
@@ -300,8 +285,7 @@ export const useDetectionStore = defineStore('detection', () => {
         try {
         let items: DetectionItem[] | null = null
 
-        // Chrome/Edge 且 AI 就绪：走唯一模型宿主（正则 + AI 同一条管线）。
-        // AI 未开 / 未就绪时直接用本地正则，省掉一次消息往返。
+        // Chrome/Edge 且 AI 就绪走唯一宿主（正则 + AI 同一管线）；否则本地正则，省一次消息往返
         if (aiEnabled.value && isNERReady.value && (await detectHostMode())) {
             const hosted = await sendRuntimeMessage<ModelHostDetectResponse>({
                 type: MODEL_HOST_DETECT,
@@ -355,7 +339,6 @@ export const useDetectionStore = defineStore('detection', () => {
         }
     }
 
-    // 切换检测配置档案（Tab），持久化并对已有文本重新检测
     const setActiveProfile = async (profileId: string) => {
         if (profileId === activeProfileId.value) return
         activeProfileId.value = profileId
@@ -367,9 +350,9 @@ export const useDetectionStore = defineStore('detection', () => {
         }
     }
 
-    // ---- 用户自定义档案 CRUD（Phase 4） ----
+    // ---- 用户自定义档案 CRUD ----
 
-    // 当前激活档案是否为用户自定义（内置档案不显示编辑/删除入口）
+    // 内置档案不显示编辑/删除入口
     const isActiveProfileCustom = computed(() => {
         void userProfilesVersion.value
         return profileManager.isUserOwned(activeProfileId.value)
@@ -388,7 +371,6 @@ export const useDetectionStore = defineStore('detection', () => {
         return profile
     }
 
-    // 更新用户档案；若为当前激活档案则重新检测
     const updateUserProfile = async (profile: ProfileConfig) => {
         const updated = await profileManager.update(profile)
         userProfilesVersion.value++
@@ -398,7 +380,6 @@ export const useDetectionStore = defineStore('detection', () => {
         }
     }
 
-    // 删除用户档案；若为当前激活档案则回落到默认档案
     const deleteUserProfile = async (id: string) => {
         await profileManager.remove(id)
         userProfilesVersion.value++
@@ -414,7 +395,6 @@ export const useDetectionStore = defineStore('detection', () => {
         return json.includes('"profiles": []') ? null : json
     }
 
-    // 从 JSON 导入用户档案，返回导入数量
     const importProfilesJson = async (json: string): Promise<number> => {
         const imported = await profileManager.importFromJson(json)
         userProfilesVersion.value++
@@ -436,7 +416,7 @@ export const useDetectionStore = defineStore('detection', () => {
     }
 
     const clearMapping = () => {
-        // 映射表现在由 computed 派生，无需手动清空；保留方法以兼容现有 UI 调用
+        // 映射表由 computed 派生，无需清空；保留方法供现有 UI 调用
     }
 
     const clearAll = () => {
@@ -456,7 +436,6 @@ export const useDetectionStore = defineStore('detection', () => {
         }
     }
 
-    // 后台加载模型（仅在用户显式启用 AI 增强后调用）
     const initNER = async () => {
         console.log('[ContextWatchdog] Initializing models...')
         resetModelUi()
@@ -467,8 +446,7 @@ export const useDetectionStore = defineStore('detection', () => {
             return
         }
 
-        // 宿主路径：状态完全由 storage.session 驱动，ENSURE 不阻塞 UI。
-        // 先读一次快照（宿主可能已被上一个侧栏会话加载好），再请求幂等加载。
+        // 宿主路径：状态由 storage.session 驱动，先读一次快照（宿主可能已就绪），再发幂等 ENSURE，不阻塞 UI
         void storageApi?.session?.get(MODEL_HOST_STATE_KEY).then((stored: Record<string, unknown>) => {
             const snapshot = stored?.[MODEL_HOST_STATE_KEY]
             if (snapshot) applyHostState(snapshot)
@@ -477,11 +455,10 @@ export const useDetectionStore = defineStore('detection', () => {
         void sendRuntimeMessage({ type: MODEL_HOST_ENSURE })
     }
 
-    // Firefox 回退：侧栏内加载（与 S2 之前一致）
+    // Firefox 回退：侧栏内加载
     const initLocalNER = async () => {
         try {
-            // 停滞超时：只要下载进度还在更新就不算超时（183MB 模型慢网下可能需要数分钟）；
-            // 60 秒内无任何进度推进才判定超时
+            // 停滞超时：60 秒内无任何进度推进才判超时（慢网下 183MB 可能需数分钟）
             const STALL_TIMEOUT = 60000
             let timeoutTimer: ReturnType<typeof setTimeout> | null = null
             let resetTimeout: () => void = () => {}
@@ -499,9 +476,7 @@ export const useDetectionStore = defineStore('detection', () => {
                 arm()
             })
 
-            // 真实下载进度：percent < 0 表示未知总长（不定进度）。
-            // 每次回调都 resetTimeout —— 只要还有字节进来就绝不误判「60 秒无进展」超时
-            //（修复：无 Content-Length 时此前只在开始上报一次，60 秒后必然假超时）
+            // percent < 0 = 未知总长（不定进度）；每次回调都重置超时，只要有字节进来就不算停滞
             const onProgress = (percent: number, received?: number, total?: number) => {
                 resetTimeout()
                 if (typeof received === 'number') nerLoadBytes.value = received
@@ -518,7 +493,6 @@ export const useDetectionStore = defineStore('detection', () => {
                 nerWaitingOtherWindow.value = waiting
             }
 
-            // 确认走网络下载才置位（缓存命中全程静默，仅控制台日志）—— UI 据此显示下载提示
             const onDownloadStart = () => {
                 nerDownloadStarted.value = true
             }
@@ -588,19 +562,16 @@ export const useDetectionStore = defineStore('detection', () => {
         }
     }
 
-    // 重新加载模型
     const retryLoadNER = async () => {
         console.log('[ContextWatchdog] Retrying model load...')
         await initNER()
     }
 
-    // 首启引导「已展示」置位（展示即调用，持久化后永不再弹）
     const markOnboardingSeen = () => {
         aiOnboardingSeen.value = true
         storageLocal?.set({ [AI_ONBOARDING_KEY]: true })
     }
 
-    // 禁用模型（降级模式）
     const disableNER = () => {
         nerStatus.value = 'disabled'
         nerLoadProgress.value = 0

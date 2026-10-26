@@ -5,7 +5,6 @@ import { detect } from '@engine/detector/pipeline'
 import { getProfileById } from '@engine/detector/profiles'
 import type { ProfileConfig } from '@engine/types'
 
-// 基于 universal 克隆一个带白名单的自定义档案
 const withWhitelist = (whitelist: string[]): ProfileConfig => ({
   ...structuredClone(getProfileById('universal')),
   id: 'user-test',

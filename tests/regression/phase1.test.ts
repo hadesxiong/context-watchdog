@@ -13,7 +13,6 @@ describe('回归: 含 @ 密码', () => {
       const { items } = await runDetect(text)
       const hit = items.find(i => i.type === 'DB_PASSWORD' && i.original === pw)
       expect(hit, `应检出 DB_PASSWORD=${pw}`).toBeDefined()
-      // span 精确
       assertSpansConsistent(text, items)
       const out = applyReplace(text, items)
       expect(out).not.toContain(pw)

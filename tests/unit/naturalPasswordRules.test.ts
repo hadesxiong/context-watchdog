@@ -53,7 +53,6 @@ describe('自然语言口令 - 精度防线', () => {
     expect(matchRule('密码不能为空')).toEqual([])
     expect(matchRule('密码是相同的处理方式')).toEqual([])
     expect(matchRule('密码要求至少 8 位')).toEqual([])
-    // 用户工单备注原句：密码后无连接词
     expect(matchRule('工单里涉及的密码和 API Key 仅用于测试识别')).toEqual([])
   })
 

@@ -1,20 +1,17 @@
-// 粘贴「先插入后就地替换」的纯逻辑（供单测）
-// 运行时的内联副本见 src/background/pasteEntryPoint.ts（注入函数必须自包含，无法 import），
-// 改动需两边同步。
+// 粘贴「先插入后就地替换」的纯逻辑（供单测）。运行时的内联副本见
+// src/background/pasteEntryPoint.ts（注入函数必须自包含，无法 import），改动需两边同步。
 
 export interface InsertionRange {
   start: number
   end: number
 }
 
-// 换行归一化：textarea.value 按 HTML 规范把 \r\n / \r 归一化为 \n，
-// 而剪贴板原始文本（尤其 Windows）常带 \r\n——不归一化会导致多行粘贴的
-// 逐字校验必然失配（长度与内容双重偏差），整条检测链路静默失效
+// 换行归一化：textarea.value 按规范把 \r\n / \r 归一化为 \n，而剪贴板（尤其 Windows）
+// 常带 \r\n——不归一会让多行粘贴的逐字校验必然失配，整条链路静默失效
 export const normalizeNewlines = (text: string): string =>
   text.replace(/\r\n?/g, '\n')
 
-// 粘贴插入区间：粘贴后光标位置 - 粘贴文本长度。
-// 与实际值不吻合（站点改写粘贴内容 / IME / 并发输入）则返回 null，调用方放弃改写
+// 插入区间 = 粘贴后光标位置 - 粘贴文本长度；与实际不吻合（站点改写 / IME / 并发输入）则返回 null，调用方放弃改写
 export const computeInsertionRange = (
   value: string,
   caret: number,
@@ -41,17 +38,15 @@ export const applySanitized = (
 }
 
 // 超长粘贴守卫上限（与 service-worker.ts / pasteEntryPoint.ts 的 MAX_PASTE_CHARS 一致）。
-// 入口层直接放行才是真守卫：SW 侧仅对检测范围 slice 截断，若入口照单全收，
-// 超限粘贴会被「截断后的脱敏结果」整体改写，尾部文本被静默吞掉
+// 入口层直接放行才是真守卫：SW 仅对检测范围 slice，入口照单全收会让超限粘贴被「截断后的
+// 脱敏结果」整体改写、尾部被静默吞掉
 export const MAX_PASTE_CHARS = 20000
 
 export const exceedsPasteLimit = (text: string): boolean => text.length > MAX_PASTE_CHARS
 
-// ---------- AI 二次升级守卫（设计 §3.5 P6） ----------
-//
-// 正则结果先落地，AI 是增量：任何一条守卫不通过都**保留正则结果**，
-// 绝不回退成原文，也绝不把 AI 的部分结果拼到已经变化的输入框里。
-// 注入函数里有一份等价的内联副本（无法 import），改动需两边同步。
+// ---------- AI 二次升级守卫（定义见 docs/site-ai-offscreen-host.md §3.5 P6） ----------
+// 正则结果先落地，AI 是增量：任一守卫不通过都**保留正则结果**，绝不回退原文、也绝不把
+// AI 的部分结果拼到已经变化的输入框里。注入函数里有等价的内联副本，改动需两边同步。
 
 export const AI_UPGRADE_TTL = 8000
 
@@ -60,11 +55,9 @@ export interface AiUpgradeSnapshot {
   token: string
   /** 正则脱敏结果（已写入输入框的内容） */
   appliedText: string
-  /** 正则结果在 value 中的区间 */
   range: InsertionRange
   /** 正则结果落地后的完整 value（用于判断用户是否继续输入） */
   valueAfterApply: string
-  /** 正则结果落地时间（Date.now()） */
   appliedAt: number
 }
 
@@ -72,11 +65,10 @@ export interface AiUpgradeInput {
   snapshot: AiUpgradeSnapshot
   /** 收到 AI 结果时的 value */
   currentValue: string
-  /** 收到 AI 结果时的光标位置 */
   currentCaret: number
   /** AI（正则 + 模型）重新检测后的脱敏文本 */
   aiSanitized: string
-  /** AI 结果的总脱敏处数（含正则命中） */
+  /** 总脱敏处数（含正则命中） */
   aiCount: number
   now: number
 }
@@ -100,9 +92,9 @@ export const planAiUpgrade = (input: AiUpgradeInput): AiUpgradePlan => {
   if (currentValue.slice(range.start, range.end) !== appliedText) {
     return { ok: false, reason: 'range-moved' }
   }
-  // c) AI 确实有增量（结果与正则结果完全相同则不做无意义替换）
+  // c) AI 确有增量（相同则不做无意义替换）
   if (aiSanitized === appliedText) return { ok: false, reason: 'no-increment' }
-  // d) 时效：超过 TTL 的 AI 结果直接丢弃，避免用户已经继续操作后被回写
+  // d) 超过 TTL 的 AI 结果直接丢弃，避免用户已继续操作后被回写
   if (now - snapshot.appliedAt > AI_UPGRADE_TTL) return { ok: false, reason: 'expired' }
 
   const delta = aiSanitized.length - appliedText.length

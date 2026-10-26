@@ -1,33 +1,12 @@
 #!/usr/bin/env node
 /**
- * 站点挂件探针（控制面）
- *
- * 为什么存在：挂件是注入到宿主页面的 DOM，vitest（jsdom）测不到「真的挂上了、
- * 真的没碰未授权站点、真的没改变页面布局」这三件事。这里用无头 Chrome 实测：
- *   1) 授权站点顶层文档出现挂件（fixed / 最高 z-index）
- *   2) iframe 内不出现（粘贴监听 allFrames 注入，但挂件只挂顶层）
- *   3) 未授权站点完全不注入
- *   4) 不产生横向滚动条，不往 body 里塞节点
- *   5) 常驻：页面主动删除挂件后自动重挂
- *   6) 收起态 44×44、12px 圆角矩形（面板 display:none，host 盒子就是按钮）
- *   7) mark 跟随页面明暗主题换色（亮色 #18181b / 暗色 #fafafa）
- *   8) 「在侧边栏中打开」点击后确实打开面板（侧栏不可用时退回弹窗），
- *      且按钮切成「已打开」的禁用态，而不是卡在转圈的灰态；
- *      面板开着的真值在推送、2s 轮询、页面重挂三条路径上都不许走样
- *   9) 暗色下面板有能与背景分开的边框
- *
- * 挂件在 closed Shadow DOM 里，页面 JS 读不到内部，因此 6)~8) 走 CDP 的
- * DOM.getDocument(pierce) 穿透读取节点树（与 DevTools 元素面板同一机制）。
- *
- * 为了免去 optional_host_permissions 的交互授权，脚本运行期间会临时给
- * dist/manifest.json 加上测试站的 host_permissions，结束后**原样恢复**。
- * dist 是构建产物，本就不入库。
- *
- * 用法：
- *   npm run probe:widget
- *   CHROME_PATH=/path/to/chrome npm run probe:widget
- *   # Windows：正式版 Chrome / 新版 Edge 会忽略 --load-extension，须指向 Chromium 或
- *   # Chrome for Testing，如 %LOCALAPPDATA%\ms-playwright\chromium-*\chrome-win64\chrome.exe
+ * 站点挂件探针：挂件是注入宿主页面的 DOM，vitest（jsdom）测不到「真的挂上了、没碰未授权站点、
+ * 没改变页面布局」，这里用无头 Chrome 实测。断言清单见 docs/test-cases.md 附录 A。
+ * 挂件在 closed Shadow DOM 里，页面 JS 读不到内部，因此走 CDP 的 DOM.getDocument(pierce)
+ * 穿透读取节点树（与 DevTools 元素面板同一机制）。为免去 optional_host_permissions 的交互授权，
+ * 运行期间临时给 dist/manifest.json 加上测试站的 host_permissions，结束后原样恢复（dist 不入库）。
+ * 用法：npm run probe:widget（CHROME_PATH 可指定浏览器）。Windows 上正式版 Chrome / 新版 Edge 会忽略
+ * --load-extension，须用 CHROME_PATH 指向 Chromium 或 Chrome for Testing。
  */
 import { execFileSync, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
@@ -71,8 +50,7 @@ const PATTERN = `http://127.0.0.1:${httpPort}/*`
 
 /* ---------- 2. Chrome ---------- */
 
-// 新版正式版 Chrome 会忽略 --load-extension（只允许商店安装），
-// 因此优先找 Chrome for Testing / Chromium——它们支持加载未打包扩展。
+// 正式版 Chrome 会忽略 --load-extension（只允许商店安装），因此优先找 Chrome for Testing / Chromium
 function playwrightChromium() {
   const cache = join(process.env.HOME ?? '', 'Library/Caches/ms-playwright')
   if (!existsSync(cache)) return []
@@ -118,11 +96,8 @@ const debugPort = await freePort()
 const profile = join(root, 'node_modules', '.cache', `probe-widget-${process.pid}`)
 rmSync(profile, { recursive: true, force: true })
 
-// 扩展 ID：未打包扩展由绝对路径的 sha256 推导（前 32 个 hex → a-p）。
-// Windows 上 Chromium 哈希的是路径的 **UTF-16LE** 字节（base::FilePath::CharType
-// 为 wchar_t，见 components/crx_file/id_util.cc 的 GenerateIdForPath 与
-// tools/crx_id/crx_id.py 注释），POSIX 才是 UTF-8——用错编码推出的 ID 导航
-// chrome-extension:// 必 404，整个探针死在「扩展未加载」上。
+// 未打包扩展的 ID = 绝对路径 sha256 前 32 个 hex 映射到 a-p；Windows 上哈希的是路径的 **UTF-16LE**
+// 字节（见 components/crx_file/id_util.cc），POSIX 才是 UTF-8——编码用错，chrome-extension:// 必 404。
 const extensionId = [
   ...createHash('sha256')
     .update(process.platform === 'win32' ? Buffer.from(DIST, 'utf16le') : Buffer.from(DIST, 'utf8'))
@@ -220,7 +195,6 @@ try {
   await cdp.connect()
   await cdp.send('Page.enable')
 
-  // 写入站点配置（侧栏页作为扩展上下文）
   await cdp.send('Page.navigate', { url: `chrome-extension://${extensionId}/src/sidepanel/index.html` })
   await sleep(1500)
   const contextOk = await cdp.eval('typeof chrome !== "undefined" && typeof chrome.storage !== "undefined"')
@@ -236,8 +210,7 @@ try {
     'contextwatchdog.aiEnabled': true
   }).then(() => 'ok')`)
   if (stored !== 'ok') throw new Error(`写入站点配置失败：${stored}`)
-  // 宿主就绪态直接置 ready：探针只关心挂件的展示与交互，
-  // 不能因为一次探针就去下载几百 MB 的模型（预热逻辑会因此跳过）
+  // 宿主就绪态直接置 ready：探针只关心挂件的展示与交互，不能因一次探针就去下载几百 MB 的模型
   const hostReady = await cdp.eval(`chrome.storage.session.set({
     'contextwatchdog.modelHost': { phase: 'ready', percent: 100, received: 0, total: 0,
       waiting: false, downloadStarted: false, error: null, updatedAt: Date.now() }
@@ -280,7 +253,7 @@ try {
   console.log('[2] 收起态尺寸')
   check('收起态按钮 44×44', size.w === 44 && size.h === 44)
 
-  // ③ closed Shadow DOM 内部（页面 JS 拿不到，走 CDP 穿透；与 DevTools 元素面板同机制）
+  // ③ closed Shadow DOM 内部（走 CDP pierce 穿透）
   await cdp.send('DOM.enable')
   const attrOf = node => {
     const out = {}
@@ -306,9 +279,7 @@ try {
       openButton: buttons.find(node => (attrOf(node).style ?? '').includes('width: 100%'))
     }
   }
-  // 按钮点击一律按节点实际盒模型取中心，不用事先算好的坐标：侧栏（无头下是真侧栏）
-  // 打开会挤压页面视口，挂件随之移动，过期坐标落在视口外被裁到角落打在 body 上
-  // （2026-10-21 实测：「外点收起」顺手把面板收了，fab 再也点不中，探针假绿/假红）
+  // 点击按节点实际盒模型取中心，不用事先算好的坐标：侧栏（无头下是真侧栏）打开会挤压视口、挂件随之移动，过期坐标会打在 body 上（探针假绿/假红）
   const clickNode = async node => {
     const box = await cdp.send('DOM.getBoxModel', { nodeId: node.nodeId })
     const quad = box.model.content
@@ -347,8 +318,7 @@ try {
   widget = await readWidget()
   if (widget.openButton) await clickNode(widget.openButton)
   await sleep(800)
-  // 打开后应切到「已打开」态：disabled 由面板真实状态决定，
-  // 光标必须复位（上一版成功后无人复位，留下永久的 wait 光标与灰态）
+  // 打开后应切到「已打开」态：disabled 由面板真实状态决定，光标必须复位（否则留下永久的 wait 光标与灰态）
   widget = await readWidget()
   const openStyle = attrOf(widget.openButton ?? {}).style ?? ''
   check('打开后切成「已打开」态（禁用且不留转圈光标）',
@@ -361,11 +331,9 @@ try {
     target.type === 'page' && target.url.startsWith(`chrome-extension://${extensionId}/src/sidepanel/index.html`))
   check('点击后面板真的打开了（侧栏或弹窗）', Boolean(widget.openButton) && panelOpened)
 
-  // ④b 实时推送：收起挂件后轮询已停，按钮状态只可能来自 SW 的推送通道
-  // （onOpened/onClosed 走的正是这条）。从扩展上下文向标签页推 SITE_AI_PANEL_STATE，
-  // 断言按钮立即双向翻转——证明「别处关掉侧栏 → 按钮复位」不必等下个轮询周期。
+  // ④b 实时推送：收起挂件后轮询已停，按钮状态只可能来自 SW 的推送通道（onOpened/onClosed 走的正是这条）；
+  // 断言推 SITE_AI_PANEL_STATE 后按钮立即双向翻转，即「别处关掉侧栏 → 按钮复位」不必等下个轮询周期。
   console.log('[4b] 侧栏状态实时推送')
-  // 点 fab 收起；收起即 clearInterval(轮询)，状态只剩推送能改
   widget = await readWidget()
   await clickNode(widget.fab)
   await sleep(400)
@@ -395,9 +363,8 @@ try {
       Object.prototype.hasOwnProperty.call(attrOf(widget.openButton ?? {}), 'disabled'))
   ext.close()
 
-  // ④c 轮询真值：展开后轮询周期（2s）内的 SITE_AI_GET 回包必须报告 panelOpen=true，
-  // 否则「已打开」约 2s 后被 false 翻回可点（2026-10-21 真机验收现象：
-  // getContexts filter 字段写成单数被运行时抛错 → catch → panelOpen 恒 false）
+  // ④c 轮询真值：展开态一个轮询周期（2s）内的 SITE_AI_GET 回包必须报 panelOpen=true，
+  // 否则「已打开」约 2s 后被 false 翻回可点
   console.log('[4c] 轮询真值不翻回')
   widget = await readWidget()
   await clickNode(widget.fab)
@@ -408,9 +375,7 @@ try {
     attrOf(widget.fab ?? {})['aria-expanded'] === 'true' &&
       Object.prototype.hasOwnProperty.call(attrOf(widget.openButton ?? {}), 'disabled'))
 
-  // ④d 挂件重挂的初始真值：页面重载 → 挂件重新注入 → mount 首次 syncState，
-  // 侧栏开着时按钮必须出生就是「已打开」禁用态（2026-10-21 真机验收现象：
-  // 别处打开侧栏后，挂件里按钮仍是可点的「在侧边栏中打开」）
+  // ④d 挂件重挂的初始真值：页面重载 → 挂件重新注入 → mount 首次 syncState，侧栏开着时按钮出生就该是「已打开」禁用态
   console.log('[4d] 重挂初始真值')
   await cdp.send('Page.reload')
   await sleep(2200)
@@ -444,8 +409,7 @@ try {
   station.close()
   writeFileSync(MANIFEST, originalManifest)
   await sleep(300)
-  // Windows 上 SIGKILL 后 Chrome 子进程退尽、文件锁释放常晚于 300ms——锁没松就
-  // 重试几轮。全 PASS 的探针不许在收尾这一下删除上翻车（EPERM → exit 1）。
+  // Windows 上 SIGKILL 后文件锁释放常晚于 300ms，锁没松就重试几轮——全 PASS 不许在收尾删除上翻车（EPERM → exit 1）
   for (let attempt = 0; attempt < 12; attempt++) {
     try {
       rmSync(profile, { recursive: true, force: true })

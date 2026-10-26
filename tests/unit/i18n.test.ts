@@ -1,11 +1,6 @@
-// i18n 防漂移护栏
-//
-// i18n 最容易出的问题不是「翻错了」，而是**悄悄漏掉**：
-//   · 新加一条文案只写了中文，英文用户看到中文；
-//   · 词条加进 catalog 但忘了同步另一门语言；
-//   · 模板里 t('xxx') 拼错，运行时回退成 key 显示（不报错、不崩溃）；
-//   · manifest 引用的 __MSG_*__ 没有对应词条，浏览器直接把占位符当名字显示。
-// 这四类都是「构建全绿、界面才露馅」，所以必须由测试兜住。
+// i18n 防漂移护栏：兜住四类「构建全绿、界面才露馅」的漂移 —— 新文案只写中文、词条只同步了
+// 一门语言、t('xxx') 拼错（运行时静默回退成 key）、manifest 的 __MSG_*__ 缺对应词条。
+// 四类清单与 i18n 机制见 docs/spec.md §16。
 
 import { describe, it, expect } from 'vitest'
 import { readFileSync, readdirSync } from 'node:fs'
@@ -75,9 +70,8 @@ describe('i18n - 词条完整性', () => {
   })
 
   it('词条值里没有残留的未替换占位符以外的花括号', () => {
-    // {count} / {name} / {error} 是允许的。
-    // 只检查「标识符形状」的花括号：正则示例里的 \d{6} 属于正常内容，
-    // 而拼错的占位符（如 {Count}）一定会命中这条。
+    // {count} / {name} / {error} 是允许的；只检查「标识符形状」的花括号 —— 正则示例里的 \d{6}
+    // 属正常内容，而拼错的占位符（如 {Count}）一定命中这条。
     const allowed = new Set(['count', 'name', 'error'])
     const offenders = Object.entries({ ...en, ...zh }).flatMap(([key, value]) =>
       [...value.matchAll(/\{([A-Za-z_][A-Za-z0-9_]*)\}/g)]

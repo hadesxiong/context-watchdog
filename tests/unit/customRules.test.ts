@@ -28,7 +28,6 @@ describe('ReDoS 静态防护', () => {
     expect(validateCustomPattern('(a?)+b').ok).toBe(false)
     expect(validateCustomPattern('([a-z]+)+x').ok).toBe(false)
     expect(validateCustomPattern('(\\d+)*').ok).toBe(false)
-    // 嵌套两层也拒绝
     expect(validateCustomPattern('((ab)+)*').ok).toBe(false)
   })
 

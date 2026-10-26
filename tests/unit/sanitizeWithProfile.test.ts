@@ -1,7 +1,5 @@
-// 单元用例 - sanitizeWithProfile：粘贴拦截链路（SW 正则首答 + offscreen AI 升级）
-// 必须执行档案的 keep/replace 判定。
-// 2026-10-21 验收缺陷：两处都直接用 sanitizeText 无条件替换全部识别项，
-// 把档案判定为「保留」的邮箱/高熵/IP 也一并脱敏了。
+// 单元用例 - sanitizeWithProfile：粘贴拦截链路（SW 正则首答 + offscreen AI 升级）必须执行
+// 档案的 keep/replace 判定（回归：两处曾直接无条件替换，把档案判定「保留」的项也脱敏了）。
 import { describe, it, expect } from 'vitest'
 import { runDetect } from '../helpers'
 import { sanitizeWithProfile, sanitizeText } from '@engine/replacer'

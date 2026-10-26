@@ -27,7 +27,7 @@ const textareaClasses = computed(() => [
   'bg-background border',
   'text-foreground',
   'placeholder:text-muted-foreground',
-  // 焦点样式与主功能区 textarea 统一（见 InputArea）：1px ring + 聚焦时边框透明
+  // 焦点样式与 InputArea 的 textarea 统一（两处需同步改）：1px ring + 聚焦时边框透明
   'focus:outline-none focus:ring-1 focus:ring-ring focus:border-transparent',
   'border-border',
   props.disabled && 'opacity-50 cursor-not-allowed'

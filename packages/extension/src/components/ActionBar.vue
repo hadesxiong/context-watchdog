@@ -39,10 +39,8 @@ const handleKeepAll = () => {
 
 <template>
   <div class="bg-card shadow-sm border-t border-border p-3">
-        <!-- 单行不换行：三个按钮等分宽度，文案超出用省略号截断。
-             换行会让按钮栏高度跳动（英文文案比中文长，切语言时尤其明显）。
-             省略号需要一层包裹元素才生效——Button 的 slot 是裸文本节点，
-             text-overflow 只对块级容器里的行内内容生效。 -->
+        <!-- 三按钮等分且不换行（换行会让栏高随语言文案长度跳动）；
+             省略号需块级包裹层，Button 的 slot 是裸文本节点，故每格套一层 span -->
         <div class="flex gap-2">
             <Button @click="handleCopy" variant="primary" class="flex-1 min-w-0">
                 <!-- <svg v-if="!copySuccess" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

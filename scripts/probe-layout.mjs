@@ -1,36 +1,11 @@
 #!/usr/bin/env node
 /**
- * 布局断点回归探针
- *
- * 为什么存在：本项目的断点失效过两类 bug，肉眼难复现、vitest 也测不到（jsdom 无布局）：
- *   A. 结果网格的列数断点按「视口宽度」触发，而网格实际活在右侧栏里
- *      （宽 = 视口 − 左栏 400px），导致 1200px 视口下 3 列每列仅 ~250px，
- *      卡片被 AccordionItem 的 overflow-hidden 裁掉 69px。
- *   B. 左栏基础类 min-w-100（400px）在所有宽度生效，面板拖窄到 <400px 时
- *      整页出现横向滚动。
- *
- * 本脚本用无头 Chrome + CDP 实测真实布局（jsdom 做不了），逐档视口宽度断言：
- *   1) 页面无横向溢出
- *   2) 结果网格无内部溢出、卡片不越出列
- *   3) 列数由容器宽度推导（= 当前设计意图：660/1000 阈值），而非固定视口值
- *   4) 宽视口 + 零检出时 main 仍为两栏（hasDetected 判定，而非 hasResults）
- *   5) 宽屏断点下输入区四边等距 12px（曾因缺 min-[820px]:pb-3 导致下边距为 0，
- *      输入框贴到列底 / 按钮栏顶边）
- *   6) 长文本检测遮罩时序：遮罩必须先上屏再开跑检测（App.vue handleDetect 的
- *      nextTick + 绘制屏障时序）。退化表现：检测的同步长任务把遮罩渲染压到任务结束，
- *      而 1s 最小延时已在阻塞前过期 → 遮罩一闪而过甚至根本没出现
- *
- *      ⚠️ 本条只覆盖「遮罩出现了、存活时长达标」这一层。它用 rAF 当「已上屏」的
- *      证据，而 rAF 回调发生在绘制**之前**——所以它无法区分「rAF 跑过」与
- *      「那一帧真的画了」，对上面那个退化表现是**假阴性**（旧实现在此同样是绿的）。
- *      真正的顺序属性由 tests/unit/paintBarrier.test.ts 守（会在旧写法下变红）。
- *      要用像素/帧时序级别兜住它，得改用 CDP Page.startScreencast 的帧时间戳。
- *
- * 用法：
- *   npm run probe:layout          # 缺 dist 会先自动 build
- *   CHROME_PATH=/path/to/chrome npm run probe:layout
- *
- * 退出码：0 全部通过；1 有断言失败；2 环境不具备（无 Chrome / 无法构建）
+ * 布局断点回归探针：无头 Chrome + CDP 实测真实布局——jsdom 没有布局，vitest 测不到断点/溢出
+ * 这类肉眼难复现的 bug。断言清单见各 report() 标签。
+ * 用法：npm run probe:layout（缺 dist 先自动 build；CHROME_PATH 可指定浏览器）。
+ * 退出码：0 全部通过；1 有断言失败；2 环境不具备（无 Chrome / 无法构建）。
+ * 「遮罩时序」一条只证明遮罩上屏与存活达标，对绘制顺序是假阴性（rAF 早于绘制），
+ * 真正的先后由 tests/unit/paintBarrier.test.ts 守。
  */
 import http from 'node:http'
 import { createReadStream, existsSync, mkdtempSync, rmSync } from 'node:fs'
@@ -116,7 +91,6 @@ class CDP {
     }
 }
 
-/* 页面内测量：一次性取全，避免多次注入表达式 */
 const MEASURE = `(() => {
   const main = document.querySelector('main')
   const right = main && main.children[1]
@@ -188,7 +162,6 @@ async function main() {
     process.on('exit', cleanup)
     const watchdog = setTimeout(() => { console.error('超时：探针 120s 未完成'); process.exit(1) }, 120000)
 
-    // 等 CDP 就绪
     let wsUrl = null
     for (let i = 0; i < 100 && !wsUrl; i++) {
         try { wsUrl = (await (await fetch(`http://127.0.0.1:${debugPort}/json/version`)).json()).webSocketDebuggerUrl } catch { await sleep(100) }
@@ -249,7 +222,7 @@ async function main() {
         [z.gapTop, z.gapBottom, z.gapLeft, z.gapRight].every(g => g != null && Math.abs(g - 12) <= 1),
         `上=${z.gapTop} 下=${z.gapBottom} 左=${z.gapLeft} 右=${z.gapRight}`)
 
-    // 6. 长文本检测遮罩时序：遮罩需先上屏再开跑检测（遮罩 DOM 增删 + 首帧 rAF 取证）
+    // 6. 长文本遮罩时序：遮罩先上屏再开跑（DOM 增删 + 首帧 rAF 取证）
     console.log(`\n\u25c0 长文本检测遮罩时序（~155KB 文本）`)
     await setW(1400); await sleep(200)
     await clickButton(cdp, '\u6e05\u7a7a'); await sleep(300)

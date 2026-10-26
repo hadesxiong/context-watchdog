@@ -52,7 +52,6 @@ describe('短密钥族误报防线', () => {
 })
 
 describe('sk- 厂商段规则（sk-<vendor>-<hex> 形态）', () => {
-  // 拼接构造（同上，防 push protection）
   const key = 'sk-live-' + '7f3a9c2e'.repeat(4) // 32 位小写十六进制体
 
   it('sk- + 小写厂商段 + 32 位十六进制体被命中', () => {

@@ -1,7 +1,6 @@
 <script setup lang="ts">
-// 档案下拉选择器（替代原顶部 Tab 条）：挂在「输入文本」标题旁。
-// 菜单项两行布局：档案名 + 说明小字；自定义档案项右侧内嵌编辑齿轮
-// （点齿轮 = 先激活该档案再打开编辑弹窗，保证编辑的就是当前生效档案）
+// 档案下拉选择器：菜单项两行（档案名 + 说明），自定义档案右侧内嵌编辑齿轮
+// （点齿轮 = 先激活该档案再开编辑弹窗，保证编辑的就是当前生效档案）
 import { ref } from 'vue'
 import {
     SelectRoot,
@@ -18,17 +17,15 @@ import { Dialog } from '../ui'
 import { useI18n } from '../i18n'
 import ProfileSettings from './ProfileSettings.vue'
 
-// 「新建」菜单项的哨兵值（不存在的档案 id，选中即触发创建流程）
+// 「新建」菜单项的哨兵值（非真实档案 id，选中即触发创建）
 const CREATE_VALUE = '__create_profile__'
 
 const store = useDetectionStore()
 const { t, profileLabel } = useI18n()
 const showSettings = ref(false)
-// 菜单开合受控：编辑齿轮需在不触发 Item 选中的前提下显式关闭菜单
-// （SelectItem 的选中/关菜单挂在 pointerup 上，拦掉后菜单不会自行关闭）
+// 菜单开合受控：编辑齿轮须在不触发 Item 选中的前提下显式关菜单
 const menuOpen = ref(false)
 
-// 自定义档案判定：非内置即用户自定义（见 ProfileConfig.builtin）
 const isCustom = (profile: { builtin?: boolean }) => profile.builtin === false
 
 const onCreate = async () => {
@@ -45,11 +42,9 @@ const onUpdate = (value: string) => {
     void store.setActiveProfile(value)
 }
 
-// 菜单项内点编辑齿轮：同步「关菜单 → 切档案 → 开编辑弹窗」（一次 flush 内完成）。
-// 档案切换不 await（store 内 activeProfileId 是同步更新的，弹窗读取即为新档案；
-// 若有待检文本，重检在后台跑，不阻塞弹窗打开）
+// 点齿轮：关菜单 → 切档案 → 开编辑弹窗一次完成；档案切换不 await——
+// activeProfileId 同步更新（弹窗即读到新档案），有待检文本时重检在后台跑
 const onEdit = (profileId: string, event: MouseEvent) => {
-    // 阻断 SelectItem 的选中/关闭流程，只执行编辑
     event.preventDefault()
     event.stopPropagation()
     menuOpen.value = false
@@ -79,10 +74,8 @@ const onDelete = async () => {
             <!-- <SelectValue placeholder="选择档案" class="truncate" /> -->
             <span class="flex items-center min-w-0 gap-1">
                 <span class="shrink-0">{{ t('profile_mode') }}</span>
-                <!-- 自己渲染文本，不用 SelectValue 的默认内容：reka-ui 的 SelectValue 显示的是
-                     候选项在**挂载时**抓取的 textContent 快照（SelectItemText.vue），不随语言变化，
-                     只有重挂载（开关一次菜单）才刷新 → 表现为切语言后档案名不更新。
-                     这里直接读响应式的 profileLabel()，切语言当帧就跟上。 -->
+                <!-- 自己渲染而非 SelectValue 默认内容：后者显示挂载时抓取的 textContent 快照、
+                     不随语言变化，这里读响应式 profileLabel()，切语言当帧更新 -->
                 <SelectValue :placeholder="t('profile_select_placeholder')" class="truncate">
                     {{ profileLabel(store.activeProfile).name }}</SelectValue>
             </span>
@@ -108,13 +101,11 @@ const onDelete = async () => {
                             <span :class="profile.id === store.activeProfileId && 'font-medium'">
                                 {{ profileLabel(profile).name }}</span>
                         </SelectItemText>
-                        <!-- 档案说明：选项内第二行小字，超一行省略号截断（预设/自定义一致） -->
                         <p class="text-xs text-muted-foreground leading-snug truncate mt-0.5">
                             {{ profileLabel(profile).description }}</p>
                     </div>
-                    <!-- 编辑齿轮：仅自定义档案；pointerup/touchend 必须拦（SelectItem 在
-                         pointerup 上选中并关菜单，菜单在 click 派发前就卸载 → 点击丢失；
-                         item 的 touchend prevent 还会吞掉触屏合成 click） -->
+                    <!-- 编辑齿轮：仅自定义档案；pointerup/touchend 必须拦——SelectItem 在
+                         pointerup 上选中并关菜单，click 会随菜单卸载丢失（touchend 同理） -->
                     <button v-if="isCustom(profile)"
                         @pointerdown.stop @pointerup.stop @touchend.stop
                         @click="onEdit(profile.id, $event)"
@@ -141,7 +132,6 @@ const onDelete = async () => {
             </SelectViewport>
         </SelectContent>
     </SelectRoot>
-    <!-- 自定义档案设置弹窗 -->
     <Dialog
         v-model:open="showSettings"
         :title="t('profile_settings_title')"

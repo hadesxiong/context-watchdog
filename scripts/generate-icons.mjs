@@ -1,6 +1,4 @@
-// 从 public/icons/logo.svg 生成扩展图标 PNG（16/32/48/128）
-// 用法：npm run icons
-// 注意：SVG 源用 CSS 变量（组件内联用），生成 PNG 时替换为固定色值
+// 从 public/icons/logo.svg 生成扩展图标 PNG（16/32/48/128）。用法：npm run icons
 import { Resvg } from '@resvg/resvg-js'
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'

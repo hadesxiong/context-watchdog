@@ -1,6 +1,5 @@
-// 单元用例 - 命令行口令规则（分隔形回归 + 直连形新增）
-// 2026-10-21 真机漏检：`mysql -u lantu_app -p'Qy7#mP2!vL9@' lantu_prod` 中的口令
-// 完全未检出——旧规则要求旗标后必须有空白分隔，mysql 的直连引号形/裸值形全漏。
+// 单元用例 - 命令行口令规则（分隔形回归 + 直连形新增）：旧规则要求旗标后必须有空白分隔，
+// `mysql -u user -p'...' db` 这类直连引号形 / 裸值形全漏（真机漏检）。
 import { describe, it, expect } from 'vitest'
 import { runDetect, assertSpansConsistent } from '../helpers'
 

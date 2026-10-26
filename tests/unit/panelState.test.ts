@@ -1,9 +1,7 @@
-// 单元用例 - 跨浏览器侧栏状态解析（panelState）
-//
-// 覆盖 2026-10-22 两个 Firefox 真机缺陷的修复面（CHANGELOG ⑱）：
-//   ① Firefox 无 getContexts → sidebarAction.isOpen + 弹窗自追踪（状态反馈不再恒 false）
-//   ② 弹窗兜底窗口可探活（不再重复点击叠窗）；文案键按宿主选择（不冒充侧栏）
-// 同时锁住 ⑮ 的复数 filter 回归（单数字段会被运行时直接抛错）。
+// 单元用例 - 跨浏览器侧栏状态解析（panelState）：锁住两个 Firefox 真机缺陷的修复面 ——
+// ① FF 无 getContexts → sidebarAction.isOpen ∪ 弹窗自追踪（状态不再恒 false）；
+// ② 弹窗兜底窗口可探活、文案键按宿主选择（不冒充侧栏）；同时锁住复数 filter 回归
+// （单数字段会被运行时直接抛错）。
 import { describe, it, expect, afterEach, vi } from 'vitest'
 import { openButtonLabelKey, readPanelState, trackPopupWindow } from '@/background/panelState'
 

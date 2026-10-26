@@ -1,5 +1,4 @@
-// Golden 用例 - 通用文本（text）Profile
-// 语义：PII 为主，高熵 strict（30 字符/熵 4.0），tierLowConfidence
+// Golden 用例 - 通用文本（text）Profile：PII 为主、高熵 strict（30 字符/熵 4.0）、tierLowConfidence
 import { describe, it, expect } from 'vitest'
 import { runDetect, applyReplace, assertNoOverlap, assertSpansConsistent } from '../helpers'
 

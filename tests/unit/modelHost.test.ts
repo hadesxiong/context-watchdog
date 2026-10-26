@@ -9,11 +9,8 @@ import {
 } from '@/modelHost/state'
 import { isModelHostReply, isModelHostRequest } from '@/modelHost/protocol'
 
-// 模型宿主的两块纯逻辑：状态迁移与端口消息守卫。
-//
-// 为什么值得单独测：状态在 offscreen 里写、在侧栏里读，中间隔着 storage.session，
-// 浏览器里只能靠肉眼判断"进度卡住/重试后错误没清掉/就绪了还显示等待中"。
-// 这些分支在 node 里是纯函数，钉死它们比事后看截图便宜得多。
+// 模型宿主的两块纯逻辑：状态迁移与端口消息守卫。值得单独测：状态在 offscreen 里写、侧栏里读，
+// 中间隔着 storage.session，浏览器里只能靠肉眼判断；这些分支在 node 里是纯函数。
 
 describe('模型宿主状态迁移', () => {
   it('初始为 idle，percent=-1 表示未知总长', () => {

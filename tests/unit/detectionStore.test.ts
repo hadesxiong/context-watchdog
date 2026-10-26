@@ -1,7 +1,5 @@
-// 单元用例 - detection store 的模型加载状态机
-// 覆盖：加载成功 / 假成功防护 / 60 秒停滞超时 / 进度重置超时与字节映射 /
-//       setAiEnabled 复位 / 另一窗口下载中的等待标记
-// 需要 fake timers：initNER 的 60 秒停滞超时是真实 setTimeout
+// 单元用例 - detection store 的模型加载状态机：加载成功 / 假成功防护 / 60 秒停滞超时 /
+// 进度重置与字节映射 / setAiEnabled 复位 / 另一窗口下载中的等待标记。需 fake timers：停滞超时是真实 setTimeout。
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import type { ModelProgress } from '@/model/modelDownload'
@@ -64,7 +62,6 @@ describe('detection store - 模型加载状态机', () => {
   })
 
   it('60 秒无任何进度推进 → timeout，不永久卡 loading', async () => {
-    // 永不完成的下载（模拟停滞）
     mockedPreload.mockImplementation(() => new Promise(() => undefined))
     const store = useDetectionStore()
 

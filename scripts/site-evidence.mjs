@@ -1,14 +1,6 @@
 #!/usr/bin/env node
-// 重新测量落地页「证据」区块里的数字（测试断言数 / 布局探针数）
-//
-// 为什么要有这个脚本：落地页上写「288 项断言」是一句**会过期的事实**。
-// 手写在页面里，下一次加测试它就变成假话，而且没人会注意到。
-// 这里把它变成「跑一遍真实套件，然后写入 data/evidence.json」，
-// 页面只读文件、不写数字。
-//
-// 用法：
-//   node scripts/site-evidence.mjs        # 测量并写入
-//   node scripts/site-evidence.mjs --check # 只比较，不看是否过期（供 CI/发布前校验）
+// 重测落地页「证据」数字（断言数 / 探针数）写入 data/evidence.json，页面只读不算数——手写的数字
+// 会随测试增长静默过期。见 docs/spec.md §11.1。--check 只比对不写入（供 CI / 发布前）。
 import { execSync } from 'node:child_process'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'

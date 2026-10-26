@@ -1,16 +1,6 @@
-/* ============================================================
-   ContextWatchdog 设计 token（唯一来源）
-
-   这份文件是扩展与落地页共用的**唯一** token 源：
-   - 扩展：src/style.css @import 它
-   - 落地页：apps/site @import 它
-
-   单一来源 = 结构上不可能出现两边漂移。改动颜色、圆角、灰阶时只改这里。
-
-   体系：shadcn/ui 风格语义色（zinc 中性灰阶）
-   - 语义色经 --color-* 映射为 Tailwind utility（bg-background 等）
-   - 媒体查询切换 light/dark（与 dark: 变体工作方式一致）
-   ============================================================ */
+/* ContextWatchdog 设计 token —— 扩展（src/style.css）与落地页（apps/site）共用的唯一来源：
+   改颜色/圆角/灰阶只改这里，勿在别处复制变量（单一来源避免两端漂移）。
+   shadcn/ui 风格语义色（zinc 灰阶），--color-* 映射为 Tailwind utility，prefers-color-scheme 切明暗。 */
 
 :root {
   /* light theme */

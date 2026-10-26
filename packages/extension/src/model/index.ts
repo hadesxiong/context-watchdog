@@ -1,11 +1,6 @@
-// 扩展侧的模型宿主入口。
-//
-// 检测管线（引擎）不持有任何模型运行时，它只在需要时向这里要一个
-// InferenceBackend。本模块负责把 GLiNER 实现注册进去，并提供宿主侧的便捷入口。
-//
-// 引擎 ↔ 宿主的分工：
-//   引擎（@engine）：场景识别、正则规则、级联调度、仲裁、值传播、替换 —— 纯逻辑
-//   宿主（本目录）：GLiNER 加载、onnxruntime-web、模型下载与缓存 —— 运行时能力
+// 扩展侧的模型宿主入口：把 GLiNER 实现注册成引擎的 InferenceBackend 并提供便捷入口。
+// 分工：引擎（@engine）只做纯逻辑（场景、正则、级联、仲裁、替换），
+// 宿主（本目录）提供运行时能力（GLiNER 加载、onnxruntime-web、模型下载与缓存）。
 
 import { getInferenceBackend, setInferenceBackend } from '@engine/detector/backend'
 import type { ModelProgress } from '@engine/detector/backend'

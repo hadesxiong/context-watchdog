@@ -1,16 +1,8 @@
 #!/usr/bin/env node
-// 版本一致性与发布就绪检查（F1）
-//
-// 为什么需要它：这个仓库的版本号出现在至少四个地方 —— 根 package.json、扩展
-// manifest（商店读的就是它）、构建产物里的 manifest、以及落地页上注入的版本号。
-// 手改漏一处，症状是「商店显示的版本和落地页不一样」，而且通常过很久才被发现。
-//
-// 用法：
-//   node scripts/check-versions.mjs             # 常规检查，纳入回归
-//   node scripts/check-versions.mjs --release    # 发布前检查：要求产物齐备、渠道已上架
-//
-// 两类检查的区别：常规检查只验证「存在的东西是否自洽」（产物还没构建时不报错）；
-// --release 强制要求**一切都已就位**，用来回答「现在能打 tag 了吗」。
+// 版本一致性与发布就绪检查：版本号散落在根 package.json、扩展 manifest、产物 manifest、
+// 落地页注入值四处，漏改一处的症状是「商店与落地页版本不一样」，且往往过很久才被发现。
+// 用法：node scripts/check-versions.mjs [--release]——常规模式只验证已存在之物自洽，
+// --release 要求一切已就位，回答「现在能打 tag 了吗」。
 import { execSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -56,11 +48,7 @@ if (version && manifestVersion && version === manifestVersion) {
   fail(`版本号不一致：package.json=${version}，扩展 manifest=${manifestVersion}`)
 }
 
-// ---------------------------------------------------------------- 落地页部署身份
-//
-// 域名 / 商店链接 / 备案号来自环境变量（apps/site/.env 或 shell），不再读仓库里的
-// JSON：这些值描述的是**这一份部署**，fork 之后不该静默继承。校验用的是构建期同一套
-// 纯函数（scripts/lib/site-links.mjs），所以「构建能过但 check 报错」不可能发生。
+// ---------------- 落地页部署身份（来自 env，不进仓库；与构建期同一套纯函数，理由见 lib/site-links.mjs）
 import { loadEnv } from 'vite'
 import { channelStates, resolveSiteLinks, resolveUmami } from './lib/site-links.mjs'
 
@@ -75,7 +63,6 @@ try {
   fail(`落地页部署身份不合法：${error instanceof Error ? error.message : String(error)}`)
 }
 
-// 访问统计与构建期用同一套纯函数；半配置在这里同样报红
 let umami = null
 try {
   umami = resolveUmami(siteEnv)
@@ -108,8 +95,7 @@ if (siteLinks) {
     pass('五个渠道均已配置')
   }
 
-  // 中文页下载指向镜像时，镜像的 Release 必须已经传了同样的 zip —— 否则中文用户
-  // 点下载会 404。这里不联网探测（构建不该依赖外网），只做一次提醒。
+  // 中文页指向镜像时，镜像 Release 需已传同样的 zip（否则中文用户点下载 404）；不联网探测，只做提醒
   if (siteLinks.gitee) {
     pass(`中文页的源码 / 下载指向镜像：${siteLinks.gitee}（发布时记得在镜像上传同样的 zip）`)
   }
@@ -131,8 +117,7 @@ try {
   fail(`读不到 apps/site/src/data/evidence.json：${error.message}`)
 }
 
-// evidence 是否过期，只有跑一遍真实套件才知道（npm run site:evidence:check）。
-// 这里只做一个便宜的代理检查：发布当天必须是当天测的。
+// evidence 是否过期只有跑真实套件才知道（npm run site:evidence:check），这里做便宜的代理检查：发布当天必须是当天测的
 if (release && evidence) {
   const now = new Date()
   const pad = (value) => String(value).padStart(2, '0')
@@ -175,8 +160,7 @@ for (const [label, dir] of [
     fail(`读不到 ${dir}/manifest.json：${error.message}`)
   }
 
-  // Apache-2.0 §4(d) 要求随附 NOTICE；§4(a)(b)(c) 要求保留 LICENSE 与第三方声明。
-  // 漏带不会让构建失败，只会让分发悄悄违约，所以必须有一条硬护栏盯着。
+  // Apache-2.0 §4(d) 要求随附 NOTICE、§4(a)(b)(c) 要求保留 LICENSE 与第三方声明；漏带不报错，只会让分发悄悄违约
   const present = new Set(readdirSync(abs(`/${dir}`)))
   const missing = LEGAL_FILES.filter((file) => !present.has(file))
   if (missing.length > 0) {
@@ -197,9 +181,7 @@ if (existsSync(siteIndex)) {
     fail(`落地页产物里找不到 v${version}（需重新构建落地页）`)
   }
 
-  // 每个页面的 canonical 必须指向**它自己**，而不是恒指向首页。
-  // 这是多语言站点最容易犯的错：canonical 写死成首页，等于告诉搜索引擎
-  // 所有子页都是首页的副本，它们会直接不被收录（且没有任何报错）。
+  // 每页 canonical 必须指向它自己：写死成首页等于告诉搜索引擎所有子页都是首页的副本，会直接不被收录且毫无报错
   const htmlFiles = []
   const walkHtml = (dir) => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -213,9 +195,7 @@ if (existsSync(siteIndex)) {
   let canonicalProblems = 0
   let scriptProblems = 0
   const origins = new Set()
-  // 部署子路径（SITE_URL 的 pathname 派生，见 site-links.mjs）。
-  // 产物文件路径**不含**它（dist 整个挂到子路径下），而 canonical 的 pathname 含它：
-  // 比对时两边都要补上，且拼绝对地址时只能用 origin（siteUrl 已含子路径）。
+  // 部署子路径（由 SITE_URL 的 pathname 派生，见 site-links.mjs）：产物路径不含它、canonical 含它，比对时两边都要补上；拼绝对地址只能用 origin
   const siteBase = siteLinks?.basePath ?? ''
   const siteOrigin = siteLinks?.siteUrl ? new URL(siteLinks.siteUrl).origin : ''
   // 外链脚本白名单：只放行 env 配置的统计地址，启用时每页必须含它
@@ -232,8 +212,7 @@ if (existsSync(siteIndex)) {
       fail(`落地页 ${relative} 缺少 canonical`)
       canonicalProblems += 1
     } else {
-      // 两种合法形态：相对路径（未配置 SITE_URL）与绝对地址（已配置）。
-      // 同一份产物里必须统一 —— 混用说明 env 只对部分页面生效了。
+      // 两种合法形态（未配置 SITE_URL 的相对路径 / 已配置的绝对地址），同一份产物必须统一——混用说明 env 只对部分页面生效了
       const isAbsolute = /^https:\/\//.test(canonical)
       let actualPath = canonical
       if (isAbsolute) {
@@ -293,7 +272,6 @@ if (existsSync(siteIndex)) {
 
 // ---------------------------------------------------------------- 动态代码（商店审核预检）
 
-/** 递归列出目录下的 .js 文件 */
 const jsFiles = (dir) => {
   const out = []
   const walk = (current) => {
@@ -307,14 +285,9 @@ const jsFiles = (dir) => {
   return out
 }
 
-// MV3 的扩展页面默认 CSP 不允许 eval / new Function。产物里出现它们有两个后果：
-//   ① 商店审核（AMO 的 addons-linter 尤其敏感）可能直接标记为不安全；
-//   ② 如果某条路径真的在运行期执行到，就是功能故障。
-// 当前实测只有三处，全部来自依赖的经典写法，且都在 try/catch 里：
-//   · protobufjs 的 inquire()：eval(`quire`.replace(/^/,`re`))（×2，ort 与 transformers 各一）
-//   · webpack 的 globalThis polyfill：new Function("return this")（×1）
-// 这些是已知误报，但**必须实测确认**——一旦某个依赖升级引入新的 eval，我们希望在
-// 提交商店之前就发现，而不是等审核员来告诉我们。
+// MV3 扩展页默认 CSP 不允许 eval / new Function：出现即可能被商店审核（AMO 的 addons-linter
+// 尤其敏感）标记不安全，运行期真执行到也是功能故障。KNOWN_DYNAMIC_CODE 登记依赖带进来的已知
+// 误报（protobufjs inquire、webpack 的 globalThis polyfill）——依赖升级引入新 eval 时这里报红。
 const KNOWN_DYNAMIC_CODE = [
   { marker: 'protobufjs-inquire', test: (snippet) => snippet.includes('quire') && snippet.includes('replace') },
   {
@@ -355,9 +328,7 @@ scanDynamicCode('Chrome', 'dist')
 scanDynamicCode('Firefox', 'dist-firefox')
 
 // ---------------------------------------------------------------- 标签
-//
-// 形态见 scripts/lib/version-tag.mjs：`<version>-<target>`（1.0.0-ext），
-// 不用 v 前缀。一个版本对应 ext / site / app 三个 tag，一次性查重。
+// 形态见 scripts/lib/version-tag.mjs（<version>-<target>，不用 v 前缀）；一个版本对应 ext / site / app 三个 tag，一次性查重。
 
 if (version) {
   let tags = null

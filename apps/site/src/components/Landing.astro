@@ -1,11 +1,7 @@
 ---
-// 单页 7 区块（E3）
-//
-// 顺序即叙事：是什么 → 看一眼 → 怎么做到的 → 用什么识别 →
-// 凭什么信 → 还有疑问。
-//
-// 两个语言页面共用这一个组件，避免 / 与 /en/ 两处各写一遍结构（结构一旦
-// 分叉，两边迟早会长得不一样）。
+// 单页 7 区块：是什么 → 看一眼 → 怎么做到的 → 用什么识别 → 凭什么信 → 还有疑问。
+// 两个语言页面共用这一个组件，避免 / 与 /en/ 两处各写一遍结构（结构一旦分叉，
+// 两边迟早会长得不一样）。
 import { dict, type SiteLocale } from '@site/i18n'
 import { repoUrlFor } from '@site/data/links'
 import Rich from '@site/components/Rich.astro'
@@ -54,8 +50,7 @@ const d = dict(locale)
                 <div class="pg-demo-label">{c.timing}</div>
                 <div class="pg-demo-pane">
                   {
-                    // 把 <<占位符>> 单独染色，一眼看出「哪些部分被换掉了」。
-                    // 用 split 保留分隔符，比 set:html 安全（无注入面）。
+                    // 占位符单独染色，一眼看出哪些部分被换掉了；用 split 保留分隔符（无 set:html 注入面）。
                     c.redacted.split(/(<<[^>]+>>)/g).map((chunk) =>
                       chunk.startsWith('<<') ? <span class="pg-ph">{chunk}</span> : chunk
                     )
@@ -93,7 +88,7 @@ const d = dict(locale)
   </div>
 </section>
 
-<!-- 5. 识别引擎（正则/AI 两档的实现层：工作原理只讲场景流程，实现细节收在这里） -->
+<!-- 5. 识别引擎（正则 / AI 两档的实现层） -->
 <section class="pg-section" id="engine">
   <div class="pg-shell">
     <h2 class="pg-section-title">{d.engine.title}</h2>
@@ -110,7 +105,7 @@ const d = dict(locale)
       }
     </div>
 
-    <!-- 能力边界注脚：只作两档下方小字，不塞进任何一档的卡片（作者裁决 2026-10-23） -->
+    <!-- 能力边界注脚：放两档下方小字，不塞进任何一档的卡片 -->
     <p class="pg-note">{d.engine.note}</p>
   </div>
 </section>

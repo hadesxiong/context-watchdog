@@ -1,18 +1,8 @@
-// Astro 配置（落地页）
-//
-// 三条约束决定了这里几乎没什么可配的：
-//   1. output: 'static' —— 全站默认零客户端 JS（例外：复制按钮、可选的 Umami 统计外链，UMAMI_* env 门控）
-//   2. 设计 token 走 @tokens 别名指向 packages/design-tokens/tokens.css，
-//      与扩展同一个源 → 视觉结构上不可能漂移
-//   3. 不引 Tailwind / 图标库 / 动效库 / web font：站点样式直接用 token 变量写普通 CSS，
-//      图标用内联 SVG，字体用系统栈（顺带避开国内 web font 加载问题）
-//
-// 部署身份（域名 / 商店链接 / 备案号）全部来自环境变量，见 .env.example。
-// 它们不进仓库，是因为源码公开：fork 之后不该静默继承作者的域名或商店页。
+// Astro 配置（落地页）。三条不改的原则与结构见 docs/spec.md §11.1。
+// 部署身份（域名 / 商店链接 / 备案号 / Umami）来自 apps/site/.env（模板 .env.example），
 // 解析与校验在 scripts/lib/site-links.mjs（纯函数，有单测）。
-//
-// 注意：Astro 的 defineConfig 是恒等函数，**不支持回调式配置**（那是 Vite 的能力）。
-// 所以 env 在模块顶层解析，mode 从命令行推断。
+// Astro 的 defineConfig 是恒等函数、不支持回调式配置（那是 Vite 的能力）：env 只能在
+// 模块顶层解析，mode 从命令行推断。
 import { defineConfig } from 'astro/config'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -29,9 +19,8 @@ const MODE = process.argv.includes('build') ? 'production' : 'development'
 
 const env = loadEnv(MODE, siteRoot, '')
 
-// 版本号在这里（配置阶段）从扩展 manifest 读出来，再经 vite.define 注入产物。
-// 不能放到页面/数据模块里读：那些模块会被打包，运行时 import.meta.url 指向 dist 里的
-// chunk，相对路径会整体偏移。配置文件的 import.meta.url 才指向真实位置。
+// 版本号在配置阶段读 manifest，经 vite.define 注入产物。不能放到页面/数据模块里读：
+// 那些模块会被打包，运行时 import.meta.url 指向 dist 里的 chunk，相对路径整体偏移。
 const manifestPath = src('../../packages/extension/src/manifest.json')
 let extensionVersion
 try {
@@ -53,9 +42,8 @@ const resolvedUmami = resolveUmami(env)
 for (const warning of resolvedUmami.warnings) console.warn(`[site] ${warning}`)
 const umami = MODE === 'production' ? resolvedUmami : { ...resolvedUmami, enabled: false }
 
-// 缺 SITE_URL 时：普通构建只警告（别人 clone / fork 也能构建出相对链接的产物），
-// 但要发布时用 SITE_REQUIRE_URL=1 把自己钉死 —— 否则会静默产出一份没有 canonical
-// 的线上站点，而 canonical 缺失不会让任何东西报错。
+// 缺 SITE_URL：普通构建只警告（fork 也能构建出相对链接的产物），发布时用
+// SITE_REQUIRE_URL=1 把自己钉死 —— canonical 缺失不会让任何东西报错，只会静默上线。
 if (!links.siteUrl) {
   if (env.SITE_REQUIRE_URL === '1') {
     throw new Error(
@@ -82,8 +70,8 @@ export default defineConfig({
   build: { format: 'directory' },
   devToolbar: { enabled: false },
   // 子路径部署：SITE_URL 形如 https://aa.bb.com/context-watchdog 时，pathname 派生出
-  // base（根部署为 '' → '/'）。Astro **不会**从 site 的 pathname 推导 base，必须显式配；
-  // 站内 href 的前缀来自 import.meta.env.BASE_URL（i18n.siteBase），与这里同源。
+  // base（根部署为 '' → '/'）。Astro **不会**从 site 推导 base，必须显式配；
+  // 站内 href 的前缀取 import.meta.env.BASE_URL（i18n.siteBase），与这里同源。
   base: links.basePath || '/',
   // canonical / og:url / hreflang 统一由它派生；为空时保持相对路径
   site: links.siteUrl || undefined,

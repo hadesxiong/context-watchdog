@@ -13,10 +13,9 @@ import { waitForPaint } from '../lib/paintBarrier'
 
 const { t, localePreference, setLocalePreference, availableLocales, localeNames } = useI18n()
 
-// 「能力与隐私」面板：三轴能力矩阵 + 数据去向/价格声明
 const showCapability = ref(false)
 
-// 界面语言：'auto' 跟随浏览器语言；改动立即生效（占位符语言一并切换）
+// 界面语言：'auto' 跟随浏览器语言；切换即时生效，占位符语言一并切换（见 docs/spec.md §16）
 const localeChoice = computed({
     get: () => localePreference.value,
     set: (value: 'auto' | 'en' | 'zh_CN') => setLocalePreference(value)
@@ -30,10 +29,9 @@ const hasResults = computed(() => store.detections.length > 0)
 const hasDetected = computed(() => store.originalText.trim() !== '')
 const showEngineStatus = ref(false)
 
-// 模型不再随面板挂载自动下载：仅当用户此前显式启用 AI 增强时，
-// store 内部会自行恢复并加载（见 stores/detection.ts 的 AI_ENABLED_KEY 逻辑）
+// 模型不随面板挂载自动下载：仅在用户此前启用过 AI 时由 store 自行恢复加载
 
-// 首启引导弹窗：从未展示过 且 未启用过 AI 才弹；展示即置位（store 持久化），无论用户怎么选都永不再弹
+// 首启引导：从未展示 且 未启用过 AI 才弹；展示即置位（store 持久化），此后永不再弹
 const showOnboarding = ref(store.shouldShowOnboarding)
 watch(() => store.shouldShowOnboarding, (val) => {
     if (val) {
@@ -80,23 +78,20 @@ onUnmounted(() => {
     if (dismissTimer.value) clearTimeout(dismissTimer.value)
 })
 
-// 等到一次真实渲染：nextTick 只保证 DOM 已更新，rAF 回调发生在**绘制之前**，
-// 两者都不等于「已经上屏」。屏障实现与理由见 lib/paintBarrier.ts（含顺序单测）。
-// 遮罩必须先上屏再开跑同步长任务，否则长文本检测会把这一帧的绘制整段跳过。
+// 遮罩须真正上屏再开跑同步长任务，否则长文本检测会跳过这一帧的绘制；
+// nextTick 只到 DOM 更新、rAF 仍在绘制之前，屏障实现见 lib/paintBarrier.ts（含顺序单测）
 const handleDetect = async (text: string) => {
     showOverlay.value = true
     document.body.style.overflow = 'hidden'
     try {
-        // 遮罩必须先上屏再开跑：长文本检测是同步重活（实测 516KB 触发 1.6s 长任务），
-        // 若与检测同任务，遮罩的 DOM 更新会被压到长任务结束才渲染；又因 1s 最小延时
-        // 在阻塞前就起了表，届时早已过期 → 表现为「遮罩一闪而过/根本没出现」。
+        // 遮罩与检测同任务时，DOM 更新会被同步长任务压到任务之后才渲染
         await nextTick()
         await waitForPaint()
-        // 最小展示时长从「已上屏」起算，保证短文本也不会一闪而过
+        // 最小展示时长自「已上屏」起算，短文本也不会一闪而过
         const minDelay = new Promise<void>(resolve => setTimeout(resolve, 1000))
         await Promise.all([store.detect(text), minDelay])
     } finally {
-        // 异常路径也要收尾，否则遮罩常驻且 body 滚动被永久锁死
+        // 异常路径也要收尾，否则遮罩常驻、body 滚动被锁死
         showOverlay.value = false
         document.body.style.overflow = ''
     }
@@ -115,16 +110,15 @@ const toggleEngineStatus = () => {
     showEngineStatus.value = !showEngineStatus.value
 }
 
-// 独立打开新标签页：暂时隐藏（保留实现与模板引用，恢复时把常量改回 true）
+// 独立打开新标签页：暂隐藏，恢复时把常量改回 true
 const SHOW_OPEN_IN_NEW_TAB = false
 
 const openInNewTab = () => {
     chrome.tabs.create({ url: chrome.runtime.getURL('src/sidepanel/index.html') })
 }
 
-// 引擎卡片：正则为基础引擎恒开（Switch 禁止修改——SW 粘贴拦截仅依赖此档，
-// 误关会使拦截整体失灵）；场景识别并入 AI（仅喂给 GLiNER 提示词，随 AI 开关走，
-// 不单独设卡）；AI 开关即 aiEnabled
+// 引擎卡片：正则恒开（Switch 禁改——SW 粘贴拦截仅依赖此档，误关会使拦截整体失灵）；
+// 场景识别并入 AI（仅作 GLiNER 提示词），AI 开关即 aiEnabled
 const engineStatusItems = computed(() => [
     {
         key: 'regex' as const,
@@ -144,10 +138,8 @@ const engineStatusItems = computed(() => [
     }
 ])
 
-// 模型加载进度文案：始终并显「百分比 + 已下/总长 MB」——大小是可核验信息，不该只给百分比；
-// 不定进度（无 Content-Length）时去掉百分比只留 MB。字节换算用十进制 MB（÷1e6），
-// 与 MODEL_FILE_BYTES「183,403,734 字节 ≈183MB」及全部文案口径一致
-// （旧实现 ÷1048576 会把总长显示成 174.9，与文案的 183 对不上）
+// 进度并显「百分比 + 已下/总长 MB」（大小可核验）；不定进度（无 Content-Length）时只留 MB。
+// 字节用十进制 MB（÷1e6），与 MODEL_FILE_BYTES「183,403,734 ≈183MB」的文案口径一致
 const progressLabel = computed(() => {
     const done = (store.nerLoadBytes / 1e6).toFixed(1)
     const all = Math.round(store.nerLoadTotal / 1e6)
@@ -159,7 +151,7 @@ const progressLabel = computed(() => {
     return '…'
 })
 
-// 加载阶段文案（仅在确认网络下载后才展示，缓存命中全程静默）
+// 加载阶段文案（仅真网络下载时展示，缓存命中静默）
 const loadingCaption = computed(() => {
     if (store.nerWaitingOtherWindow) return t('engine_caption_waiting')
     return t('engine_caption_downloading')
@@ -170,13 +162,11 @@ const loadingCaption = computed(() => {
     <div class="min-h-screen bg-linear-to-br relative
         from-background to-muted/50 
         ">
-        <!-- 头部 -->
         <header class="bg-background/80 backdrop-blur-sm border-b border-border sticky top-0 z-10">
             <div class="p-3">
                 <div class="flex items-center justify-between">
                     <div class="flex items-center gap-2">
-                        <!-- 品牌锁标（图形 + 字）：源文件 public/icons/logo-1.svg；
-                             暗色跟随 prefers-color-scheme，与设计 token 同一套切换条件 -->
+                        <!-- 品牌锁标：public/icons/logo-1.svg，暗色随 prefers-color-scheme（与设计 token 同一切换条件） -->
                         <h1 class="shrink-0">
                             <picture class="block">
                                 <source media="(prefers-color-scheme: dark)"
@@ -187,7 +177,6 @@ const loadingCaption = computed(() => {
                         </h1>
                     </div>
                     <div class="flex items-center gap-2">
-                        <!-- 独立打开按钮：暂时隐藏（见 SHOW_OPEN_IN_NEW_TAB） -->
                         <Button v-if="SHOW_OPEN_IN_NEW_TAB" @click="openInNewTab" variant="secondary"
                             btn-type="text" size="sm">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -195,7 +184,7 @@ const loadingCaption = computed(() => {
                                     d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                             </svg>
                         </Button>
-                        <!-- 能力与隐私（关于）：三轴能力矩阵 + 数据去向/价格声明 -->
+                        <!-- 能力与隐私（关于）：三轴能力矩阵 + 数据/价格声明 -->
                         <Button @click="showCapability = true" variant="secondary"
                             btn-type="text" size="sm" :title="t('about_tooltip')">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -203,7 +192,6 @@ const loadingCaption = computed(() => {
                                     d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                             </svg>
                         </Button>
-                        <!-- 引擎状态按钮（齿轮入口） -->
                         <Button @click="toggleEngineStatus" variant="secondary"
                             btn-type="text" size="sm" :title="t('engine_tooltip')"
                             :class="{ 'text-success': store.isNERReady }">
@@ -219,14 +207,11 @@ const loadingCaption = computed(() => {
                 </div>
             </div>
         </header>
-        <!-- 引擎状态面板：外壳无内边距，三个功能区块全宽贴边——
-             内容（正则规则等）到面板边框的距离统一由区块自身 p-4 提供
-             （16px，与标题行到边框的距离一致），无任何 margin -->
+        <!-- 引擎状态面板：外壳无内边距，区块全宽贴边，间距一律由区块 p-4 提供（16px），无 margin -->
         <div v-if="showEngineStatus"
             class="rounded-lg shadow-lg border fixed z-50 w-80 overflow-hidden
                 max-w-[calc(100vw-1.5rem)] bg-card border-border"
                 :style="{ top: 'var(--header-height)', right: '12px' }">
-            <!-- 标题行：px-4 pt-4 距上/左/右边框 16px，pb-4 与下方区块间隔 16px -->
             <div class="flex items-center justify-between px-4 pt-4 pb-4">
                 <h3 class="text-sm font-semibold text-foreground">
                     {{ t('engine_panel_title') }}</h3>
@@ -242,9 +227,7 @@ const loadingCaption = computed(() => {
                 </svg>
                 </button>
             </div>
-            <!-- 界面语言：直接决定 UI 文案与「脱敏占位符」语言（见 i18n/index.ts）。
-                 放在面板最前——它是「你在用哪个语言」的前置设定，先于任何引擎开关。
-                 边距与下方区块同构：px-4 pt-4（pb=0），与下一块的 pt-4 合成 16px 间距 -->
+            <!-- 界面语言置于面板最前：它决定 UI 文案与脱敏占位符的语言（见 docs/spec.md §16） -->
             <div class="px-4 pt-4 bg-muted/50 flex items-center justify-between gap-3">
                 <p class="text-sm font-medium text-foreground">{{ t('settings_language') }}</p>
                 <select v-model="localeChoice"
@@ -255,19 +238,15 @@ const loadingCaption = computed(() => {
                         {{ localeNames[code] }}</option>
                 </select>
             </div>
-            <!-- 引擎开关：正则恒开（禁改）+ AI 开关（含场景识别，合并下载）；
-                 区块全宽贴边（无内缩），区块间 gap-4（16px），无 margin -->
             <div class="flex flex-col">
                 <div v-for="item in engineStatusItems" :key="item.nameKey"
                     class="px-4 pt-4 bg-muted/50">
-                    <!-- gap-3：文字块与 Switch 之间保留间距（行内自由空间为 0 时也不贴合） -->
                     <div class="flex items-center justify-between gap-3">
                         <div class="min-w-0 flex items-center gap-3">
                             <div>
                                 <p class="text-sm font-medium text-foreground">
                                     {{ t(item.nameKey) }}
                                 </p>
-                                <!-- 描述：最多 2 行，超出省略 -->
                                 <p class="text-xs text-muted-foreground line-clamp-2">
                                     {{ t(item.descKey) }}
                                 </p>
@@ -277,7 +256,6 @@ const loadingCaption = computed(() => {
                             :disabled="item.locked"
                             @update:model-value="item.toggle" />
                     </div>
-                    <!-- AI 卡片附属：加载进度（仅真网络下载；缓存命中静默初始化）/ 失败重试 -->
                     <template v-if="item.key === 'ai'">
                         <div v-if="store.nerStatus === 'loading' && store.nerDownloadStarted"
                             class="pt-2 w-full">
@@ -292,7 +270,6 @@ const loadingCaption = computed(() => {
                                 <div v-else class="h-1.5 w-1/3 bg-primary rounded-full pg-indeterminate"></div>
                             </div>
                         </div>
-                        <!-- 失败提示（关闭开关或重试） -->
                         <div v-if="store.nerStatus === 'error' || store.nerStatus === 'timeout'"
                             class="pt-2 flex items-center justify-between gap-2">
                             <p class="text-xs text-warning">
@@ -305,10 +282,9 @@ const loadingCaption = computed(() => {
                     </template>
                 </div>
             </div>
-            <!-- 粘贴自动拦截：逐站授权，只有授权站点才注入粘贴监听 -->
+            <!-- 粘贴自动拦截：逐站授权，仅授权站点注入粘贴监听（见 docs/spec.md §8） -->
             <PasteInterceptionSettings />
         </div>
-        <!-- NER 模型状态条（仅确认网络下载才显示；缓存命中全程静默） -->
         <Transition name="ner-notify" @after-leave="onNotifyLeave">
             <div v-if="store.nerStatus === 'loading' && store.nerDownloadStarted && !dismissing"
                 class="fixed z-50 left-1/2 -translate-x-1/2 top-[calc(var(--header-height)+8px)] m-3 p-3 max-w-125 min-w-80 w-auto
@@ -336,7 +312,6 @@ const loadingCaption = computed(() => {
                         <span>{{ t('ner_downloading_progress') }}</span>
                         <span>{{ progressLabel }}</span>
                     </div>
-                    <!-- 定进度：按真实字节数填充；不定进度：循环滑动动画 -->
                     <div class="w-full bg-primary/20 rounded-full h-1.5 overflow-hidden">
                         <div v-if="!store.nerIndeterminate"
                             class="bg-primary h-1.5 rounded-full transition-all duration-300"
@@ -346,7 +321,6 @@ const loadingCaption = computed(() => {
                 </div>
             </div>
         </Transition>
-        <!-- NER 模型下载提示 - 失败 -->
         <Transition name="ner-notify" @after-leave="onNotifyLeave">
             <div v-if="(store.nerStatus === 'error' || store.nerStatus === 'timeout') && !dismissing" 
                 class="fixed z-50 left-1/2 -translate-x-1/2 top-[calc(var(--header-height)+8px)] m-3 p-3 gap-3 flex items-center max-w-125 min-w-80 w-auto
@@ -368,7 +342,6 @@ const loadingCaption = computed(() => {
                 </svg>
             </div>
         </Transition>
-        <!-- NER 模型下载提示 - 成功（仅真下载后提示；缓存命中静默完成） -->
         <Transition name="ner-notify" @after-leave="onNotifyLeave">
             <div v-if="store.nerStatus === 'success' && store.nerDownloadStarted && !dismissing"
                 class="fixed z-50 left-1/2 -translate-x-1/2 top-[calc(var(--header-height)+8px)] m-3 p-3 gap-3 flex items-center max-w-125 min-w-80 w-auto
@@ -387,15 +360,13 @@ const loadingCaption = computed(() => {
                 </svg>
             </div>
         </Transition>
-        <!-- 主内容 -->
         <main :class="[
             'flex flex-col relative',
-            // 列宽/行向以「是否检测过」为准（与左右栏显示条件一致）；ActionBar 仍按是否有检出项显示
+            // 列宽/行向以「是否检测过」为准（与左右栏显示条件一致）；ActionBar 另按有无检出项显示
             hasDetected && `min-h-[calc(100vh-58px)] min-[820px]:flex-row min-[820px]:h-[calc(100vh-64px)]`
             ]">
-            <!-- 左侧列 -->
             <div :class="[
-                // 基础态随容器收缩：面板窄于 400px 时不再由 min-w 强撑出整页横向滚动
+                // 基础态随容器收缩：窄面板不再由 min-w 强撑出整页横向滚动
                 'flex flex-col w-full min-w-0',
                 hasDetected && `
                     min-[820px]:w-auto 
@@ -408,9 +379,7 @@ const loadingCaption = computed(() => {
                     min-[820px]:border-border 
                      `
                 ]">
-                <!-- 输入项（档案下拉挂在标题旁）
-                     宽屏断点下四边等距：上/左/右 12px 已有，底部同样补 12px——
-                     有按钮栏时作为输入框与按钮栏的间距，无按钮栏时作为输入框到列底的间距 -->
+                <!-- 输入项（档案下拉挂在标题旁）；宽屏下底部补 12px，作输入框与按钮栏/列底的间距 -->
                 <div :class="['px-3 pt-3 min-[820px]:pb-3',
                     hasDetected && `min-[820px]:pt-3
                         min-[820px]:flex 
@@ -425,29 +394,23 @@ const loadingCaption = computed(() => {
                         </template>
                     </InputArea>
                 </div>
-                <!-- 底部操作（仅在有检出项时显示替换操作） -->
                 <div v-if="hasResults" class="hidden min-[820px]:block">
                     <ActionBar @copy="handleCopy" @replace-all="store.replaceAll" 
                         @keep-all="store.keepAll"/>
                 </div>
             </div>
-            <!-- 右侧列：检测过即显示（无检出时给出显式空状态反馈） -->
             <div v-if="hasDetected" class="flex-1 min-[820px]:flex-1 
                 min-[820px]:h-full min-[820px]:overflow-y-auto">
-                <!-- 检查结果 -->
                 <div class="p-3">
                     <DetectionList :detections="store.detections"/>
                 </div>
             </div>
-            <!-- 输入项: 小于820px下显示 -->
             <div v-if="hasResults" class="min-[820px]:hidden sticky bottom-0">
                 <ActionBar @copy="handleCopy" @replace-all="store.replaceAll" 
                     @keep-all="store.keepAll"/>
             </div>
         </main>
-        <!-- 全局检测中遮罩 -->
         <LoadingOverlay v-if="showOverlay" />
-        <!-- 首启引导弹窗：AI 增强为可选项，开启才下载模型（选择权交还用户） -->
         <CapabilityDialog :open="showCapability" @update:open="showCapability = $event" />
 
         <Dialog :open="showOnboarding" :title="t('onboarding_title')"
@@ -471,7 +434,6 @@ const loadingCaption = computed(() => {
 </template>
 
 <style scoped>
-/* 进入：从上方滑入 + 淡入 */
 .ner-notify-enter-from {
     opacity: 0;
     transform: translateY(-8px);
@@ -480,7 +442,6 @@ const loadingCaption = computed(() => {
     transition: all 0.3s ease-out;
 }
 
-/* 退出：向上滑出 + 淡出 */
 .ner-notify-leave-to {
     opacity: 0;
     transform: translateY(-8px);
@@ -489,7 +450,7 @@ const loadingCaption = computed(() => {
     transition: all 0.3s ease-in;
 }
 
-/* 不定进度（无法获取 Content-Length 时）：循环滑动 */
+/* 不定进度（无 Content-Length）：循环滑动 */
 .pg-indeterminate {
     animation: pg-indeterminate 1.2s ease-in-out infinite;
 }

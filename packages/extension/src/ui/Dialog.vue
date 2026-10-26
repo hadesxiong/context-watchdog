@@ -1,6 +1,5 @@
 <script setup lang="ts">
-// 通用对话框（shadcn Dialog 风格）：遮罩 + 居中卡片 + 进出动画
-// 基于 reka-ui Dialog，teleport 到 body 避免父容器裁剪
+// 通用对话框（shadcn 风格）：基于 reka-ui Dialog，teleport 到 body 避免父容器裁剪
 import {
     DialogRoot,
     DialogPortal,
@@ -49,13 +48,12 @@ const onOpenChange = (open: boolean) => {
                     'fixed left-1/2 top-1/2 z-50 w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2',
                     'max-h-[calc(100vh-4rem)] overflow-hidden flex flex-col',
                     'rounded-lg border border-border bg-card text-card-foreground shadow-lg',
-                    // 各区域（标题/正文/操作区）占满弹窗宽度，边距由各区自身 padding 提供
+                    // p-0：各区域占满弹窗宽度，边距由各区自身 padding 提供
                     'p-0',
                     'data-[state=open]:pg-dialog-in data-[state=closed]:pg-dialog-out',
                     width
                 ]">
-                <!-- 标题区：独立固定（shrink-0），长表单滚动时标题/描述/关闭按钮不跟随；
-                     占满弹窗宽度、自身 px-4 提供边距，border-b 与底部操作区的 border-t 呼应 -->
+                <!-- 标题区固定（shrink-0）：长表单滚动时标题/描述/关闭按钮不跟随 -->
                 <div class="flex items-start justify-between gap-3 shrink-0 px-4 pt-4 pb-3 border-b border-border">
                     <div class="space-y-1">
                         <DialogTitle v-if="title" class="text-base font-semibold text-foreground">
@@ -65,7 +63,6 @@ const onOpenChange = (open: boolean) => {
                             {{ description }}
                         </DialogDescription>
                     </div>
-                    <!-- 关闭按钮 -->
                     <button
                         @click="onOpenChange(false)"
                         class="shrink-0 rounded-md p-1 text-muted-foreground hover:text-foreground
@@ -78,7 +75,7 @@ const onOpenChange = (open: boolean) => {
                         <span class="sr-only">{{ t('common_close') }}</span>
                     </button>
                 </div>
-                <!-- 正文滚动区：仅内容滚动（含长表单），overscroll-contain 防滚动穿透到页面 -->
+                <!-- 仅正文滚动（含长表单），overscroll-contain 防滚动穿透 -->
                 <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain">
                     <slot />
                 </div>
@@ -88,7 +85,7 @@ const onOpenChange = (open: boolean) => {
 </template>
 
 <style scoped>
-/* 对话框进出动画（tailwind 4 无内建 animate-in，自定义实现） */
+/* 进出动画：tailwind 4 无内建 animate-in，自定义实现 */
 @keyframes pg-fade {
     from { opacity: 0; }
     to { opacity: 1; }

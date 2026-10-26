@@ -1,17 +1,6 @@
-// offscreen 模型宿主（Chrome / Edge 下唯一的模型运行时）。
-//
-// 为什么要有这个文档：GLiNER + onnxruntime-web 是模块级单例，只能在**文档**里跑；
-// service worker 里既不能加载 WASM，也会被浏览器随时终止。offscreen 文档有独立
-// 进程、没有 SW 的 30s 限制、且全局只允许一个 —— 正好当"唯一模型宿主"。
-//
-// 生命周期：
-//   SW createDocument → 本文件执行 → 连 Port → 等 ENSURE
-//   SW closeDocument  → 整个文档销毁（内存随之释放）
-// 所以这里**没有 UNLOAD 操作**：在文档内部释放到不了"进程消失"的程度，真正有效的
-// 释放就是销毁文档本身。S2 的"关闭全局 AI"直接调 closeDocument 即可。
-//
-// 失败语义：ENSURE 失败只写状态 + 回包，不抛到控制台顶层 —— AI 是可选能力，
-// 正则档必须继续可用。
+// offscreen 模型宿主（Chrome / Edge 唯一的模型运行时；offscreen 文档全局仅一个、已被本模块占用，
+// 见 docs/site-ai-offscreen-host.md §10）。GLiNER + onnxruntime-web 是文档级单例，SW 不能加载 WASM
+// 也会被随时终止；没有 UNLOAD，真正有效的释放是销毁文档。失败语义：ENSURE 失败只写状态 + 回包，正则档继续可用。
 import { detect } from '@engine/detector'
 import { getProfileById, DEFAULT_PROFILE_ID } from '@engine/detector/profiles'
 import { sanitizeWithProfile } from '@engine/replacer'
@@ -34,19 +23,15 @@ import {
   type ModelHostState
 } from '@/modelHost/state'
 
-// 占位符语言：offscreen 文档**没有 chrome.i18n**（实测只有 chrome.runtime），
-// 因此只能用 navigator.language。这与 SW 侧按浏览器语言定占位符语言的取舍一致，
-// 区别只在数据源。
+// 占位符语言：offscreen 文档没有 chrome.i18n（只有 chrome.runtime），只能用 navigator.language；与 SW 侧按浏览器语言定的取舍一致，区别只在数据源。
 setPlaceholderLocale(navigator.language.toLowerCase().startsWith('zh') ? 'zh_CN' : 'en')
 
 let state = initialModelHostState(Date.now())
 let lastPostAt = 0
 
 /**
- * 状态上报。offscreen 里**没有 chrome.storage**，所以只能把状态发给 SW，由它写
- * storage.session（S2 的面板订阅那一份）。
- *
- * 进度回调是按下载块来的，因此按 1s 节流；相位变化（ready / error / waiting）
+ * 状态上报。offscreen 里**没有 chrome.storage**，只能发给 SW，由它写 storage.session
+ *（面板订阅那一份）。进度按下载块来，故 1s 节流；相位变化（ready / error / waiting）
  * 强制发，避免"卡在 99%"。
  */
 const publish = (next: ModelHostState, force = false): void => {
@@ -91,7 +76,7 @@ const connect = (): void => {
     // 读取 lastError 以抑制 "Unchecked runtime.lastError" 噪音
     void chrome.runtime.lastError
     port = null
-    // SW 被浏览器回收后会自动重启；宿主不必重启，重连即可（设计文档 §5）
+    // SW 被浏览器回收后会自动重启；宿主不必重启，重连即可
     setTimeout(connect, 500)
   })
 }
@@ -105,8 +90,7 @@ const ensure = async (token: string): Promise<void> => {
   }
 
   try {
-    // 首次 ENSURE 可能持续数分钟（下载 183MB）；进度通过 storage.session 暴露，
-    // 因此这里刻意不设超时。
+    // 首次 ENSURE 可能持续数分钟（下载 183MB），进度经 storage.session 暴露，故刻意不设超时。
     await preloadModels(
       (percent, received, total) => {
         publish(withProgress(state, percent, received, total, Date.now()))
@@ -137,8 +121,7 @@ const runDetect = async (request: Extract<ModelHostRequest, { op: 'DETECT' }>): 
 
   try {
     const result = await detect(request.text, request.profile, { enableContentDetection: true })
-    // 按档案默认策略脱敏：判定为「保留」的项（如不限档的邮箱/高熵/IP）原样留下。
-    // 与 SW 正则首答同一规则——不能用 sanitizeText 无条件替换全部识别项。
+    // 按档案默认策略脱敏（与 SW 正则首答同一规则）：判定「保留」的项原样留下，不能无条件替换全部识别项。
     const profile = request.profile ?? getProfileById(DEFAULT_PROFILE_ID)
     const { sanitizedText } = sanitizeWithProfile(result.text, result.items, profile)
     reply({

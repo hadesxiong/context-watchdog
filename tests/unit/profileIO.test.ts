@@ -108,7 +108,6 @@ describe('Manager.importFromJson', () => {
     const mgr = new UserProfileManager(storage)
     await mgr.load()
 
-    // 先建一个同名档案
     await mgr.create(getProfileById('universal'), '导出测试')
 
     const json = exportProfiles([userProfile])
@@ -117,7 +116,6 @@ describe('Manager.importFromJson', () => {
     expect(imported).toHaveLength(1)
     expect(imported[0].name).toBe('导出测试 2')
 
-    // 再导入一次 → 序号递增
     const imported2 = await mgr.importFromJson(json)
     expect(imported2[0].name).toBe('导出测试 3')
 
@@ -134,11 +132,9 @@ describe('Manager.importFromJson', () => {
     const created = await mgr.create(getProfileById('code'), '链路测试')
     await mgr.update({ ...created, whitelist: ['corp.com'], customRules: [customRule] })
 
-    // 导出
     const json = mgr.exportJson()
     expect(JSON.parse(json).profiles[0].customRules).toHaveLength(1)
 
-    // 导入到全新环境
     const { storage: storage2 } = createMockStorage()
     const mgr2 = new UserProfileManager(storage2)
     await mgr2.load()
@@ -147,7 +143,6 @@ describe('Manager.importFromJson', () => {
     expect(imported[0].whitelist).toEqual(['corp.com'])
     expect(imported[0].customRules).toEqual([customRule])
 
-    // 新环境持久化往返
     const mgr3 = new UserProfileManager(storage2)
     await mgr3.load()
     expect(mgr3.getAll().find(p => p.name === imported[0].name)?.customRules).toEqual([customRule])

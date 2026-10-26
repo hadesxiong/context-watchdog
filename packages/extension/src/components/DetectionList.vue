@@ -26,16 +26,14 @@ const { t, typeLabel } = useI18n()
 
 const openTypes = ref<string[]>([])
 
-// 默认全部展开：检测完即见所有分类的卡片。三角图标直接由 openTypes 驱动
-// （不再用 data-[state=open] 变体——实测折叠/展开时它不随状态切换朝向，
-// 显式状态绑定保证收起▼/展开▲ 必然变化）。
+// 默认全部展开；三角朝向由 openTypes 显式驱动（reka-ui 的 data-[state=open] 变体实测不随折叠切换）
 watch(() => props.detections, () => {
     openTypes.value = Object.keys(groupedDetections.value)
 }, { immediate: true })
 </script>
 
 <template>
-    <!-- 容器查询锚点：结果列表自身的宽度（= 右栏内宽），网格列数随它而非视口切换 -->
+    <!-- 容器查询锚点：网格列数随结果列表自身宽度（右栏内宽）而非视口切换 -->
     <div class="@container space-y-4">
         <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
@@ -85,7 +83,7 @@ watch(() => props.detections, () => {
                     </AccordionTrigger>
                 </AccordionHeader>
                 <AccordionContent class="p-0">
-                    <!-- 列数按容器宽度判定：卡片宽 320 + gap-3(12) → 2 列需 ≥652、3 列需 ≥984，留余量取 660/1000 -->
+                    <!-- 卡片 320 + gap 12 → 2 列需 ≥652、3 列需 ≥984，留余量取 660/1000 -->
                     <div class="grid grid-cols-1 gap-3 
                         @[660px]:grid-cols-2 
                         @[1000px]:grid-cols-3">

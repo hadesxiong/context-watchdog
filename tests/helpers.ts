@@ -1,4 +1,3 @@
-// 测试辅助工具
 import { detect } from '@engine/detector/pipeline'
 import { getProfileById } from '@engine/detector/profiles'
 import type { DetectionItem, DetectionResult, ProfileConfig } from '@engine/types'

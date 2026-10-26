@@ -1,22 +1,6 @@
-// 极简 i18n（自写，不引 vue-i18n）
-//
-// 设计约束与取舍：
-//
-// 1) **单一 catalog**。UI 文案与 manifest 的 __MSG_*__ 共用同一份 JSON——
-//    UI 走本模块（可运行时覆盖语言），manifest 与 service worker 走
-//    chrome.i18n（Chrome 原生，不必把字典打进 SW 包）。postbuild 会把这份
-//    JSON 转成 dist/_locales/*/messages.json。
-//    键名一律用 snake_case：Chrome 的 messages.json 只接受 [a-zA-Z0-9_@]，
-//    用点号分层就无法共用，只能被迫维护两份清单。
-//
-// 2) **扁平 JSON**，不做嵌套。嵌套要靠脚本生成 _locales，多一层生成物就多
-//    一处漂移点；扁平的 key 直接就是 messages.json 的 key。
-//
-// 3) **同步**。语言在模块加载时定好（localStorage 是同步 API），渲染时直接
-//    读，不需要 loading 态、不需要 await、不会有首帧闪烁。
-//
-// 4) zh_CN 缺失的键回退到 en，en 缺失则返回 key 本身——宁可界面露出
-//    `settings_title` 这种原始 key（一眼可见、可测），也不要静默显示空串。
+// 极简 i18n（自写，不引 vue-i18n）：单一 catalog 与 manifest 的 __MSG_*__ 共用同一份 JSON（UI 走本模块、
+// manifest/SW 走 chrome.i18n，postbuild 转 dist/_locales/*/messages.json），键名一律 snake_case——
+// messages.json 只接受 [a-zA-Z0-9_@]；语言在加载时同步定好（无首帧闪烁）；缺键 zh_CN→en→key，绝不显示空串。
 import { ref, computed } from 'vue'
 import { setPlaceholderLocale } from '@engine/replacer/placeholder'
 import en from './locales/en.json'
@@ -70,8 +54,8 @@ const current = ref<Locale>(readPreference() === 'auto' ? browserLocale() : read
 const preference = ref<Locale | 'auto'>(readPreference())
 
 /**
- * 界面语言同时决定**占位符语言**：占位符会被写进用户复制去发给 AI 的文本，
- * 英文界面下出现 <<手机号>> 是明显破绽。引擎自己读不到浏览器语言，只能由宿主注入。
+ * 界面语言同时决定**占位符语言**：占位符会被写进用户复制去发给 AI 的文本，英文界面
+ * 下出现 <<手机号>> 是明显破绽；引擎读不到浏览器语言，只能由宿主注入。
  */
 const applyLocale = (next: Locale): void => {
   current.value = next
@@ -93,8 +77,8 @@ export const setLocalePreference = (next: Locale | 'auto'): void => {
 }
 
 /**
- * 取文案。params 以 `{name}` 占位符替换。
- * 找不到 key 时回退 en，再找不到就返回 key 本身（见文件头第 4 条）。
+ * 取文案，params 以 `{name}` 占位符替换。
+ * 缺 key 回退 en，再缺返回 key 本身（见文件头第 4 条）。
  */
 export const t = (key: string, params?: Record<string, string | number>): string => {
   const dict = CATALOGS[current.value]
@@ -109,9 +93,8 @@ export const t = (key: string, params?: Record<string, string | number>): string
 }
 
 /**
- * 检测类型的显示名：`type_<DetectionType>`。
- * 没有对应词条时回退到类型标识本身——t() 找不到 key 会原样返回 key，
- * 这里拿「返回值 === key」当缺失信号，界面会露出原始类型名而不是空白。
+ * 检测类型的显示名：`type_<DetectionType>`；缺词条时 t() 原样返回 key，
+ * 拿「返回值 === key」当缺失信号，界面露出原始类型名而不是空白。
  */
 export const typeLabel = (type: string): string => {
   const key = `type_${type}`
@@ -120,11 +103,9 @@ export const typeLabel = (type: string): string => {
 }
 
 /**
- * 内置档案的显示名与说明。
- *
- * 引擎里的 `ProfileConfig.name/description` 是**数据**（宿主无关），内置档案那份是
- * 中文兜底；展示层优先取 `profile_<id>_name` / `profile_<id>_desc` 词条。
- * 自定义档案的名字是用户自己输入的，永远原样显示。
+ * 内置档案的显示名与说明：优先取 `profile_<id>_name` / `_desc` 词条，缺失回退到
+ * `ProfileConfig.name/description`（宿主无关的中文兜底数据）。
+ * 自定义档案的名字由用户输入，永远原样显示。
  */
 export const profileLabel = (
   profile: { id: string; name: string; description: string; builtin?: boolean }

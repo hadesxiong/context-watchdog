@@ -77,7 +77,6 @@ describe('matchedSitePattern', () => {
     expect(matchedSitePattern('https://chat.example.com/docs/deep/page', patterns)).toBe(
       'https://chat.example.com/docs'
     )
-    // 顺序不影响结果
     expect(matchedSitePattern('https://chat.example.com/docs', [...patterns].reverse())).toBe(
       'https://chat.example.com/docs'
     )

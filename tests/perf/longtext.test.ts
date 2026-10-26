@@ -2,7 +2,6 @@
 import { describe, it, expect } from 'vitest'
 import { runDetect } from '../helpers'
 
-// 生成约 5000 字的混合长文档
 const buildLongDoc = (): string => {
   const paragraphs = [
     '这是一段普通的会议纪要内容，讨论了下个季度的产品规划和人员安排。',

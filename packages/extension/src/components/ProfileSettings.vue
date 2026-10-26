@@ -1,6 +1,5 @@
 <script setup lang="ts">
-// 自定义档案编辑面板（Phase 4/5）：类别开关 / 灵敏度 / 默认策略 / 白名单 / AI 标签 / 自定义正则 / 导入导出
-// 编辑本地草稿，点击保存时提交；内置档案不渲染本组件
+// 自定义档案编辑面板：编辑本地草稿，保存时才提交；内置档案不渲染本组件。字段清单见 docs/spec.md §5
 import { ref, reactive, watch } from 'vue'
 import { useDetectionStore } from '../stores/detection'
 import { Button, Input, Textarea, Switch } from '../ui'
@@ -19,13 +18,13 @@ const store = useDetectionStore()
 
 // ---- 本地草稿（深拷贝激活档案，避免直接改 store） ----
 const draft = reactive<ProfileConfig>(structuredClone(store.activeProfile))
-// customRules 可选字段 → 组件内用必备数组操作，保存时写回 draft
+// customRules 可选字段 → 组件内按必备数组操作，保存时写回 draft
 const customRules = ref<CustomRule[]>([...(draft.customRules || [])])
 const whitelistText = ref((store.activeProfile.whitelist || []).join('\n'))
 const error = ref('')
 const saving = ref(false)
 
-// ---- 自定义正则规则编辑（Phase 5） ----
+// ---- 自定义正则规则 ----
 const newRule = reactive<{ name: string; pattern: string; type: DetectionType; confidence: 'high' | 'medium' | 'low' }>({
     name: '',
     pattern: '',
@@ -35,7 +34,7 @@ const newRule = reactive<{ name: string; pattern: string; type: DetectionType; c
 const ruleError = ref('')
 const showRuleForm = ref(false)
 
-// 类型选项只存 key，显示名统一走 typeLabel()（词条随语言变化，故不在这里求值）
+// 类型只存 key，显示名统一走 typeLabel()（词条随语言变化，不在此求值）
 const RULE_TYPE_OPTIONS: DetectionType[] = [
     'ENV_PASSWORD',
     'API_KEY',
@@ -84,7 +83,7 @@ const removeRule = (id: string) => {
     if (idx >= 0) customRules.value.splice(idx, 1)
 }
 
-// ---- 档案导入导出（Phase 5） ----
+// ---- 档案导入导出 ----
 const ioMessage = ref('')
 const ioError = ref('')
 
@@ -127,14 +126,14 @@ const onImport = async () => {
     }
 }
 
-// GLiNER 标签预设（与 profiles.ts 内置集一致）
+// GLiNER 标签预设（须与 profiles.ts 内置集保持一致）
 const LABEL_PRESETS: Record<string, string[]> = {
     pii: ['person name', 'phone number', 'home address', 'email address', 'ID card number', 'bank card number'],
     secret: ['password', 'secret', 'api key', 'access token', 'private key', 'connection string']
 }
 LABEL_PRESETS.all = [...LABEL_PRESETS.pii, ...LABEL_PRESETS.secret]
 
-// 预设按钮的显示名（key → 词条），标签本身是 GLiNER 的英文标签，不能翻译
+// 预设按钮显示名走词条；标签本身是 GLiNER 的英文标签，不能翻译
 const LABEL_PRESET_LABELS: Record<'pii' | 'secret' | 'all' | 'custom', string> = {
     pii: 'ps_label_preset_pii',
     secret: 'ps_label_preset_secret',
@@ -189,7 +188,7 @@ const SENSITIVITY_LABELS: Array<{ key: Sensitivity; labelKey: string }> = [
     { key: 'strict', labelKey: 'ps_sensitivity_strict' }
 ]
 
-// ---- 分类型默认策略（Switch 形式：开 = 替换，关 = 保留） ----
+// ---- 分类型默认策略（Switch：开 = 替换，关 = 保留） ----
 const ACTION_TYPES: DetectionType[] = [
     'ENV_PASSWORD',
     'API_KEY',
@@ -237,11 +236,9 @@ const onSave = async () => {
 </script>
 
 <template>
-    <!-- 表单主体：外壳（标题/遮罩/关闭/动画）由外层 Dialog 提供；
-         样式对齐外部设计系统：text-sm 正文 / ui Input·Textarea·Button / 统一焦点环与间距；
-         与底部操作区（模板第二根节点）同为 100% 弹窗宽度，边距由自身 padding 提供 -->
+    <!-- 表单主体：外壳（标题/遮罩/关闭/动画）由外层 Dialog 提供；与底部操作区同为
+         弹窗 100% 宽度，边距由自身 padding 提供 -->
     <div class="text-sm px-4 py-4 space-y-4">
-        <!-- 名称与描述 -->
         <div class="space-y-3">
             <div class="space-y-1.5">
                 <label class="block text-sm font-medium text-foreground">{{ t('ps_name') }}</label>
@@ -254,8 +251,7 @@ const onSave = async () => {
             </div>
         </div>
 
-        <!-- 规则类别开关：流式换行（不压缩子项）。词条长度差异很大（「个人信息」vs
-             「美国区域规则（社保号 / 税号 / 电话）」），单行 flex 会把它们挤成多行窄块 -->
+        <!-- 规则类别开关：流式换行——词条长短差异很大，单行 flex 会把长词条挤成多行窄块 -->
         <div class="space-y-1.5">
             <label class="block text-sm font-medium text-foreground">{{ t('ps_categories') }}</label>
             <div class="flex flex-wrap gap-x-4 gap-y-2">
@@ -268,7 +264,6 @@ const onSave = async () => {
             </div>
         </div>
 
-        <!-- 灵敏度 -->
         <div class="space-y-1.5">
             <label class="block text-sm font-medium text-foreground">{{ t('ps_entropy_sensitivity') }}</label>
             <div class="flex gap-1.5">
@@ -285,13 +280,11 @@ const onSave = async () => {
             </div>
         </div>
 
-        <!-- 置信度分层 -->
         <label class="flex items-center gap-1.5 cursor-pointer text-sm text-foreground">
             <input type="checkbox" v-model="draft.tierLowConfidence" class="accent-primary h-3.5 w-3.5" />
             {{ t('ps_tier_low') }}
         </label>
 
-        <!-- 分类型默认策略：Switch（开 = 替换，关 = 保留） -->
         <div class="space-y-1.5">
             <label class="block text-sm font-medium text-foreground">{{ t('ps_default_actions') }}</label>
             <div class="grid grid-cols-2 gap-x-4 gap-y-2">
@@ -311,14 +304,12 @@ const onSave = async () => {
             </div>
         </div>
 
-        <!-- 值白名单 -->
         <div class="space-y-1.5">
             <label class="block text-sm font-medium text-foreground">{{ t('ps_whitelist') }}</label>
             <Textarea v-model="whitelistText" :rows="3" placeholder="example.com&#10;test-account-001" />
             <p class="text-xs text-muted-foreground">{{ t('ps_whitelist_help') }}</p>
         </div>
 
-        <!-- 自定义正则规则（Phase 5） -->
         <div class="space-y-1.5">
             <div class="flex items-center justify-between">
                 <label class="block text-sm font-medium text-foreground">
@@ -327,7 +318,6 @@ const onSave = async () => {
                     {{ showRuleForm ? t('common_collapse') : t('ps_rule_add_short') }}</Button>
             </div>
 
-            <!-- 规则列表 -->
             <div v-for="rule in customRules" :key="rule.id"
                 class="flex items-center gap-2 p-2 rounded-md bg-muted/50 border border-border">
                 <input type="checkbox" v-model="rule.enabled" class="accent-primary h-3.5 w-3.5 shrink-0"
@@ -347,7 +337,6 @@ const onSave = async () => {
                 </button>
             </div>
 
-            <!-- 添加表单 -->
             <div v-if="showRuleForm" class="p-3 space-y-1.5 rounded-md border border-primary/20 bg-primary/5">
                 <Input v-model="newRule.name" maxlength="20" :placeholder="t('ps_rule_name_placeholder')" />
                 <Input v-model="newRule.pattern" :maxlength="CUSTOM_PATTERN_MAX_LENGTH"
@@ -374,7 +363,6 @@ const onSave = async () => {
             </p>
         </div>
 
-        <!-- AI 检测标签 -->
         <div class="space-y-1.5">
             <label class="block text-sm font-medium text-foreground">{{ t('ps_ai_labels') }}</label>
             <div class="flex gap-1.5 flex-wrap">
@@ -394,19 +382,14 @@ const onSave = async () => {
         </div>
     </div>
 
-    <!-- 操作：sticky 固定于弹窗可视区底部（与顶部标题同逻辑，不随内容滚动）；
-         模板第二根节点，占满弹窗宽度、自身 px-4 提供边距（pb-4 与标题区 pt-4 对称）；
-         bg-card 覆盖滚过的内容，border-t 与标题区 border-b 呼应；
-         关闭由标题栏 × / Esc 承担，不设取消 -->
+    <!-- 操作区：sticky 固定于弹窗可视区底部（不随内容滚动）；关闭由标题栏 × / Esc 承担，不设取消 -->
     <div class="sticky bottom-0 bg-card border-t border-border px-4 pt-3 pb-4 space-y-1.5">
         <div class="flex items-center gap-2">
-            <!-- md 档（px-3 py-1.5 text-sm）：字号/内边距与表单内预设按钮（个人信息集等）一致 -->
             <Button variant="secondary" btnType="outline"
                 :title="t('ps_export_title')" @click="onExport">{{ t('ps_export') }}</Button>
             <Button variant="secondary" btnType="outline"
                 :title="t('ps_import_title')" @click="onImport">{{ t('ps_import') }}</Button>
             <div class="ml-auto flex items-center gap-2">
-                <!-- 删除：primary 形状（实心），危险红配色 -->
                 <Button variant="danger" @click="emit('delete')">
                     {{ t('ps_delete') }}</Button>
                 <Button :loading="saving" @click="onSave">
