@@ -1,5 +1,4 @@
-// KEY: VALUE / "key": "value" 规则 - YAML / JSON 场景的密钥检测
-// 补齐纯正则降级模式：模型不可用时 YAML/JSON 配置中的密码不再漏检
+// KEY: VALUE / "key": "value" 规则 - YAML / JSON 场景的密钥检测（纯正则降级模式下也不漏检）
 
 import type { DetectionRule } from '../../types'
 import { SENSITIVE_KEYWORDS, NON_SENSITIVE_KEYWORDS, FUNCTION_PATTERNS } from './constants'
@@ -25,12 +24,10 @@ export const kvPasswordRules: DetectionRule[] = [
 
       if (!isSensitiveKey(key)) return null
 
-      // 去除行内注释和首尾引号
       value = value.replace(/\s+#.*$/, '').replace(/^['"]|['"]$/g, '')
       const { skip } = shouldSkipValue(value)
       if (skip) return null
 
-      // 精确定位 value 在原文中的偏移
       const fullMatch = match[0]
       const rawValue = match[2].trim().replace(/\s+#.*$/, '').replace(/^['"]|['"]$/g, '')
       const valueStartInMatch = fullMatch.indexOf(rawValue)

@@ -1,9 +1,7 @@
-// Profile 注册表 - 内置检测配置档案
-// 新增场景 = 新增一个 ProfileConfig 配置项，无新代码路径
+// Profile 注册表：新增场景 = 新增一个 ProfileConfig 配置项，无新代码路径
 
 import type { ProfileConfig, Sensitivity, RuleCategory, DetectionType, Confidence } from '../types'
 
-// GLiNER 标签集
 const PII_LABELS = [
   'person name',
   'phone number',
@@ -24,7 +22,6 @@ const SECRET_LABELS = [
 
 const ALL_LABELS = [...PII_LABELS, ...SECRET_LABELS]
 
-// 内置 Profile：通用文本 / 代码开发 / 不限（默认，仲裁合成）
 export const BUILTIN_PROFILES: ProfileConfig[] = [
   {
     id: 'universal',
@@ -66,8 +63,7 @@ export const BUILTIN_PROFILES: ProfileConfig[] = [
     tierLowConfidence: false,
     glinerLabels: SECRET_LABELS
   },
-  // 区域档案：在通用规则之上追加对应地区的规则集。
-  // tierLowConfidence: false —— 用户显式选了区域档案，就是希望检出的都替换掉
+  // 区域档案：tierLowConfidence: false —— 用户显式选了区域档案，就是希望检出的都替换掉
   {
     id: 'us',
     name: '美国个人信息',
@@ -97,20 +93,16 @@ export const DEFAULT_PROFILE_ID = 'universal'
 export const getProfileById = (id: string): ProfileConfig =>
   BUILTIN_PROFILES.find(p => p.id === id) || BUILTIN_PROFILES[0]
 
-// 类别灵敏度（未配置时用 standard）
 export const getSensitivity = (profile: ProfileConfig, category: RuleCategory): Sensitivity =>
   profile.sensitivity[category] || 'standard'
 
-// 高熵检测阈值档位
 export const ENTROPY_THRESHOLDS: Record<Sensitivity, { minLength: number; minEntropy: number }> = {
   loose: { minLength: 20, minEntropy: 3.0 },
   standard: { minLength: 25, minEntropy: 3.5 },
   strict: { minLength: 30, minEntropy: 4.0 }
 }
 
-// 按 Profile 计算某检测项的默认替换动作：显式配置 > 置信度分层 > 替换。
-// 这是「识别结果的判断结果」的唯一权威来源——侧栏、粘贴正则首答、AI 二次升级
-// 三条链路都必须用它，否则会出现「判定为保留、却仍被脱敏」的策略漂移。
+// 默认替换动作的唯一权威来源（显式配置 > 置信度分层 > 替换）：侧栏、粘贴正则首答、AI 二次升级三条链路都必须用它，否则会出现「判定为保留、却仍被脱敏」的策略漂移。
 export const resolveDefaultAction = (
   profile: ProfileConfig,
   type: DetectionType,

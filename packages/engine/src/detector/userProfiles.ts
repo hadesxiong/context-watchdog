@@ -1,6 +1,4 @@
-// 用户自定义 Profile 管理（Phase 4 轻量自定义）
-// - 内置档案不可改删；用户档案可 CRUD，持久化于 chrome.storage.local
-// - 存储接口可注入（测试用 mock）
+// 用户自定义 Profile 管理：内置档案不可改删，用户档案可 CRUD、持久化于 chrome.storage.local；存储接口可注入（测试用 mock）。
 
 import type { ProfileConfig, RuleCategory, Sensitivity, DetectionType, CustomRule } from '../types'
 import { BUILTIN_PROFILES } from './profiles'
@@ -9,13 +7,11 @@ import { generateId } from '../utils/id'
 
 export const USER_PROFILES_KEY = 'contextwatchdog.userProfiles'
 
-// 可注入的 KV 存储接口
 export interface KeyValueStorage {
   get(key: string): Promise<Record<string, unknown>>
   set(items: Record<string, unknown>): Promise<void>
 }
 
-// chrome.storage.local 适配器（浏览器环境）
 export const createChromeStorage = (): KeyValueStorage | null => {
   if (typeof chrome === 'undefined' || !chrome.storage?.local) return null
   return {
@@ -31,7 +27,6 @@ export const createChromeStorage = (): KeyValueStorage | null => {
 const RULE_CATEGORIES: RuleCategory[] = ['secret', 'pii', 'entropy', 'us', 'eu']
 const SENSITIVITIES: Sensitivity[] = ['loose', 'standard', 'strict']
 
-// 深拷贝并规范化档案（防御存储数据损坏 / 版本漂移）
 export const sanitizeProfile = (raw: unknown): ProfileConfig | null => {
   if (typeof raw !== 'object' || raw === null) return null
   const p = raw as Record<string, unknown>
@@ -68,7 +63,6 @@ export const sanitizeProfile = (raw: unknown): ProfileConfig | null => {
     whitelist: Array.isArray(p.whitelist)
       ? p.whitelist.filter((w): w is string => typeof w === 'string' && w.trim() !== '').slice(0, 200)
       : [],
-    // 自定义规则：逐条过 ReDoS 校验，非法模式丢弃而非拒绝整个档案
     customRules: sanitizeCustomRules(p.customRules)
   }
 }
@@ -78,7 +72,6 @@ const CUSTOM_RULE_TYPES: DetectionType[] = [
   'EMAIL', 'PHONE', 'ID_CARD', 'BANK_CARD', 'IP_ADDRESS', 'PLATE', 'NAME', 'ADDRESS'
 ]
 
-// 自定义规则数组清洗（导入/存储共用）
 export const sanitizeCustomRules = (raw: unknown): CustomRule[] => {
   if (!Array.isArray(raw)) return []
   const result: CustomRule[] = []
@@ -91,7 +84,6 @@ export const sanitizeCustomRules = (raw: unknown): CustomRule[] => {
     if (!CUSTOM_RULE_TYPES.includes(r.type as DetectionType)) continue
 
     const pattern = r.pattern.trim()
-    // ReDoS 校验：非法/危险模式静默丢弃
     if (!validateCustomPattern(pattern).ok) continue
     if (seenPatterns.has(pattern)) continue
     seenPatterns.add(pattern)
@@ -108,7 +100,6 @@ export const sanitizeCustomRules = (raw: unknown): CustomRule[] => {
   return result
 }
 
-// 从模板克隆生成新用户档案（Phase 4 主要创建路径："基于当前档案新建"）
 export const cloneProfile = (base: ProfileConfig, name: string): ProfileConfig => ({
   id: `user-${generateId()}`,
   name: name.trim().slice(0, 20),
@@ -123,7 +114,6 @@ export const cloneProfile = (base: ProfileConfig, name: string): ProfileConfig =
   customRules: (base.customRules || []).map(r => ({ ...r }))
 })
 
-// 名称校验：非空、不与现有档案重名
 export const validateProfileName = (
   name: string,
   existing: ProfileConfig[]
@@ -134,8 +124,6 @@ export const validateProfileName = (
   return null
 }
 
-// ---- JSON 导入导出（Phase 5） ----
-
 const EXPORT_VERSION = 1
 
 export interface ProfileExportPayload {
@@ -144,7 +132,6 @@ export interface ProfileExportPayload {
   profiles: ProfileConfig[]
 }
 
-// 导出用户档案为 JSON（内置档案不导出；导入到新环境后仍是自定义档案）
 export const exportProfiles = (profiles: ProfileConfig[]): string => {
   const payload: ProfileExportPayload = {
     version: EXPORT_VERSION,
@@ -154,8 +141,6 @@ export const exportProfiles = (profiles: ProfileConfig[]): string => {
   return JSON.stringify(payload, null, 2)
 }
 
-// 导入：解析 + 校验 + 重新生成 id（防与现有档案 id 碰撞）
-// 名称去重在 Manager 层做（需要现有档案名单）
 export const importProfiles = (json: string): ProfileConfig[] => {
   let payload: unknown
   try {
@@ -188,13 +173,11 @@ export const importProfiles = (json: string): ProfileConfig[] => {
   return imported.map(profile => ({ ...profile, id: `user-${generateId()}` }))
 }
 
-// 用户 Profile 管理器
 export class UserProfileManager {
   private userProfiles: ProfileConfig[] = []
 
   constructor(private storage: KeyValueStorage | null) {}
 
-  // 从存储加载（存储不可用时静默为空）
   async load(): Promise<void> {
     if (!this.storage) return
     try {
@@ -220,7 +203,6 @@ export class UserProfileManager {
     }
   }
 
-  // 全部档案（内置 + 用户）
   getAll(): ProfileConfig[] {
     return [...BUILTIN_PROFILES, ...this.userProfiles]
   }
@@ -233,7 +215,6 @@ export class UserProfileManager {
     return this.userProfiles.some(p => p.id === id)
   }
 
-  // 新建：从任意档案（含内置）克隆
   async create(base: ProfileConfig, name: string): Promise<ProfileConfig> {
     const error = validateProfileName(name, this.getAll())
     if (error) throw new Error(error)
@@ -244,7 +225,6 @@ export class UserProfileManager {
     return profile
   }
 
-  // 更新（仅用户档案；id 不可变）
   async update(profile: ProfileConfig): Promise<ProfileConfig> {
     const idx = this.userProfiles.findIndex(p => p.id === profile.id)
     if (idx === -1) throw new Error('只能修改自定义档案')
@@ -263,7 +243,6 @@ export class UserProfileManager {
     return sanitized
   }
 
-  // 删除（仅用户档案）
   async remove(id: string): Promise<void> {
     const idx = this.userProfiles.findIndex(p => p.id === id)
     if (idx === -1) throw new Error('只能删除自定义档案')
@@ -271,12 +250,10 @@ export class UserProfileManager {
     await this.persist()
   }
 
-  // 导出全部用户档案为 JSON
   exportJson(): string {
     return exportProfiles(this.userProfiles)
   }
 
-  // 从 JSON 导入：id 重生成防碰撞，重名自动加序号
   async importFromJson(json: string): Promise<ProfileConfig[]> {
     const imported = importProfiles(json)
     const existingNames = new Set(this.getAll().map(p => p.name))

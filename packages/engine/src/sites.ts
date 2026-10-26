@@ -1,24 +1,18 @@
-// 受保护站点（粘贴自动拦截）的规范化与匹配
-// 纯逻辑供 service worker 与侧栏 UI 共用；单测见 tests/unit/sites.test.ts
+// 受保护站点（粘贴自动拦截）的规范化与匹配；纯逻辑供 service worker 与侧栏 UI 共用，单测见 tests/unit/sites.test.ts
 
-// 站点列表在 chrome.storage.local 中的键
 export const PROTECTED_SITES_KEY = 'contextwatchdog.protectedSites'
 
-// 用户输入 → 站点匹配模式（查询与锚点丢弃，路径保留到最后一级）：
-//   'chat.example.com'                → 'https://chat.example.com/*'
-//   'deepseek.com'                    → 'https://deepseek.com/*'          （连同其所有子域一起生效）
-//   '*.deepseek.com'                  → 'https://deepseek.com/*'          （'*.' 前缀可写可不写）
-//   'https://chat.example.com/docs'   → 'https://chat.example.com/docs'     （只写一级路径也认）
-//   'https://chat.example.com/docs/*' → 'https://chat.example.com/docs/*'   （子树写法）
-//   'http://localhost:5173'           → 'http://localhost:5173/*'           （写 http = 协议不限）
-// 无法识别返回 null
+// 用户输入 → 站点匹配模式（查询与锚点丢弃，路径保留到最后一级；无法识别返回 null）：
+//   'chat.example.com' → 'https://chat.example.com/*'
+//   'deepseek.com' / '*.deepseek.com' → 'https://deepseek.com/*'（连同其所有子域一起生效，'*.' 可写可不写）
+//   'https://chat.example.com/docs' → 同名（只写一级路径也认）；'…/docs/*' → 子树写法；
+//   'http://localhost:5173' → 'http://localhost:5173/*'（写 http = 协议不限）
 export const normalizeSiteInput = (raw: string): string | null => {
   const input = (raw ?? '').trim()
   if (!input) return null
 
   let url: URL
   try {
-    // 无协议时默认按 https 处理
     url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(input) ? input : `https://${input}`)
   } catch {
     return null
@@ -32,7 +26,6 @@ export const normalizeSiteInput = (raw: string): string | null => {
   const hostname = url.hostname.startsWith('*.') ? url.hostname.slice(2) : url.hostname
   if (!hostname) return null
 
-  // 域名需含点，或为 localhost / IPv4 字面量
   const isLocalhost = hostname === 'localhost'
   const isIpv4 = /^\d{1,3}(\.\d{1,3}){3}$/.test(hostname)
   if (!hostname.includes('.') && !isLocalhost && !isIpv4) return null
@@ -45,8 +38,7 @@ export const normalizeSiteInput = (raw: string): string | null => {
   return `${url.protocol}//${host}${path}${wildcard ? '/*' : ''}`
 }
 
-// 解析已存的站点模式。整站条目（…://host/*）的 prefix 为空串；
-// 带路径的条目 prefix 形如 '/docs'（不含结尾斜杠）。
+// 解析已存的站点模式：整站条目（…://host/*）的 prefix 为空串；带路径的条目形如 '/docs'（不含结尾斜杠）
 interface SitePatternSpec {
   scheme: string
   host: string
@@ -64,8 +56,7 @@ const parseSitePattern = (pattern: string): SitePatternSpec | null => {
   if (!host) return null
   if (!rest || rest === '/' || rest === '/*') return { scheme, host, prefix: '' }
 
-  // 只认「结尾一个 *」的子树写法；路径中间出现 * 的一律不认，
-  // 免得出现没人解释得清的匹配行为
+  // 只认「结尾一个 *」的子树写法；路径中间出现 * 的一律不认，免得出现没人解释得清的匹配行为
   const trimmed = rest.replace(/\/+$/, '')
   if (trimmed.endsWith('/*')) {
     const base = trimmed.slice(0, -2).replace(/\/+$/, '')
@@ -75,15 +66,13 @@ const parseSitePattern = (pattern: string): SitePatternSpec | null => {
   return { scheme, host, prefix: trimmed }
 }
 
-// 协议：写 http 的条目视为**协议不限**——站点常从 http 跳到 https，
-// 用户照地址栏写的 http 也必须能命中；写 https 的条目只匹配 https。
+// 协议：写 http 的条目视为**协议不限**——站点常从 http 跳到 https，用户照地址栏写的 http 也必须能命中；写 https 的条目只匹配 https
 const schemeMatches = (patternScheme: string, urlScheme: string): boolean =>
   patternScheme === 'http:' ? true : urlScheme === patternScheme
 
-// 主机名：条目写什么就精确覆盖什么，**外加它的所有子域**——
-// 用户输入 deepseek.com，chat.deepseek.com 也应受保护（不必逐个子域去加）。
-// 前缀伪造吃不到后缀（evil.com.a.com 结尾不是 '.a.com'）；带端口的条目只做精确比对，
-// 因为端口不同的子域对不上，与其猜不如交给用户显式写。
+// 主机名：条目写什么就精确覆盖什么，**外加它的所有子域**——用户输入 deepseek.com，
+// chat.deepseek.com 也应受保护（不必逐个子域去加）；前缀伪造吃不到后缀（evil.com.a.com 结尾不是
+// '.a.com'）；带端口的条目只做精确比对（端口不同的子域对不上，与其猜不如交给用户显式写）。
 const hostMatches = (specHost: string, urlHost: string): boolean => {
   if (specHost === urlHost) return true
   if (specHost.includes(':')) return false
@@ -97,8 +86,7 @@ const pathMatches = (prefix: string, pathname: string): boolean => {
   return target === prefix || target.startsWith(`${prefix}/`)
 }
 
-// URL 命中的站点条目（多条命中时取最具体的那条，保证逐站开关的键唯一）。
-// 返回的是用户列表里的原样字符串，可直接作为存储键。
+// URL 命中的站点条目（多条命中时取最具体的那条，保证逐站开关的键唯一）；返回的是用户列表里的原样字符串，可直接作为存储键。
 export const matchedSitePattern = (url: string, patterns: string[]): string | null => {
   let parsed: URL
   try {
@@ -117,8 +105,7 @@ export const matchedSitePattern = (url: string, patterns: string[]): string | nu
     if (!hostMatches(spec.host, parsed.host.toLowerCase())) continue
     if (!schemeMatches(spec.scheme, parsed.protocol)) continue
     if (!pathMatches(spec.prefix, parsed.pathname)) continue
-    // 路径最长者优先；路径一样长时主机名更长的更具体
-    //（deepseek.com 与 chat.deepseek.com 同时存在时，chat 页归 chat 那条管）
+    // 路径最长者优先；路径一样长时主机名更长的更具体（deepseek.com 与 chat.deepseek.com 并存时，chat 页归 chat 那条管）
     const isMoreSpecific =
       spec.prefix.length > bestLength ||
       (spec.prefix.length === bestLength && spec.host.length > bestHostLength)
@@ -131,16 +118,13 @@ export const matchedSitePattern = (url: string, patterns: string[]): string | nu
   return best
 }
 
-// URL 是否命中任一模式
 export const matchSite = (url: string, patterns: string[]): boolean =>
   matchedSitePattern(url, patterns) !== null
 
-// 站点模式 → 申请/撤销 host 权限时用的 origin 列表。
-// - 带路径的条目同时给出「精确路径」与「子树」两条：权限按 match pattern 逐条校验，
-//   少一条就会出现「列表里有站点但页面没被注入」
-// - 写 http 的条目协议不限，http 与 https 两条都要申请，否则跳到 https 后注入不了
-// - 域名条目同时申请 '*.' 那条：match pattern 里 '*.a.com' 只吃子域、不吃本域，
-//   少了它子域页面匹配得到却没权限注入（IP 与带端口的条目没有子域，不申请）
+// 站点模式 → 申请/撤销 host 权限时用的 origin 列表：带路径的条目要给「精确路径」与「子树」两条、
+// 写 http 的要给 http/https 两条、域名条目要给 '*.' 那条（match pattern 里 '*.a.com' 只吃子域不吃
+// 本域）。权限按 match pattern 逐条校验，少一条就分别出现「列表里有站点但没注入」「跳到 https 后
+// 注入不了」「子域匹配得到却没权限」（IP 与带端口的条目没有子域，不申请）
 export const sitePermissionOrigins = (pattern: string): string[] => {
   const spec = parseSitePattern(pattern)
   if (!spec) return []

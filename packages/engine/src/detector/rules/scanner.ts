@@ -1,13 +1,10 @@
-// 扫描器 - 执行所有正则规则并合并结果
+// 扫描器：执行所有正则规则并合并结果；无 extractor 时按 '=' 与匹配之间只有空白判定 ENV_PASSWORD；高熵检测可选。
 
 import type { DetectionRule, DetectionItem, DetectionType } from '../../types'
 import { SENSITIVE_KEYWORDS, NON_SENSITIVE_KEYWORDS, FUNCTION_PATTERNS } from './constants'
 import { detectHighEntropy } from './highEntropyRules'
 import { generateId } from '../../utils/id'
 
-// 扫描正则规则
-// options.enableEntropy: 是否附带高熵检测（Profile 停用 entropy 类别时传 false）
-// options.entropyThresholds: 高熵阈值（来自 Profile 类别灵敏度）
 export const scanRegexRules = (
   text: string,
   rules: DetectionRule[],
@@ -26,17 +23,14 @@ export const scanRegexRules = (
     while ((match = pattern.exec(text)) !== null) {
       ruleMatchCount++
 
-      // 有 extractor 的规则需要特殊处理
       if (rule.extractor) {
         const extracted = rule.extractor(match, text)
         if (extracted) {
-          // 检查是否已有相同位置的检测项
           const existingItem = items.find(
             item => item.startIndex <= extracted.startIndex && item.endIndex >= extracted.endIndex
           )
 
           if (existingItem) {
-            // 合并检测类型
             if (!existingItem.detectionTypes) {
               existingItem.detectionTypes = [existingItem.type]
             }
@@ -59,14 +53,11 @@ export const scanRegexRules = (
           }
         }
       } else {
-        // 普通匹配（无 extractor）
         const original = match[0]
         const startIndex = match.index!
         const endIndex = startIndex + original.length
 
-        // 检查是否是环境变量赋值的值位：
         // 仅当 '=' 与匹配之间只有空白（即匹配就是 env 值本身）才重归类为 ENV_PASSWORD
-        // 防止同行后续文本被误标（如 `API_KEY=xxx 与 support@example.com` 中的邮箱）
         const lineStart = text.lastIndexOf('\n', startIndex) + 1
         const prefix = text.substring(lineStart, startIndex)
         const varMatch = prefix.match(/^([A-Z0-9_]+)[\t ]*=[\t ]*$/)
@@ -74,34 +65,28 @@ export const scanRegexRules = (
         if (varMatch) {
           const varName = varMatch[1]
 
-          // 检查是否在白名单中
           if (NON_SENSITIVE_KEYWORDS.some(kw => varName.includes(kw))) {
             console.log('[ContextWatchdog] Skipping whitelisted variable:', varName)
             continue
           }
 
-          // 检查是否是函数调用
           if (FUNCTION_PATTERNS.some(pattern => pattern.test(varName))) {
             console.log('[ContextWatchdog] Skipping function call:', varName)
             continue
           }
 
-          // 检查变量名是否包含点号
           if (varName.includes('.')) {
             console.log('[ContextWatchdog] Skipping object property:', varName)
             continue
           }
 
-          // 检查是否是敏感变量名
           const isSensitive = SENSITIVE_KEYWORDS.some(kw => varName.includes(kw))
 
-          // 检查是否已有相同位置的检测项
           const existingItem = items.find(
             item => item.startIndex <= startIndex && item.endIndex >= endIndex
           )
 
           if (existingItem) {
-            // 合并检测类型（保留规则自身类型 + 敏感变量名的 ENV_PASSWORD 归类）
             const newTypes: DetectionType[] = isSensitive ? [rule.type, 'ENV_PASSWORD'] : [rule.type]
             if (!existingItem.detectionTypes) {
               existingItem.detectionTypes = [existingItem.type]
@@ -126,13 +111,11 @@ export const scanRegexRules = (
             })
           }
         } else {
-          // 检查是否已有相同位置的检测项
           const existingItem = items.find(
             item => item.startIndex <= startIndex && item.endIndex >= endIndex
           )
 
           if (existingItem) {
-            // 合并检测类型
             if (!existingItem.detectionTypes) {
               existingItem.detectionTypes = [existingItem.type]
             }
@@ -162,19 +145,16 @@ export const scanRegexRules = (
     }
   }
 
-  // 添加高熵字符串检测
   if (enableEntropy) {
     console.log('[ContextWatchdog] Detecting high entropy strings...')
     const highEntropyItems = detectHighEntropy(text, entropyThresholds)
     console.log('[ContextWatchdog] Found', highEntropyItems.length, 'high entropy strings')
     for (const item of highEntropyItems) {
-      // 检查是否已有相同位置的检测项
       const existingItem = items.find(
         existing => existing.startIndex <= item.startIndex && existing.endIndex >= item.endIndex
       )
 
       if (existingItem) {
-        // 合并检测类型
         if (!existingItem.detectionTypes) {
           existingItem.detectionTypes = [existingItem.type]
         }

@@ -1,4 +1,3 @@
-// 检测项类型
 export type DetectionType =
   | 'ENV_PASSWORD'
   | 'API_KEY'
@@ -19,15 +18,12 @@ export type DetectionType =
   | 'IBAN'
   | 'VAT'
 
-// 置信度类型
 export type Confidence = 'high' | 'medium' | 'low'
 
-// 检测来源
 export type DetectionSource = 'model' | 'regex'
 
-// 规则类别（Profile 按类别启用/停用规则集）
-// 'us' / 'eu' 是区域类别：这两个集里的模式只在对应地区的语境下成立，
-// 混进通用集会显著抬高其他地区用户的误报率，因此默认全关、由 Profile 显式开启
+// 规则类别（Profile 按类别启用/停用规则集）。'us' / 'eu' 是区域类别：这两个集里的模式只在
+// 对应地区的语境下成立，混进通用集会显著抬高其他地区用户的误报率，因此默认全关、由 Profile 显式开启
 export type RuleCategory = 'secret' | 'pii' | 'entropy' | 'us' | 'eu'
 
 // 场景类型（启发式判定）
@@ -36,14 +32,13 @@ export type SceneType = 'yaml' | 'env' | 'code' | 'log' | 'json' | 'plain'
 // 灵敏度档位（Profile 内每类别的阈值组合）
 export type Sensitivity = 'loose' | 'standard' | 'strict'
 
-// 用户自定义正则规则（Phase 5）
+// 用户自定义正则规则
 export interface CustomRule {
   id: string
   // 规则名称（UI 展示）
   name: string
   // 正则源串（不含分隔符；编译时统一加 g flag）
   pattern: string
-  // 命中后归类的检测类型
   type: DetectionType
   confidence: Confidence
   // 是否启用（可临时停用而不删除）
@@ -57,7 +52,6 @@ export interface ProfileConfig {
   description: string
   // 是否内置档案（内置不可删除/改名；用户自定义档案可 CRUD）
   builtin?: boolean
-  // 启用的规则类别
   enabledCategories: RuleCategory[]
   // 各类别灵敏度（未指定的类别用 standard）
   sensitivity: Partial<Record<RuleCategory, Sensitivity>>
@@ -69,11 +63,10 @@ export interface ProfileConfig {
   glinerLabels: string[]
   // 值白名单：精确匹配的值不检测不替换（如公司域名、测试账号）
   whitelist?: string[]
-  // 用户自定义正则规则（Phase 5，经 ReDoS 校验）
+  // 用户自定义正则规则（经 ReDoS 校验）
   customRules?: CustomRule[]
 }
 
-// 检测项
 export interface DetectionItem {
   id: string
   type: DetectionType
@@ -87,28 +80,23 @@ export interface DetectionItem {
   source?: DetectionSource  // 检测来源
 }
 
-// 检测结果
 export interface DetectionResult {
   items: DetectionItem[]
   text: string
 }
 
-// 替换操作
 export type ReplaceAction = 'replace' | 'keep'
 
-// 替换配置
 export interface ReplaceConfig {
   itemId: string
   action: ReplaceAction
   customPlaceholder?: string
 }
 
-// 映射表
 export interface MappingTable {
   [placeholder: string]: string
 }
 
-// 检测规则
 export interface DetectionRule {
   type: DetectionType
   pattern: RegExp
@@ -116,7 +104,6 @@ export interface DetectionRule {
   extractor?: (match: RegExpMatchArray, fullText: string) => { original: string; startIndex: number; endIndex: number } | null
 }
 
-// NER检测结果
 export interface NERResult {
   entity_group: string
   word: string

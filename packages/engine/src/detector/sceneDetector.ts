@@ -1,6 +1,5 @@
-// 场景识别器 - 确定性启发式（Phase 2：移除 MobileBERT 零样本分类模型）
-// 扫描前若干行的结构特征打分：KEY=VALUE / KEY: value / JSON 语法 / 时间戳 / 代码
-// 优点：0ms、可单测、离线可用、无模型下载
+// 场景识别器 - 确定性启发式：扫描前若干行的结构特征打分（KEY=VALUE / KEY: value / JSON /
+// 时间戳 / 代码）。0ms、可单测、离线可用、无模型下载
 
 import type { SceneType } from '../types'
 
@@ -29,7 +28,6 @@ const SCENE_WEIGHTS: Record<Exclude<SceneType, 'plain'>, number> = {
   code: 0.8
 }
 
-// 启发式场景检测
 export const detectScene = async (text: string): Promise<SceneResult> => {
   // 只分析前 50 行，避免长文本上的无谓扫描
   const sample = text.split('\n').slice(0, 50).join('\n')

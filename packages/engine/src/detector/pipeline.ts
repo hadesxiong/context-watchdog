@@ -1,4 +1,4 @@
-// 五步检测管线（Phase 2：Profile 驱动 + GLiNER 级联触发）
+// 五步检测管线（Profile 驱动 + GLiNER 级联触发）
 
 import type { DetectionItem, DetectionResult, DetectionType, Confidence, ProfileConfig } from '../types'
 import { detectScene, type SceneResult } from './sceneDetector'
@@ -13,7 +13,7 @@ import { getProfileById, DEFAULT_PROFILE_ID, getSensitivity, ENTROPY_THRESHOLDS 
 import { generatePlaceholder } from '../replacer/placeholder'
 import { generateId } from '../utils/id'
 
-// 检测引擎配置（正则为基础引擎恒开；场景识别为 AI 分支内部细节，不单独暴露开关）
+// 正则恒开；场景识别为 AI 分支内部细节，不单独暴露开关
 interface DetectorConfig {
   enableContentDetection: boolean
 }
@@ -51,7 +51,6 @@ const PII_LABELS = new Set([
   'person name', 'phone number', 'home address', 'email address', 'ID card number', 'bank card number'
 ])
 
-// 将 ContentEntity 转换为 DetectionItem
 const toDetectionItem = (entity: ContentEntity): DetectionItem => {
   const type = entityTypeMap[entity.entityType] || 'HIGH_ENTROPY'
   const confidence: Confidence = entity.confidence > 0.8 ? 'high' : entity.confidence > 0.5 ? 'medium' : 'low'
@@ -74,25 +73,21 @@ const toDetectionItem = (entity: ContentEntity): DetectionItem => {
 const validateSensitiveEntity = (entity: ContentEntity): boolean => {
   const value = entity.text
 
-  // PII 类实体不做通用值质量校验（姓名/地址天然短小，长度过滤会误杀）
   if (PII_LABELS.has(entity.entityType)) {
     return value.length >= 2
   }
 
-  // API Key 格式验证
   if (entity.entityType === 'api_key') {
     if (/^(sk-|AKIA|ghp_|xox[baprs]-)/.test(value)) return true
     if (/^[A-Za-z0-9]{20,}$/.test(value)) return true
     return false
   }
   
-  // 连接串格式验证
   if (entity.entityType === 'connection_string') {
     if (/^[a-z]+:\/\/[^\s]+/.test(value)) return true
     return false
   }
   
-  // JWT 格式验证
   if (entity.entityType === 'jwt_token') {
     if (/^eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(value)) return true
     return false
@@ -104,7 +99,6 @@ const validateSensitiveEntity = (entity: ContentEntity): boolean => {
   const weakPasswords = ['password', 'admin', 'secret', '123456', 'root', 'test', 'changeme', 'default']
   if (weakPasswords.includes(value.toLowerCase())) return false
   
-  // 其他类型保持原判断
   return true
 }
 
@@ -128,8 +122,7 @@ const typePriority: Record<DetectionType, number> = {
   PLATE: 2,
   NAME: 2,
   ADDRESS: 2,
-  // 区域标识符（SSN/EIN/IBAN/VAT）是强校验的高可信标识，与身份证/银行卡同级：
-  // 它们比包住自己的高熵串更具体，仲裁时应胜出
+  // 区域标识符（SSN/EIN/IBAN/VAT）是强校验标识，与身份证/银行卡同级：比包住自己的高熵串更具体
   SSN: 2,
   EIN: 2,
   IBAN: 2,
@@ -140,7 +133,6 @@ const typePriority: Record<DetectionType, number> = {
 const itemPriority = (item: DetectionItem): number =>
   Math.max(...(item.detectionTypes || [item.type]).map(t => typePriority[t] || 0))
 
-// 合并类型与置信度到目标项
 const mergeMeta = (target: DetectionItem, source: DetectionItem): void => {
   const targetTypes = target.detectionTypes || [target.type]
   const sourceTypes = source.detectionTypes || [source.type]
@@ -182,7 +174,6 @@ const resolveOverlaps = (items: DetectionItem[]): DetectionItem[] => {
   )
 
   const pickWinner = (a: DetectionItem, b: DetectionItem): DetectionItem => {
-    // 类型优先级优先：凭据类 > PII > 高熵
     const prioDiff = itemPriority(b) - itemPriority(a)
     if (prioDiff !== 0) return prioDiff > 0 ? b : a
 
@@ -210,7 +201,6 @@ const resolveOverlaps = (items: DetectionItem[]): DetectionItem[] => {
       continue
     }
 
-    // 与前一项重叠：仲裁后保留胜者
     const winner = pickWinner(last, item)
     const loser = winner === last ? item : last
     mergeMeta(winner, loser)
@@ -254,7 +244,6 @@ const propagateKnownValues = (items: DetectionItem[], text: string): DetectionIt
       if (idx === -1) break
       fromIndex = idx + item.original.length
 
-      // 跳过已被检测项覆盖的位置
       const covered = items.some(
         existing => idx >= existing.startIndex && idx + item.original.length <= existing.endIndex
       ) || propagated.some(
@@ -309,8 +298,6 @@ const regeneratePlaceholders = (items: DetectionItem[]): DetectionItem[] => {
   })
 }
 
-// ============ 级联触发辅助 ============
-
 // 构建未被正则覆盖的文本片段（GLiNER 只处理这些片段，省电省时）
 interface TextSegment { text: string; offset: number }
 
@@ -320,7 +307,6 @@ const buildUncoveredSegments = (
   maxSegments = 20,
   maxTotalChars = 8000
 ): TextSegment[] => {
-  // 合并覆盖区间
   const merged = [...covered]
     .sort((a, b) => a.startIndex - b.startIndex)
     .reduce<Array<{ startIndex: number; endIndex: number }>>((acc, cur) => {
@@ -349,7 +335,6 @@ const buildUncoveredSegments = (
     cursor = Math.max(cursor, region.endIndex)
   }
 
-  // 尾部
   if (cursor < text.length) {
     const segText = text.substring(cursor)
     if (segText.trim().length >= 8 && segments.length < maxSegments && totalChars + segText.length <= maxTotalChars) {
@@ -375,7 +360,6 @@ const recheckWithRegex = (entity: ContentEntity): DetectionItem[] => {
   }))
 }
 
-// 主检测函数
 export const detect = async (
   text: string,
   profile: ProfileConfig = getProfileById(DEFAULT_PROFILE_ID),
@@ -396,7 +380,6 @@ export const detect = async (
   const regexItems = scanRegexRules(text, enabledRules, { enableEntropy, entropyThresholds })
   console.log('[ContextWatchdog] Regex found', regexItems.length, 'items')
 
-  // 为正则结果添加 source 标记
   for (const item of regexItems) {
     items.push({
       ...item,
@@ -404,7 +387,7 @@ export const detect = async (
     })
   }
 
-  // Step 2b: 用户自定义正则（ReDoS 校验 + 时间预算，Phase 5）
+  // Step 2b: 用户自定义正则（ReDoS 校验 + 时间预算）
   const customRules = (profile.customRules || []).filter(r => r.enabled)
   if (customRules.length > 0) {
     const custom = scanCustomRules(text, customRules)
@@ -415,10 +398,8 @@ export const detect = async (
     items.push(...custom.items)
   }
 
-  // Step 3-4: GLiNER 级联触发（仅处理正则未覆盖片段，如果模型可用）。
-  // 场景识别为 AI 分支内部细节（仅喂给 GLiNER 提示词，不影响正则检出），
-  // 随 AI 开关走：AI 关闭/模型未就绪时一并省去这步启发式（约 10ms）
-  // 引擎不持有模型运行时：后端由宿主注册（getInferenceBackend），未注册即纯正则
+  // Step 3-4: GLiNER 级联触发（仅处理正则未覆盖片段）；场景识别仅喂给 GLiNER，随 AI 开关走；
+  // 引擎不持有模型运行时，后端未注册即纯正则
   const backend = getInferenceBackend()
   if (mergedConfig.enableContentDetection && backend?.isReady()) {
     try {
@@ -436,7 +417,6 @@ export const detect = async (
       const entities: ContentEntity[] = []
       for (const segment of segments) {
         const segmentEntities = await backend.detectSegment(segment.text, scene.type, profile.glinerLabels)
-        // 映射回全文偏移
         for (const e of segmentEntities) {
           entities.push({
             ...e,
@@ -449,7 +429,6 @@ export const detect = async (
       }
       console.log('[ContextWatchdog] Found', entities.length, 'entities from model')
 
-      // 分类实体
       const sensitive = entities.filter(e => categorizeEntity(e) === 'sensitive')
       const uncertain = entities.filter(e => categorizeEntity(e) === 'uncertain')
 

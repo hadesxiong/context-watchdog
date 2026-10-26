@@ -1,5 +1,4 @@
-// PII 规则集 - 通用文本个人敏感信息检测
-// 全部纯正则 + 算法校验（身份证校验位 / 银行卡 Luhn），控制误报
+// PII 规则集 - 通用文本个人敏感信息检测：全部纯正则 + 算法校验（身份证校验位 / 银行卡 Luhn）控制误报。
 // 默认策略：手机号/身份证/银行卡/IP/车牌 → 替换；邮箱 → 保留（见 emailRules.ts）
 
 import type { DetectionRule } from '../../types'
@@ -39,7 +38,7 @@ export const isValidLuhn = (num: string): boolean => {
 // ============ 规则 ============
 
 export const piiRules: DetectionRule[] = [
-  // 身份证号（18位 + 校验位验证，medium 置信度起步但校验通过极可靠）
+  // 身份证号（18位 + 校验位验证，校验通过即极可靠）
   {
     type: 'ID_CARD',
     pattern: /(?<!\d)\d{17}[\dXx](?!\d)/g,

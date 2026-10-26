@@ -1,25 +1,8 @@
-// 欧盟区域规则集（Profile 按 'eu' 类别启用）
-//
-// 两条规则的校验强度不同，这里是刻意的：
-//   IBAN  mod-97 校验（ISO 13616）——15~34 位任意字符串通过的概率约 1/97，
-//         再加上长度区间，误报率极低，因此给 high
-//   VAT   只有逐国格式校验，没有通用校验位。好处是「国家前缀 + 位数」
-//         本身就很有辨识度；代价是理论误报率高于 IBAN，因此给 medium
-//         （逐国校验位如 DE 的 MOD 11,10、FR 的 key 尚未实现，属于后续迭代）
+// 欧盟区域规则集：IBAN mod-97 强校验（high）、VAT 逐国格式校验（medium，希腊前缀 EL 非笔误）。
 
 import type { DetectionRule } from '../../types'
 
-// ============ IBAN ============
-
-/**
- * IBAN mod-97 校验（ISO 13616）。
- *
- * 算法：把前 4 位移到末尾，字母换成两位数字（A=10 … Z=35），
- * 然后对 97 取模，结果必须为 1。逐位取模避免大整数溢出。
- *
- * 这里不对照「每国固定长度表」再收一道：mod-97 已经是强校验，
- * 而长度表是一张需要跟着 ISO 更新维护的数据表，收益不抵维护成本。
- */
+// IBAN mod-97 校验（ISO 13616）：前 4 位移到末尾、字母换两位数字（A=10…Z=35）后对 97 取模须为 1（逐位取模避免大整数溢出）；不另对照「每国固定长度表」——mod-97 已是强校验。
 export const isValidIBAN = (raw: string): boolean => {
   const iban = raw.replace(/[\s-]/g, '').toUpperCase()
   if (iban.length < 15 || iban.length > 34) return false
@@ -28,7 +11,6 @@ export const isValidIBAN = (raw: string): boolean => {
   const rearranged = iban.slice(4) + iban.slice(0, 4)
   let remainder = 0
   for (const ch of rearranged) {
-    // 字母 → 10..35（两位十进制），逐位滚动取模
     const chunk = ch >= 'A' ? String(ch.charCodeAt(0) - 55) : ch
     for (const digit of chunk) {
       remainder = (remainder * 10 + Number(digit)) % 97
@@ -37,10 +19,7 @@ export const isValidIBAN = (raw: string): boolean => {
   return remainder === 1
 }
 
-// ============ VAT ============
-
-// 欧盟各国增值税号格式（含 XI = 北爱尔兰，沿用欧盟规则）
-// 希腊的增值税号前缀是 EL 而非 ISO 国家码 GR——这是 VIES 的定义，不是笔误
+// 欧盟各国增值税号格式（含 XI = 北爱尔兰）
 const EU_VAT_PATTERNS: Record<string, RegExp> = {
   AT: /^ATU\d{8}$/,
   BE: /^BE[01]\d{9}$/,
@@ -72,16 +51,12 @@ const EU_VAT_PATTERNS: Record<string, RegExp> = {
   XI: /^XI\d{9}$/
 }
 
-/** 欧盟增值税号：按国家前缀查对应格式，未收录的国家一律不收 */
 export const isValidEUVAT = (raw: string): boolean => {
   const vat = raw.replace(/[\s.-]/g, '').toUpperCase()
   const pattern = EU_VAT_PATTERNS[vat.slice(0, 2)]
   return !!pattern && pattern.test(vat)
 }
 
-// ============ 规则 ============
-
-// 候选国家前缀（与 EU_VAT_PATTERNS 的键保持一致，源串由它生成，避免两处走样）
 const VAT_PREFIX_SOURCE = Object.keys(EU_VAT_PATTERNS).join('|')
 
 export const euRules: DetectionRule[] = [

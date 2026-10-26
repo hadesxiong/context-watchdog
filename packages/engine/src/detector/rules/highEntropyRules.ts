@@ -1,9 +1,8 @@
-// HIGH_ENTROPY 规则 - 高熵字符串检测
+// HIGH_ENTROPY 规则：阈值由 Profile 类别灵敏度提供；剥离 "KEY=" 前缀、含 '@' 的候选先让位给 EMAIL / DB_PASSWORD 规则。
 
 import type { DetectionItem } from '../../types'
 import { generateId } from '../../utils/id'
 
-// 计算高熵字符串的信息熵
 export const calculateEntropy = (str: string): number => {
   const freq: Record<string, number> = {}
   for (const char of str) {
@@ -18,13 +17,11 @@ export const calculateEntropy = (str: string): number => {
   return entropy
 }
 
-// 检测高熵字符串（thresholds 由 Profile 的类别灵敏度提供）
 export const detectHighEntropy = (
   text: string,
   thresholds: { minLength: number; minEntropy: number } = { minLength: 25, minEntropy: 3.5 }
 ): DetectionItem[] => {
   const items: DetectionItem[] = []
-  // 匹配长度>=阈值的字符串（支持更多特殊字符）
   const pattern = new RegExp(`[A-Za-z0-9!@#$%^&*()_+\\-=\\/\\\\[\\]{}:;"'.,<>?~\`|]{${thresholds.minLength},}`, 'g')
   let match
 
@@ -32,8 +29,7 @@ export const detectHighEntropy = (
     let str = match[0]
     let strStart = match.index!
 
-    // 剥离 "KEY=" 前缀：高熵候选常吞掉整个环境变量赋值行，
-    // 导致 key 名被一并替换（Phase 1 修复），值部分交给 ENV_PASSWORD 规则
+    // 剥离 "KEY=" 前缀：候选常吞掉整个赋值行、把 key 名也一并替换掉；值部分交给 ENV_PASSWORD 规则
     const assignmentPrefix = str.match(/^([A-Z0-9_]{2,40})=/)
     if (assignmentPrefix) {
       strStart += assignmentPrefix[0].length
@@ -41,8 +37,7 @@ export const detectHighEntropy = (
       if (str.length < thresholds.minLength) continue
     }
 
-    // Phase 1 修复：含 '@' 的候选先做邮箱/连接串判定
-    // 命中则让位给 EMAIL / DB_PASSWORD 规则，避免高熵 span 吞掉 '@' 后半段导致截断式替换
+    // 含 '@' 的候选先做邮箱/连接串判定，命中则让位给 EMAIL / DB_PASSWORD 规则，避免高熵 span 吞掉 '@' 后半段造成截断式替换
     if (str.includes('@')) {
       const isEmailLike = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/.test(str)
       const isConnectionLike = /:\S*@\S/.test(str)

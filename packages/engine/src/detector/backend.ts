@@ -1,19 +1,7 @@
-// AI 推理后端抽象。
-//
-// 引擎（packages/engine）不持有任何模型运行时：不静态 import gliner /
-// onnxruntime-web / @xenova/transformers。检测管线通过这里的接口取得 AI 能力，
-// 由各宿主在启动时注册自己的实现。
-//
-// 为什么用单例注入而不是把 backend 作为 detect() 的参数：
-// detect() 有三个调用群体（侧栏 store、service worker、tests），逐个改签名会产生
-// 无意义的连锁改动。单例注入让调用点零改动，且语义天然正确——
-//   · tests（node 环境）不注册后端 → getInferenceBackend() === null → 走纯正则，
-//     与"模型未就绪"的历史行为完全一致；
-//   · 扩展注册 LocalBackend（侧栏 / service worker 内加载，见 src/model/）；
-//   · 后续 offscreen 单宿主与 Node 代理各自注册自己的实现。
+// AI 推理后端抽象：引擎不持有模型运行时；单例注入让调用点零改动——tests 不注册即走纯正则，各宿主启动时注册自己的实现。
 import type { SceneType } from './sceneDetector'
 
-// 置信度分类阈值（Phase 2 下调：GLiNER-small 在密钥/PII 场景超 0.8 的比例很低）
+// 置信度分类阈值（GLiNER-small 在密钥/PII 场景超 0.8 的比例很低，上限只给 0.65）
 export const CONFIDENCE_THRESHOLDS = {
   SENSITIVE: 0.65,     // > 0.65 → 显然敏感
   UNCERTAIN: 0.35,     // < 0.35 → 显然不敏感
@@ -34,7 +22,6 @@ export interface ContentEntity extends InferenceEntity {
   scene: SceneType
 }
 
-// 实体分类
 export type EntityCategory = 'sensitive' | 'not_sensitive' | 'uncertain'
 
 // 按置信度分档。管线据此决定"验证后采纳"还是"回流正则复检"。
