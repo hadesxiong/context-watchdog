@@ -1,10 +1,7 @@
 # ContextWatchdog 检验样例与 TC 索引
 
 > 发布前手动验证的入口：环境准备、可复用检验样例（输入夹具）、TC 目录与自动化基线。
-> **完整验收步骤与逐条预期属作者发布过程文档，已移出仓库**（作者自存；
-> 分层与移出沿革见 `CHANGELOG.md` ㉔/㉕），此处每条 TC 只保留编号、标题与一句核心判据。
-> 实现轮次与结案记录见 `CHANGELOG.md`，当前状态见 `TODO.md`；
-> 自动化测试基线见附录 A（`npm test`），本文档不重复自动化已覆盖的内容。
+> **完整验收步骤与逐条预期属作者发布过程文档，已移出仓库**（作者自存），此处每条 TC 只保留编号、标题与一句核心判据；实现轮次与结案见 `CHANGELOG.md`，当前状态见 `TODO.md`。自动化测试基线见附录 A（`npm test`），本文档不重复自动化已覆盖的内容。
 
 ## 0. 环境准备
 
@@ -21,30 +18,22 @@ npm run build:firefox   # Firefox：about:debugging → 加载临时附加组件
 ### 检验样例文本
 
 > **复制注意**：
-> 1. 下列样例一律**整段复制代码块内容**——不要带反引号/前后空格/表格符号，行首「顶格」。
->    行首任何不可见字符都会让 env 规则（`^` 锚点）失配，造成 `KEY=值` 漏检；
-> 2. 除注明「单独检测」外，样例**一次贴入同一文本框、一次检测**——占位符序号
->    （如 `<<手机号:2>>`）按单次检测计数，分次贴入序号会重置；
-> 3. 样例 A/B/C/E 在「不限」档、AI 开/关均可测（正则档行为与 AI 无关）；
->    样例 D 必须 AI 就绪——用于验证「中文 AI 跳过守卫」：AI 在场也不得给 D 补出占位符。
+> 1. 下列样例一律**整段复制代码块内容**——不要带反引号/前后空格/表格符号，行首「顶格」。行首任何不可见字符都会让 env 规则（`^` 锚点）失配，造成 `KEY=值` 漏检；
+> 2. 除注明「单独检测」外，样例**一次贴入同一文本框、一次检测**——占位符序号（如 `<<手机号:2>>`）按单次检测计数，分次贴入序号会重置；
+> 3. 样例 A/B/C/E 在「不限」档、AI 开/关均可测（正则档行为与 AI 无关）；样例 D 必须 AI 就绪——用于验证「中文 AI 跳过守卫」：AI 在场也不得给 D 补出占位符。
 
 **样例 A**——密钥类检测（4 行，真换行）：
-
 ```
 DB_PASSWORD=Tr0ub4dor!#2024
 STRIPE_KEY=sk_live_51N3xAbCdEfGhIjKlMnOpQrStUv
 JWT_TOKEN=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N65IhHAA8ogYl4pMWj7DlE
 REDIS_URL=redis://cache01:6379/0
 ```
-
 **样例 B**——PII 类检测（单行；卡号为 Luhn 合法校验位）：
-
 ```
 联系人张三，手机 13812345678，身份证 11010519491231002X，银行卡 6222021202021234563，邮箱 zhang.san@example.com，住址北京市海淀区中关村大街 1 号，服务器 IP 192.168.10.23，车牌京A12345
 ```
-
 **样例 C**——弱值/无敏感不误报（5 行，**真换行**——不要复制成字面 `\n` 单行）：
-
 ```
 EMPTY_PASSWORD=
 SHORT_PASS=ab
@@ -52,36 +41,28 @@ NUMERIC_ONLY=12345678901234567890
 WEAK_PASS=password123
 今天天气不错，适合出去玩。
 ```
-
 **样例 D**——AI 中文跳过守卫（姓名/地址自由文本，需 AI 就绪；就绪也不得补出姓名/地址）：
-
 ```
 用户李雷的收货地址是上海市浦东新区世纪大道 100 号，联系电话 13905551234，订单备注：请放在前台。
 ```
-
 **样例 E**——值传播/同值同占位符（3 行；同一密码出现 3 次：1 次带 `DB_PASSWORD=` 上下文，2 次裸露）：
-
 ```
 DB_PASSWORD=Tr0ub4dor!#2024
 最后再强调一遍：Tr0ub4dor!#2024 千万别泄漏
 收尾再重复一次 Tr0ub4dor!#2024 记得轮换
 ```
-
-**样例 F**——短密钥族（4 行，真换行；覆盖 sk-ant-/SG./hf_/PMAK- 四种形状，
-其余家族由 `tests/unit/apiKeyRules.test.ts` 构造串覆盖）：
-
+**样例 F**——短密钥族（4 行，真换行；覆盖 sk-ant-/SG./hf_/PMAK- 四种形状，其余家族由 `tests/unit/apiKeyRules.test.ts` 构造串覆盖）：
 ```
     ANTHROPIC_KEY=sk-ant-api03-FakeKeyFakeKeyFakeKeyFakeKey1234
     SENDGRID_KEY=SG.FakeBodyAbCdEfGhIjKl.SecRetAbCdEfGhIjKlMnOpQr
     HF_TOKEN=hf_FakeTokenAbCdEfGhIjKlMnOpQrStUvWx1234567
     POSTMAN_KEY=PMAK-a1B2a1B2a1B2a1B2a1B2-c3D4c3D4c3D4c3D4c3D4
 ```
-
 ---
 
 ## TC 索引
 
-> 编号在仓内可解析（spec、CHANGELOG、源码注释均引用）；完整步骤与逐条预期见作者自存归档。
+> 编号在仓内可解析（spec、CHANGELOG、源码注释均引用）。
 
 ### TC-01 安装与加载
 - **TC-01-1** Chrome 加载 —— 无任何警告加载 `dist/`，图标正常，点图标开侧栏。
@@ -140,11 +121,11 @@ DB_PASSWORD=Tr0ub4dor!#2024
 - **TC-07-9** 粘贴链路的 AI 二次升级 —— 正则立即落地、AI 增量二次替换；任何失败保正则不回退原文。
 
 ### TC-08 UI 细节（判据已随㉕移出，作者自存）
-- **TC-08-1** 弹窗规范 —— 判据在作者归档。
-- **TC-08-2** 明暗主题 —— 判据在作者归档。
-- **TC-08-3** 引擎状态面板 —— 判据在作者归档。
-- **TC-08-4** 输入焦点统一 —— 判据在作者归档。
-- **TC-08-5** 间距目视 —— 判据在作者归档。
+- **TC-08-1** 弹窗规范
+- **TC-08-2** 明暗主题
+- **TC-08-3** 引擎状态面板
+- **TC-08-4** 输入焦点统一
+- **TC-08-5** 间距目视
 
 ### TC-09 边界与安全
 - **TC-09-1** AI 关闭零网络 —— 正常使用零外部请求、控制台零报错。
@@ -156,24 +137,10 @@ DB_PASSWORD=Tr0ub4dor!#2024
 ## 附录 A：自动化测试基线
 
 - 运行：`npm test`（vitest，期望 **436 passed / 33 文件**）；`npm run typecheck` 0 错误。
-- 浏览器探针：`npm run probe:layout`（侧栏布局 85 项，无头 Chrome + CDP）、
-  `npm run probe:widget`（授权站点挂件 / iframe 不挂 / 未授权零注入 / 不影响页面布局 /
-  收起态 44×44 / 12px 圆角矩形 / mark 跟随明暗主题换色 / 暗色下面板有边框 /
-  「在侧边栏中打开」真的打开面板并切到已打开态 / 侧栏开/关的实时推送使按钮双向即时翻转 /
-  展开态轮询一个周期后不把「已打开」翻回 / 页面重载后挂件初始即「已打开」禁用态 /
-  删除后自动重挂，共 20 项，需要 Chrome for Testing 或 Chromium——正式版 Chrome 与
-  新版 Edge 会忽略 `--load-extension`，Windows 上用 `CHROME_PATH` 指向 Chromium
-  （如 `%LOCALAPPDATA%\ms-playwright\chromium-*\chrome-win64\chrome.exe`））。
+- 浏览器探针：`npm run probe:layout`（侧栏布局 85 项，无头 Chrome + CDP）、`npm run probe:widget`（授权站点挂件 / iframe 不挂 / 未授权零注入 / 不影响页面布局 / 收起态 44×44 / 12px 圆角矩形 / mark 跟随明暗主题换色 / 暗色下面板有边框 / 「在侧边栏中打开」真的打开面板并切到已打开态 / 侧栏开/关的实时推送使按钮双向即时翻转 / 展开态轮询一个周期后不把「已打开」翻回 / 页面重载后挂件初始即「已打开」禁用态 / 删除后自动重挂，共 20 项），需要 Chrome for Testing 或 Chromium——正式版 Chrome 与新版 Edge 会忽略 `--load-extension`，Windows 上用 `CHROME_PATH` 指向 Chromium（如 `%LOCALAPPDATA%\ms-playwright\chromium-*\chrome-win64\chrome.exe`）。
 - 覆盖分布：
   - `tests/golden/`（4 文件）：内置三档档案 + 白名单的端到端金样例断言；
-  - `tests/unit/`（26 文件）：正则规则/值过滤、自然语言口令（构造串）、命令行口令
-    （构造串）、短密钥族（构造串）、自定义规则 ReDoS、
-    管线配置（正则恒开）、store 状态机、模型下载（续传/退避/看门狗/缓存/锁/版本探测）、
-    宿主状态归并、有效 AI 判定（全局 × 本站 × 宿主）、粘贴改写与 AI 升级守卫、
-    站点匹配、档案 CRUD/导入导出、替换引擎、基础功能、
-    跨浏览器面板状态解析（`panelState`：getContexts 复数 filter / FF `isOpen` ∪
-    弹窗 `storage.session` 自追踪 / 文案键按宿主选择）；
+  - `tests/unit/`（26 文件）：正则规则/值过滤、自然语言口令（构造串）、命令行口令（构造串）、短密钥族（构造串）、自定义规则 ReDoS、管线配置（正则恒开）、store 状态机、模型下载（续传/退避/看门狗/缓存/锁/版本探测）、宿主状态归并、有效 AI 判定（全局 × 本站 × 宿主）、粘贴改写与 AI 升级守卫、站点匹配、档案 CRUD/导入导出、替换引擎、基础功能、跨浏览器面板状态解析（`panelState`：getContexts 复数 filter / FF `isOpen` ∪ 弹窗 `storage.session` 自追踪 / 文案键按宿主选择）；
   - `tests/perf/longtext.test.ts`：长文本性能护栏；
   - `tests/regression/`（2 文件）：历史缺陷回归 + CJK 边界。
-- 原则：本文档 TC 只登记目录与核心判据；**必须真机判定**（视觉、真实下载、权限弹窗、
-  真实推理）的完整步骤由作者在发布时执行（判据明细自存仓外）；纯逻辑一律以自动化为准。
+- 原则：本文档 TC 只登记目录与核心判据；**必须真机判定**（视觉、真实下载、权限弹窗、真实推理）的完整步骤由作者在发布时执行（判据明细自存仓外）；纯逻辑一律以自动化为准。

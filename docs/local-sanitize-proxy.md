@@ -1,10 +1,7 @@
 # ② 本地脱敏代理服务（拦截出网请求 + 白名单 + 溯源审计）
 
 > 状态：设计稿（**未实现**）。这是 1.0.0 之后的第二条线。
-> 关联现状：`packages/engine/src/detector/{pipeline,profiles}.ts`、
-> `packages/engine/src/detector/rules/`、`packages/engine/src/replacer/*`、
-> `packages/engine/src/sites.ts`、`packages/engine/src/types/index.ts`
-> （引擎零宿主依赖，因此可在 Node 下直接复用）
+> 关联现状：`packages/engine/src/detector/{pipeline,profiles}.ts`、`packages/engine/src/detector/rules/`、`packages/engine/src/replacer/*`、`packages/engine/src/sites.ts`、`packages/engine/src/types/index.ts`（引擎零宿主依赖，因此可在 Node 下直接复用）
 
 ---
 
@@ -23,17 +20,9 @@
 
 ## 1. 目标与非目标
 
-**目标**
+**目标**：在**出网前**拦截 LLM 请求体、按策略做 `audit / sanitize / block`；提供白名单（值 / 域名 / 规则类型 / 仓库路径）；提供**溯源审计**——谁、什么时候、在哪个应用、命中了什么类型、做了什么动作，**不含原文**。
 
-1. 在**出网前**拦截 LLM 请求体，按策略做 `audit / sanitize / block`。
-2. 提供白名单（值 / 域名 / 规则类型 / 仓库路径）。
-3. 提供**溯源审计**：谁、什么时候、在哪个应用、命中了什么类型、做了什么动作——**不含原文**。
-
-**非目标（本期不做）**
-
-- 响应体清洗（流式 SSE 不动）。
-- 系统级 TLS MITM（本期只做 base_url 覆盖；MITM 列入后续可选）。
-- 跨应用 UI 注入（Accessibility）——见 ①/评估结论，优先级最低。
+**非目标（本期不做）**：响应体清洗（流式 SSE 不动）；系统级 TLS MITM（本期只做 base_url 覆盖，MITM 列入后续可选）；跨应用 UI 注入（Accessibility）——见 ①/评估结论，优先级最低。
 
 ---
 
@@ -58,12 +47,7 @@ AI 应用 / CLI / IDE
    ▼
 ┌──────────────────────────────────────────────┐
 │ contextwatchdog-proxy（本地 Node 进程，127.0.0.1） │
-│  1) 路由：识别上游（openai/anthropic/自定义） │
-│  2) 抽取：从 JSON 里取出所有 prompt 字符串     │
-│  3) 检测：detect(text, profile)  ← core 复用  │
-│  4) 策略：audit / sanitize / block            │
-│  5) 改写：sanitizeText() 回写 JSON（保结构合法）│
-│  6) 审计：写元数据（无原文）                   │
+│  路由 → 抽取 → 检测 → 策略 → 改写 → 审计（详见 §4） │
 └───────────────┬──────────────────────────────┘
                 │ 改写后的请求体
                 ▼
@@ -178,26 +162,14 @@ interface AuditEvent {
 ## 7. CLI 与集成
 
 ```
-contextwatchdog proxy start [--port 8787] [--profile universal]
-                       [--upstream openai=https://api.openai.com]
-                       [--mode sanitize|audit|block] [--fail-closed]
-                       [--allow-repo <glob>] [--retention 30d]
+contextwatchdog proxy start [--port 8787] [--profile universal] [--upstream openai=https://api.openai.com] [--mode sanitize|audit|block] [--fail-closed] [--allow-repo <glob>] [--retention 30d]
 contextwatchdog proxy status | stop | pause --for 15m
 contextwatchdog proxy audit [--since 24h] [--type API_KEY] [--json]
 contextwatchdog proxy allow <eventId>            # 会话级白名单
 contextwatchdog run -- <cmd>                     # 注入环境变量后运行子进程
 ```
 
-`contextwatchdog run` 的行为（一次性上手的关键）：
-
-```bash
-OPENAI_BASE_URL=http://127.0.0.1:8787/openai/v1
-ANTHROPIC_BASE_URL=http://127.0.0.1:8787/anthropic
-HTTP_PROXY=http://127.0.0.1:8787        # 可选，后续 MITM 模式
-contextwatchdog run -- codex
-```
-
-代理内部用**路径前缀**路由上游：`/openai/*` → openai、`/anthropic/*` → anthropic，其余 404（避免变成通用代理）。
+`contextwatchdog run` 注入 `OPENAI_BASE_URL=http://127.0.0.1:8787/openai/v1`、`ANTHROPIC_BASE_URL=http://127.0.0.1:8787/anthropic`（可选 `HTTP_PROXY=http://127.0.0.1:8787`，后续 MITM 模式）后起子进程，例如 `contextwatchdog run -- codex`。代理内部用**路径前缀**路由上游：`/openai/*` → openai、`/anthropic/*` → anthropic，其余 404（避免变成通用代理）。
 
 ### 失败语义
 
@@ -216,12 +188,7 @@ contextwatchdog run -- codex
 | `modelDownload` | ⚠️ 需替换实现 | 依赖 `caches`（`modelDownload.ts:261,331`）与 `chrome.storage` 锁（`:872`）；Node 侧要么注入 `fetch/cache` 适配（模块本身已支持注入），要么改为本地文件缓存 |
 | GLiNER 推理 | ⚠️ 需后端切换 | 扩展里是 `onnxruntime-web` + 自定义 vite alias shim（`vite.config.ts:31-34`）；Node 侧建议走 `onnxruntime-node`（真线程，快得多），需抽象一个 `InferenceBackend` |
 
-**抽象建议**：把"检测能力"抽成 `DetectionService` 接口，两处实现：
-
-- `ExtensionDetectionService`（现状：本地/offscreen 宿主，见 ①）
-- `NodeDetectionService`（代理侧：文件缓存 + onnxruntime-node）
-
-这样 ① 和 ② 共享 `core/**` 而互不依赖宿主细节。
+**抽象建议**：把"检测能力"抽成 `DetectionService` 接口，两个实现——`ExtensionDetectionService`（现状：本地/offscreen 宿主，见 ①）与 `NodeDetectionService`（代理侧：文件缓存 + onnxruntime-node），使 ① 和 ② 共享 `core/**` 而互不依赖宿主细节。
 
 **AI 在代理侧的成本**：模型 183MB 首跑下载（可复用同一套多源回退/断点续传逻辑，改注入 `fetch` + 文件缓存）；常驻内存一份；正则档 < 10ms，AI 档按段计（同扩展的级联上限）。
 
@@ -233,21 +200,14 @@ contextwatchdog run -- codex
 
 - 抽取器：各上游 schema 的候选字段抽取（含 `content` 为数组/字符串两种形态、`tools[].function.arguments` 是字符串化 JSON 的坑）。
 - 改写器：改写后 JSON 可解析；未命中字段保持字节级不变；多模态字段不动。
-- 策略裁决：`audit/sanitize/block` × 类型 × 白名单真值表。
+- 策略裁决：`audit/sanitize/block` × 类型 × 白名单真值表；降级：畸形 JSON / 超长 body / 上游 5xx → 直通 + `degraded`。
 - **审计红线测试**：构造含明显密钥的请求 → 断言审计记录里**不出现**该密钥的任何子串（含 base64/哈希前的原值）。
-- 降级：畸形 JSON / 超长 body / 上游 5xx → 直通 + `degraded`。
 
 **集成测试（起真实 server + stub 上游）**
 
-- 起代理在 0 端口 → 起一个 stub 上游 → 发带密钥的 `chat/completions` → 断言：stub 收到的 body 已被脱敏、且不含原值；流式响应原样透传（SSE chunk 时间戳/顺序不变）。
-- `--fail-closed` 下检测异常 → 返回阻断错误。
+- 起代理在 0 端口 → 起一个 stub 上游 → 发带密钥的 `chat/completions` → 断言：stub 收到的 body 已被脱敏、且不含原值；流式响应原样透传（SSE chunk 时间戳/顺序不变）；`--fail-closed` 下检测异常 → 返回阻断错误。
 
-**验证命令**
-
-```
-npm run typecheck && npx vitest run          # 扩展侧基线不回归（311 项）
-npm run build && npm run probe:layout        # 扩展侧不受影响（本设计不改扩展）
-```
+**验证命令**：`npm run typecheck && npx vitest run`（扩展侧基线不回归，311 项）；`npm run build && npm run probe:layout`（扩展侧不受影响，本设计不改扩展）。
 
 ---
 

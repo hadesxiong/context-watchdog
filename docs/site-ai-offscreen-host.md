@@ -1,26 +1,15 @@
 # ① 授权站点 AI 增强（页面挂件控制面 + 单一模型宿主）
 
-> 状态：**S1–S4 已实现**（offscreen 宿主、侧栏客户端、粘贴 AI 升级、页面挂件）；S5 的文案、文档、挂件探针与宿主销毁验证已完成，剩作者真机手动验收。这是 1.0.0 之后的第一条线。
-> 关联现状：`packages/extension/src/background/{service-worker,pasteEntryPoint}.ts`、
-> `packages/engine/src/detector/{pipeline}.ts`、
-> `packages/extension/src/model/{contentDetector,modelDownload}.ts`、
-> `packages/extension/src/stores/detection.ts`、`docs/spec.md`
+> 状态：**S1–S4 已实现**，S5 的文案、文档、挂件探针与宿主销毁验证已完成，剩作者真机手动验收。
+> 关联现状：`packages/extension/src/background/{service-worker,pasteEntryPoint}.ts`、`packages/engine/src/detector/{pipeline}.ts`、`packages/extension/src/model/{contentDetector,modelDownload}.ts`、`packages/extension/src/stores/detection.ts`、`docs/spec.md`
 
 ---
 
 ## 0. 目标与非目标
 
-**目标**
+**目标**：授权站点上粘贴时在现有正则档外可选叠加 GLiNER AI 检测（逐站控制，默认关闭）；页面上提供**常驻小挂件**作为入口（本站 AI 开关 + 打开侧边栏）；用户明确知情"AI 档会有一点延迟"。
 
-1. 授权站点上粘贴时，除了现有的正则档，可选叠加 GLiNER AI 检测（逐站控制，默认关闭）。
-2. 在授权站点页面上提供一个**常驻小挂件**作为入口：本站 AI 开关 + 打开侧边栏。
-3. 用户明确知情"AI 档会有一点延迟"。
-
-**非目标（本期不做）**
-
-- contenteditable 富文本路径的 AI 增强（见 §3.5 结论）。
-- 把模型放进页面/内容脚本（见 §1 否决理由）。
-- 模型推理分片/多线程优化（`numThreads=1` 保持不变）。
+**非目标（本期不做）**：contenteditable 富文本路径的 AI 增强（见 §3.5 结论）；把模型放进页面/内容脚本（见 §1 否决理由）；模型推理分片/多线程优化（`numThreads=1` 保持不变）。
 
 ---
 
@@ -36,13 +25,9 @@
 
 **否决：把模型放进授权站点的常驻 document（内容脚本）**
 
-1. 内容脚本与宿主页面**同一渲染进程、同一主线程** → 推理期间卡死用户正在用的 AI 对话页（几百 ms ~ 秒级）。
-2. 每个授权标签页一份模型实例 → 内存 ×N。
-3. 宿主活不过一次导航：注入函数随导航/SPA 重挂载重建，等于每次都要重建 ORT 会话。
-4. WASM 编译受 CSP 管控，内容脚本很可能继承**宿主页面**的 CSP。**这一条尚未实测**，列入 §10 待验证项（我判断成立，但以实测为准）。
-5. 反过来说，这些成本 offscreen 都没有：**独立进程 + 全局仅一份 + 生命周期独立于 SW**（除 `AUDIO_PLAYBACK` 外无 30s 上限）。
-
-**保留：页面挂件本身**——它是**控制面**，成本几十 KB，不需要模型、不需要 WASM、不需要网络。
+1. 内容脚本与宿主页面**同一渲染进程、同一主线程** → 推理期（几百 ms ~ 秒级）卡死用户正在用的页面；每个授权标签页一份模型实例 → 内存 ×N。
+2. 宿主活不过一次导航：注入函数随导航/SPA 重挂载重建，等于每次都要重建 ORT 会话；WASM 编译受 CSP 管控，内容脚本很可能继承**宿主页面**的 CSP（尚未实测，列入 §10 待验证项）。
+3. 这些成本 offscreen 都没有：**独立进程 + 全局仅一份 + 生命周期独立于 SW**（除 `AUDIO_PLAYBACK` 外无 30s 上限）。反过来说，**保留页面挂件本身**——它是**控制面**，成本几十 KB，不需要模型、不需要 WASM、不需要网络。
 
 ---
 
@@ -66,8 +51,7 @@
 
 **关键决策**
 
-- **D1**：offscreen 是 Chrome/Edge 下**唯一的模型宿主**；侧栏不再自己加载模型（改为客户端）。
-- **D2**：Firefox 无 `chrome.offscreen` → 走 `LocalHost`（侧栏内加载，即现状），接口一致。
+- **D1/D2**：offscreen 是 Chrome/Edge 下**唯一的模型宿主**，侧栏不再自己加载模型（改为客户端）；Firefox 无 `chrome.offscreen` → 走 `LocalHost`（侧栏内加载，即现状），接口一致。
 - **D3**：所有模型流量由 **SW 统一路由**（避免"多上下文广播同一 `runtime.sendMessage`"的路由歧义）。
 - **D4**：页面挂件**只做控制面**，自身不引入模型/WASM。
 - **D5**：AI 是**二次升级**而不是首答——正则结果先落地，AI 结果到达后在守卫通过时替换（见 §3.5）。
@@ -78,38 +62,23 @@
 
 ### 3.1 offscreen 模型宿主（新增）
 
-新增文件：
-
-- `src/offscreen/index.html`（空壳页面，随手挂载入口脚本）
-- `src/offscreen/host.ts`（宿主逻辑）
-
-宿主职责：
+新增 `src/offscreen/index.html`（空壳页面，挂载入口脚本）与 `src/offscreen/host.ts`（宿主逻辑）。宿主职责：
 
 ```
 onConnect('pg-model-host')
-  ├─ ENSURE      → preloadModels(onProgress,onWaiting,onDownloadStart) 幂等
-  │                进度经 Port 上报给 SW（宿主自己写不了 storage.session）
-  ├─ DETECT      → detect(text, profile, { enableContentDetection: true }) → sanitizeText() → 回包
-  ├─ PING        → 返回 ready 状态（SW 冷启动后探测宿主是否还在）
-  └─ UNLOAD      → 不做（见下）
+  ├─ ENSURE   → preloadModels(...) 幂等；进度经 Port 上报给 SW（宿主自己写不了 storage.session）
+  ├─ DETECT   → detect(text, profile, { enableContentDetection: true }) → sanitizeText() → 回包
+  ├─ PING     → 返回 ready 状态（SW 冷启动后探测宿主是否还在）
+  └─ UNLOAD   → 不做（见下）
 ```
 
-> **实测约束**：offscreen 文档只暴露 `chrome.runtime`（`chrome.storage` / `chrome.i18n`
-> 都是 `undefined`）。因此 ① 状态必须由宿主发给 SW、SW 写 `storage.session`；
-> ② 占位符语言只能用 `navigator.language`。这两点已写进 `src/offscreen/host.ts` 的注释。
+> **实测约束**：offscreen 文档只暴露 `chrome.runtime`（`chrome.storage` / `chrome.i18n` 均为 `undefined`）。因此 ① 状态必须由宿主发给 SW、SW 写 `storage.session`；② 占位符语言只能用 `navigator.language`。
 
-生命周期：SW 在需要时 `chrome.offscreen.createDocument({ url, reasons: ['WORKERS'], justification })`（`reasons` 取最贴近的合法值，`WORKERS` 允许在宿主内起 Worker 以便后续切 `proxy=true`），并**用 `chrome.offscreen.hasDocument()` 幂等化**；`creating` 变量必须放在 SW 内存里做并发去重（SW 重启会丢，需先 `hasDocument()` 复查）。
-
-**UNLOAD 为什么不存在**：文档内部的"释放引用"到不了进程消失的程度，真正有效的释放
-就是 `closeDocument()` 销毁整个文档。所以 S2 的"关闭全局 AI"直接销毁文档即可。
-
-> 注意：`chrome.offscreen.createDocument` 只允许**一个** offscreen 文档；与其他潜在用途（未来若要做系统通知等）互斥，需在代码注释中标注占用。
+生命周期：SW 需要时 `chrome.offscreen.createDocument({ url, reasons: ['WORKERS'], justification })`（`WORKERS` 允许宿主内起 Worker，便于后续切 `proxy=true`），并**用 `chrome.offscreen.hasDocument()` 幂等化**；`creating` 变量必须放在 SW 内存里做并发去重（SW 重启会丢，需先 `hasDocument()` 复查）。**UNLOAD 为什么不存在**：文档内部的"释放引用"到不了进程消失的程度，真正有效的释放就是 `closeDocument()` 销毁整个文档；关闭全局 AI 即销毁文档。`chrome.offscreen.createDocument` 只允许**一个** offscreen 文档，与其他潜在用途（未来若要做系统通知等）互斥，需在代码注释中标注占用。
 
 ### 3.2 消息协议（扩展 `src/core/messages.ts`）
 
 ```ts
-// 既有：PASTE_DETECT / PasteDetectResponse 保留（正则档立即回包）
-
 // 新增：SW ↔ offscreen
 export const MODEL_HOST_PORT = 'pg-model-host'
 export interface ModelHostDetectRequest {
@@ -128,33 +97,29 @@ export interface ModelHostDetectResponse {
   error?: string
 }
 
-// 新增：content script ↔ SW（挂件；pattern 一律不传——带路径的条目页面算不出来，
-// 也不可信，SW 用 sender.url 在用户列表里解析最具体的条目）
+// 新增：content script ↔ SW（挂件；pattern 一律不传——带路径的条目页面算不出来也不可信，
+// SW 用 sender.url 在用户列表里解析最具体的条目）
 export const SITE_AI_GET = 'SITE_AI_GET'     // {} → { pattern, globalEnabled, siteEnabled, hostReady, panelOpen? }
 export const SITE_AI_SET = 'SITE_AI_SET'     // { enabled }（站点由 sender.url 推导）
 export const OPEN_SIDE_PANEL = 'OPEN_SIDE_PANEL'   // 同步调 sidePanel.open()（手势），失败退回弹窗
 
-// 新增：SW → tab（AI 二次升级结果）
-export const PASTE_AI_RESULT = 'PASTE_AI_RESULT'
-```
-
-`PASTE_DETECT` 请求扩展两个可选字段（向后兼容）：
-
-```ts
+// 既有 PASTE_DETECT / PasteDetectResponse 保留（正则档立即回包），新增字段（向后兼容）：
 export interface PasteDetectRequest {
   type: typeof PASTE_DETECT
   text: string
   token?: string        // 有 token 且本站 AI 生效时，SW 承诺后续补发 PASTE_AI_RESULT
   sitePattern?: string  // 供 SW 判定本站 AI 是否生效（也可由 sender.tab.url 推断，优先用 sender）
 }
+
+// 新增：SW → tab（AI 二次升级结果）
+export const PASTE_AI_RESULT = 'PASTE_AI_RESULT'
 ```
 
 ### 3.3 侧栏改为客户端
 
-- `useDetectionStore` 的 `initNER()/retryLoadNER()` 改为"请求宿主 ENSURE"，不再 `import preloadModels` 直接调用。
+- store 改造：`initNER()/retryLoadNER()` 改为"请求宿主 ENSURE"，不再 `import preloadModels` 直接调用；`setAiEnabled(false)` → 通知宿主 UNLOAD（释放内存）+ 关闭 offscreen 文档。
 - 模型状态（`nerStatus/nerLoadProgress/nerLoadBytes/nerIndeterminate/nerWaitingOtherWindow/nerDownloadStarted/nerError`）改为**订阅 `chrome.storage.session['contextwatchdog.modelHost']`**，字段一一对应，UI 组件零改动。
 - `detectText()` 改为 `runDetection()` 抽象：宿主可用 → 走宿主（拿 `items`）；否则 → 本地 `detect()`（Firefox / 宿主不可用）。宿主的 `items` 与本地完全同构，`replaceConfigs` 初始化逻辑不变。
-- `setAiEnabled(false)` → 通知宿主 UNLOAD（释放内存）+ 关闭 offscreen 文档。
 
 ### 3.4 页面挂件（控制面，注入函数自包含）
 
@@ -162,8 +127,8 @@ export interface PasteDetectRequest {
 
 ```
 挂件（默认收起为 44px 圆角矩形按钮 + mark，12px 圆角，右下角，z-index 2147483647）
-├─ 展开面板（宽 280px，内边距 16px，头部/提示/按钮间 12–14px，头部左侧同款 mark + 字标，
-│            正文 14px / 提示 13px，暗色下带 30% 亮度边框不与页面融为一体）
+├─ 展开面板（宽 280px，内边距 16px，头部下边距 12px，头部/提示/按钮间 12–14px，提示上下 10/14px，
+│            头部左侧同款 mark + 字标，正文 14px / 提示 13px，暗色下边框 30% 亮度 + 加强投影）
 │   ├─ 行1：本站 AI 增强  [Switch]   副文案：启用后首段粘贴可能慢 1~2 秒
 │   └─ 行2：在侧边栏中打开 / 侧边栏已打开（禁用） / 打开失败（3s）
 └─ 收起（× / Esc / 点击面板外）：仅折叠面板，不写存储，挂件本身常驻
@@ -171,39 +136,13 @@ export interface PasteDetectRequest {
 
 实现要点（全部内联样式，禁止依赖宿主页面 CSS，同现有 `showToast` 的做法）：
 
-1. 挂到 `document.documentElement`，避免 SPA 重渲染 `#root` 时被清掉。
-2. `MutationObserver` 在挂载时立即启动，自身被移除就重挂；另加 3s 心跳兜住
-   `document.open/write` 与 `documentElement` 被整体替换（观察器会随旧节点失效）。
-3. 状态初始化：注入时发 `SITE_AI_GET`（**不带 pattern**——带路径的条目页面算不出来，
-   也不可信；SW 用 `sender.url` 在用户列表里解析出最具体的条目）。
-   回包前开关禁用；SW 瞬时不可用**不卸载**挂件（保持禁用态），只有页面卸载才消失。
-4. 全局 AI 关闭时，Switch 显示为禁用并附文案"需先在侧边栏开启 AI 模型"。
-5. 挂件与粘贴监听共用同一个 `__contextWatchdogInstalled` 守卫（同一次注入调用完成两件事）。
-6. **不新增权限**：授权站点本来就有 host permission；挂件不发起网络请求。
-7. 品牌 mark 随 `args` 传入：SW 用 `?raw` 读 `public/icons/logo.svg` 的**原文**，
-   注入侧按主题染色（亮色墨色 / 暗色浅色，整串替换 `#18181b`）。不走 `<img src>`/`fetch`——
-   宿主页面 CSP 的 `img-src` 可能直接拦，扩展资源还得进 `web_accessible_resources`。
-   换 logo 只改资产一处，挂件与工具栏图标一起更新。
-8. 主题跟随宿主页面：`matchMedia('(prefers-color-scheme: dark)')` 取色板，变化时全量重绘。
-   注入侧不能写 `<style>`（宿主 `style-src` 会拦），所以色板在 JS 里取值、样式走 CSSOM。
-   toast 与挂件共用同一套色板。
-9. 打开侧栏必须**同步发车**：`sidePanel.open()` 只认「用户手势」，手势在监听器返回后的
-   第一个 `await` 就过期（实测报 `may only be called in response to a user gesture`，
-   表现为按钮点了没反应）。授权校验并行进行，只决定回包内容。侧栏 API 不可用或手势
-   已失效时，同一份面板页面退回 `windows.create` 弹窗，按钮必须有反应。
-10. 「在侧边栏中打开」是**状态控件**而非一次性按钮：打开成功切到「侧边栏已打开」禁用态，
-    状态来自 SW 的 `runtime.getContexts`（按 tabId 查 SIDE_PANEL；弹窗兜底按 sidepanel
-    页面的 documentUrl 查 TAB）——在别处关掉侧栏也能同步回可点态。展开期间挂件每 2s
-    轮询一次 `SITE_AI_GET`（收起即停），因此开关/宿主/侧栏三者的变化都能即时反映。
-    请求在途用 `disabled + cursor:wait + 0.6 透明度`，回包后由 render 重建整体复位——
-    不在 DOM 上留残留（曾出现「点一次就永久灰态 + 转圈光标」）。
-11. 宿主预热：`SITE_AI_GET` 发现「全局开 ∧ 本站开 ∧ 宿主没跑」时顺手
-    `ensureModelHost()`（单飞、幂等）。不预热的话，重启浏览器后模型明明已下载，
-    首个页面却一直显示「尚未就绪」，首段粘贴也拿不到 AI；预热后靠上一条的轮询
-    在几秒内翻到可用，无需刷新页面。
-12. 暗色下面板/按钮的边框由 18% 提到 30% 亮度并加强投影：0.18 在深色页面上几乎不可见，
-    面板会与背景连成一片（真机反馈）。间距同轮调整：内边距 14→16px、头部下边距 8→12px、
-    提示上下 6/12→10/14px。
+1. 挂载与重挂：挂到 `document.documentElement`（避免 SPA 重渲染 `#root` 时被清掉）；`MutationObserver` 在挂载时立即启动、自身被移除就重挂，另加 3s 心跳兜住 `document.open/write` 与 `documentElement` 被整体替换（观察器会随旧节点失效）。
+2. 状态初始化：注入时发 `SITE_AI_GET`（**不带 pattern**，理由见 §3.2）。回包前开关禁用；SW 瞬时不可用**不卸载**挂件（保持禁用态），只有页面卸载才消失。全局 AI 关闭时 Switch 禁用并附文案"需先在侧边栏开启 AI 模型"。
+3. 挂件与粘贴监听共用同一个 `__contextWatchdogInstalled` 守卫（同一次注入调用完成两件事）；**不新增权限**（授权站点本来就有 host permission），挂件不发起网络请求。
+4. 样式与主题：品牌 mark 随 `args` 传入——SW 用 `?raw` 读 `public/icons/logo.svg` 的**原文**，注入侧按主题染色（亮色墨色 / 暗色浅色，整串替换 `#18181b`），不走 `<img src>`/`fetch`（宿主页面 CSP 的 `img-src` 可能直接拦，扩展资源还得进 `web_accessible_resources`；换 logo 只改资产一处）。主题跟随宿主页面：`matchMedia('(prefers-color-scheme: dark)')` 取色板，变化时全量重绘；注入侧不能写 `<style>`（宿主 `style-src` 会拦），色板在 JS 里取值、样式走 CSSOM，toast 与挂件共用同一套色板。
+5. 打开侧栏必须**同步发车**：`sidePanel.open()` 只认「用户手势」，手势在监听器返回后的第一个 `await` 就过期（实测报 `may only be called in response to a user gesture`）。授权校验并行进行，只决定回包内容；侧栏 API 不可用或手势已失效时，同一份面板页面退回 `windows.create` 弹窗，按钮必须有反应。
+6. 「在侧边栏中打开」是**状态控件**而非一次性按钮：打开成功切到「侧边栏已打开」禁用态，状态来自 SW 的 `runtime.getContexts`（按 tabId 查 SIDE_PANEL；弹窗兜底按 sidepanel 页面的 documentUrl 查 TAB）——在别处关掉侧栏也能同步回可点态。展开期间挂件每 2s 轮询一次 `SITE_AI_GET`（收起即停），开关/宿主/侧栏三者的变化都能即时反映；请求在途用 `disabled + cursor:wait + 0.6 透明度`，回包后由 render 重建整体复位，不在 DOM 上留残留。
+7. 宿主预热：`SITE_AI_GET` 发现「全局开 ∧ 本站开 ∧ 宿主没跑」时顺手 `ensureModelHost()`（单飞、幂等）——否则重启浏览器后模型明明已下载，首个页面却一直显示「尚未就绪」、首段粘贴拿不到 AI；预热后靠上一条的轮询在几秒内翻到可用，无需刷新页面。
 
 ### 3.5 粘贴链路的 AI 二次升级（状态机）
 
@@ -214,15 +153,13 @@ P0 paste 事件（已存在）
  └─ 乐观插入原文 → setTimeout(0) → computeInsertionRange 校验（已存在，不变）
 P1 发 PASTE_DETECT{ text, token }
 P2 SW 正则档 detect() → sanitizeText() → 立即回 { ok, sanitized, count }（体验同今天，ms 级）
-P3 content script 就地把插入区间替换为 sanitized，记录：
-     appliedText / appliedRange / elementValueAfterApply / token
-     toast = 「已脱敏 N 处」
+P3 content script 就地把插入区间替换为 sanitized，记录 appliedText / appliedRange / elementValueAfterApply / token；toast = 「已脱敏 N 处」
 P4 SW（仅当 本站AI生效 && hostReady && token 存在）异步发起宿主 DETECT（同 original text）
 P5 宿主返回 → SW 发 PASTE_AI_RESULT{ token, sanitized: aiSanitized, count }
 P6 content script 守卫（全部通过才替换）：
-     a) el.value === elementValueAfterApply        （用户没继续输入）
-     b) el.value.slice(appliedRange) === appliedText（正则结果仍在原位）
-     c) aiSanitized 与 appliedText 不同              （AI 确实多检出）
+     a) el.value === elementValueAfterApply          （用户没继续输入）
+     b) el.value.slice(appliedRange) === appliedText （正则结果仍在原位）
+     c) aiSanitized 与 appliedText 不同               （AI 确实多检出）
      d) 距 P3 不超过 AI_UPGRADE_TTL（建议 8000ms）
    → 通过：替换区间 + 光标修正 + toast 改「AI 增强后共脱敏 N 处」
    → 不通过：丢弃升级（**保留正则结果，绝不回退成原文**）
@@ -245,9 +182,7 @@ P6 content script 守卫（全部通过才替换）：
 | `contextwatchdog.modelHost` | **session** | `{ state, percent, received, total, waiting, downloadStarted, error, updatedAt }` | 新增，宿主经 Port 上报、**SW 代写**（宿主只有 `chrome.runtime`）；面板订阅 `storage.onChanged` 渲染 |
 | `contextwatchdog.modelLock` / `lastModelProbe` | local | — | 既有，宿主复用 |
 
-有效 AI 判定：`effectiveAI(site) = aiEnabled && siteAiEnabled[site] && hostReady`。
-
-> `storage.session` 默认 `TRUSTED_CONTEXTS`，SW/扩展页/offscreen 均属可信上下文，无需 `setAccessLevel`。写频率沿用下载器 1s 心跳节流（`HEARTBEAT_THROTTLE_MS`）。
+有效 AI 判定：`effectiveAI(site) = aiEnabled && siteAiEnabled[site] && hostReady`。`storage.session` 默认 `TRUSTED_CONTEXTS`，SW/扩展页/offscreen 均属可信上下文，无需 `setAccessLevel`；写频率沿用下载器 1s 心跳节流（`HEARTBEAT_THROTTLE_MS`）。
 
 ---
 
@@ -279,19 +214,9 @@ P6 content script 守卫（全部通过才替换）：
 
 ## 7. 构建与打包改动
 
-1. `vite.config.ts`：给 `build.rolldownOptions.input` 增加
-   `offscreen: resolve(EXT_ROOT, 'src/offscreen/index.html')`
-   （CRXJS 只按 manifest 发现入口，offscreen 页面不由 manifest 声明，必须显式加入 input；
-   **Vite 8 下写 `rollupOptions.input` 会被静默丢弃**——实测产物里根本没有这个页面，
-   没有任何警告。产物路径 `dist/src/offscreen/index.html`。）
-2. `src/manifest.json`：`permissions` 增加 `"offscreen"`。
-3. `scripts/postbuild.mjs`（Firefox）：
-   - 移除 `offscreen` 权限（Firefox 无此权限，审核会标）。
-   - Firefox 目标不产出 offscreen 入口（`vite.config.ts` 按 mode 排除），因此不会多一份运行时。
-4. CSP 无需改动：`extension_pages` 已含 `wasm-unsafe-eval` 与 `connect-src https:`（`manifest.json:39`），offscreen 页面继承同一策略。
-5. 构建体积（**实测**）：入口 chunk 2.2KB；ORT / transformers / gliner 与侧栏共用同一批
-   chunk（不重复打包），`dist` 总体积仍为 12MB。原先担心的"双份模型运行时"不成立，
-   无需 `manualChunks`。
+1. `vite.config.ts`：`build.rolldownOptions.input` 增加 `offscreen: resolve(EXT_ROOT, 'src/offscreen/index.html')`——CRXJS 只按 manifest 发现入口，offscreen 页面不由 manifest 声明，必须显式加入；**Vite 8 下写 `rollupOptions.input` 会被静默丢弃**（实测无任何警告）。产物路径 `dist/src/offscreen/index.html`。
+2. `src/manifest.json`：`permissions` 增加 `"offscreen"`；`scripts/postbuild.mjs`（Firefox）移除 `offscreen` 权限（Firefox 无此权限，审核会标），且 Firefox 目标不产出 offscreen 入口（`vite.config.ts` 按 mode 排除），不会多一份运行时。
+3. CSP 无需改动：`extension_pages` 已含 `wasm-unsafe-eval` 与 `connect-src https:`（`manifest.json:39`），offscreen 页面继承同一策略。构建体积（**实测**，同 §10）：入口 chunk 2.2KB，ORT / transformers / gliner 与侧栏共用同一批 chunk（不重复打包），`dist` 总体积仍为 12MB，无需 `manualChunks`。
 
 ---
 
@@ -299,19 +224,13 @@ P6 content script 守卫（全部通过才替换）：
 
 **单测（vitest，node 环境）**
 
-- `modelHostState` 纯函数：状态归并（loading→ready/error/timeout）、进度字段映射（与 store 现有语义一致）。
-- AI 二次升级状态机（把 §3.5 的 P3–P6 守卫抽成纯函数放 `src/content/pasteText.ts`，与注入副本同步）：
-  - 守卫 a/b/c/d 各自失败 → 返回"丢弃升级"；
-  - 成功 → 返回替换后的文本与光标位置；
-  - 断言"AI 升级失败时结果 === 正则结果"。
-- 有效 AI 判定 `effectiveAI(site)`（全局 x 站点 x 宿主就绪的真值表）。
+- `modelHostState` 纯函数：状态归并（loading→ready/error/timeout）、进度字段映射（与 store 现有语义一致）；有效 AI 判定 `effectiveAI(site)`（全局 x 站点 x 宿主就绪的真值表）。
+- AI 二次升级状态机（把 §3.5 的 P3–P6 守卫抽成纯函数放 `src/content/pasteText.ts`，与注入副本同步）：守卫 a/b/c/d 各自失败 → 返回"丢弃升级"；成功 → 返回替换后的文本与光标位置；断言"AI 升级失败时结果 === 正则结果"。
 
 **回归**
 
 - `npm run typecheck`、`npx vitest run`（当前基线 436 项）、`npm run build`（零警告）、`npm run probe:layout`（85 项）、`npm run probe:widget`（20 项）必须全绿。
-- 新增探针断言（扩 `scripts/probe-layout.mjs` 或新脚本）：
-  - 挂件在授权站点渲染、无授权站点不渲染；
-  - 挂件不影响页面布局（不产生滚动条、不遮挡输入框，可用简易碰撞检测）。
+- 新增探针断言（扩 `scripts/probe-layout.mjs` 或新脚本）：挂件在授权站点渲染、无授权站点不渲染；不影响页面布局（不产生滚动条、不遮挡输入框，可用简易碰撞检测）。
 
 **手动验收（Chrome，`npm run build` + 加载 `dist/`）**
 
@@ -323,11 +242,7 @@ P6 content script 守卫（全部通过才替换）：
 6. 关闭全局 AI → offscreen 文档被关闭，内存回落。
 7. Firefox 构建 → 侧栏内加载模型，功能可用（AI 仅侧栏路径）。
 
-**性能记录（写入 PR 描述）**
-
-- 首答延迟（正则回包）：应维持现状量级（ms 级）。
-- AI 升级延迟：记录 25KB / 155KB / 516KB 三档从 P3 到 P6 的耗时。
-- 内存：宿主就绪后 offscreen 进程 RSS；与"侧栏自己加载"方案对比（验证 §7 的重复打包/重复内存是否可接受）。
+**性能记录**：首答延迟（正则回包）维持现状量级（ms 级），AI 升级延迟记录 25KB / 155KB / 516KB 三档从 P3 到 P6 的耗时；内存记录宿主就绪后 offscreen 进程 RSS，与"侧栏自己加载"方案对比（验证 §7 的重复打包/重复内存是否可接受）。
 
 ---
 
@@ -347,7 +262,7 @@ P6 content script 守卫（全部通过才替换）：
 
 | 风险 | 等级 | 处置 |
 |---|---|---|
-| **内容脚本能否实例化 WASM（受页面 CSP 限制）** | 中 | **需实测**。这条不是方案的前置条件（方案已不放页面内），但会影响"挂件里能不能做本地兜底检测"。切执行模式后可用带严格 CSP 的测试页 + 加载扩展验证，约 10 分钟 |
+| **内容脚本能否实例化 WASM（受页面 CSP 限制）** | 中 | **需实测**（非方案前置条件——方案已不放页面内，但影响"挂件里能不能做本地兜底检测"）：带严格 CSP 的测试页 + 加载扩展验证 |
 | offscreen 文档与其他潜在用途互斥（只允许一个） | 低 | 代码注释显式占用声明；未来若需第二个用途，改为"类型路由" |
 | 双份模型运行时（侧栏 + offscreen 打包）导致体积/内存增长 | ~~中~~ 已排除 | 实测：入口 chunk 2.2KB，ORT/transformers 与侧栏共用同一批 chunk；S2 后侧栏不再自己加载，运行时只有一份 |
 | SW 与宿主的连接在 SW 重启后断裂 | 中 | `hasDocument()` + `PING` 重连；端口重连要幂等（避免重复 ENSURE 重复下载——已由 `createSingleFlight` + 下载锁兜住） |
@@ -360,28 +275,8 @@ P6 content script 守卫（全部通过才替换）：
 
 ## 11. 与既有代码的具体改动清单
 
-**新增**
+**新增**：`src/offscreen/{index.html,host.ts}`；`src/modelHost/protocol.ts`（端口名 / op / 请求与回包类型 / 状态通知 / 类型守卫）、`state.ts`（状态归并纯函数，已测）、`client.ts`（SW 侧 `ensureModelHost()` / `detectViaModelHost()` / `pingModelHost()` / `closeModelHost()` / `readModelHostState()`）；`src/content/siteWidget.ts`（挂件可测纯部分）+ 注入副本（自包含）。
 
-- `src/offscreen/index.html`、`src/offscreen/host.ts`
-- `src/modelHost/protocol.ts`（端口名 / op / 请求与回包类型 / 状态通知 / 类型守卫）
-- `src/modelHost/state.ts`（状态归并纯函数，已测）
-- `src/modelHost/client.ts`（SW 侧客户端：`ensureModelHost()` / `detectViaModelHost()` /
-  `pingModelHost()` / `closeModelHost()` / `readModelHostState()`）
-- `src/content/siteWidget.ts`（挂件逻辑的可测纯部分）+ 注入副本（自包含）
+**修改**：`src/manifest.json`（+`offscreen` 权限）、`vite.config.ts`（+offscreen input，写在 `rolldownOptions.input`）、`scripts/postbuild.mjs`（Firefox 移除 `offscreen` 权限）、`src/background/service-worker.ts`（路由器：正则档回包 + 宿主转发 + `PASTE_AI_RESULT` 补发 + offscreen 生命周期）、`src/background/pasteEntryPoint.ts`（挂件注入；`token` 透传；`PASTE_AI_RESULT` 监听与守卫）、`src/content/pasteText.ts`（升级守卫纯函数 + `effectiveAI` 判定）、`src/stores/detection.ts`（`runDetection()` 抽象；模型状态改为 session 订阅；`setAiEnabled` 联动宿主）、`docs/spec.md`（已知限制改写；补 offscreen 宿主与逐站 AI 说明）。
 
-**修改**
-
-- `src/manifest.json`（+`offscreen` 权限）
-- `vite.config.ts`（+offscreen input，写在 `rolldownOptions.input`）
-- `scripts/postbuild.mjs`（Firefox 移除 `offscreen` 权限）
-- `src/modelHost/protocol.ts`（协议常量与类型）—— 已落地，路径不是原先设想的 `src/core/`
-- `src/background/service-worker.ts`（路由器：正则档回包 + 宿主转发 + `PASTE_AI_RESULT` 补发 + offscreen 生命周期）
-- `src/background/pasteEntryPoint.ts`（挂件注入；`token` 透传；`PASTE_AI_RESULT` 监听与守卫）
-- `src/content/pasteText.ts`（抽取升级守卫纯函数 + `effectiveAI` 判定）
-- `src/stores/detection.ts`（`runDetection()` 抽象；模型状态改为 session 订阅；`setAiEnabled` 联动宿主）
-- `docs/spec.md`（§已知限制改写；补 offscreen 宿主与逐站 AI 说明）
-
-**测试**
-
-- `tests/unit/modelHost.test.ts`、`tests/unit/siteAi.test.ts`、扩展 `tests/unit/pasteRewrite.test.ts`
-- `scripts/probe-layout.mjs`（或新 `scripts/probe-widget.mjs`）
+**测试**：`tests/unit/modelHost.test.ts`、`tests/unit/siteAi.test.ts`、扩展 `tests/unit/pasteRewrite.test.ts`；`scripts/probe-layout.mjs`（或新 `scripts/probe-widget.mjs`）。

@@ -43,10 +43,10 @@ npm run test            # 运行测试套件（436 项断言）
 
 | 承诺 | 核验方式 |
 |------|----------|
-| **扩展不会把你的文本发送到任何服务器** | `rg -n '\bfetch\s*\(' packages/extension/src` → 只有 `modelDownload.ts` 两处（且都是可注入的 `fetchImpl`，默认取 `globalThis.fetch`，仅用于下载模型）。全仓库无 `XMLHttpRequest` / `sendBeacon` / `WebSocket` / `EventSource` / `navigator.sendBeacon` |
-| **唯一的出网行为是模型下载** | 同上。只有在用户主动开启 AI 档后才会发生，且只访问白名单模型源 |
+| **扩展不会把你的文本发送到任何服务器** | `rg -n '\bfetch\s*\(' packages/extension/src` → 只有 `modelDownload.ts` 两处（可注入的 `fetchImpl`，仅用于下载模型）。全仓库无 `XMLHttpRequest` / `sendBeacon` / `WebSocket` / `EventSource` / `navigator.sendBeacon` |
+| **唯一的出网行为是模型下载** | 同上；仅在用户主动开启 AI 档后发生，仅访问白名单模型源 |
 | **未授权站点零接触** | `rg -n 'content_scripts\|all_urls' packages/extension/src/manifest.json` → 无匹配。manifest 不声明 `content_scripts`，只申请 `optional_host_permissions`，由用户逐站授权 |
-| **扩展不采集任何遥测数据** | 扩展源码与产物内无统计 SDK、无崩溃上报、无行为追踪；构建产物可用 `npm run build` 后自行检查。落地页默认零统计，可选的自托管 Umami（仅页面浏览、无 cookie、不采集文本）由 `apps/site/.env.example` 里的 `UMAMI_*` env 开关控制，并在其隐私页如实披露 |
+| **扩展不采集任何遥测数据** | 扩展源码与产物内无统计 SDK、无崩溃上报、无行为追踪，可用 `npm run build` 后自行检查产物。落地页默认零统计（可选自托管 Umami 详见下节） |
 | **凭据类数据绝不处理** | `password` 类型与隐藏输入框在 `isTextEditable` 处一律跳过，且在粘贴注入与侧栏两条链路上都有护栏 |
 | **发布产物可校验** | 每个 Release 附 `sha256`；许可与第三方声明随产物分发（`LICENSE` / `NOTICE` / `THIRD-PARTY-NOTICES.txt`） |
 
@@ -69,7 +69,7 @@ npm run test            # 运行测试套件（436 项断言）
 
 ## 第三方组件与模型归属
 
-构建时会生成 `THIRD-PARTY-NOTICES.txt` 并随产物一同分发（Apache-2.0 第 4 条、MIT 的版权与许可通知均有此要求）。下面是人可读版本：
+构建时生成 `THIRD-PARTY-NOTICES.txt` 并随产物一同分发。下面是人可读版本：
 
 | 组件 | 用途 | 许可 |
 |-------|------|------|
@@ -83,7 +83,7 @@ npm run test            # 运行测试套件（436 项断言）
 
 > ※ `gliner` 的 `package.json` 声明为 MIT，但其包内 `LICENSE` 文件是 Apache-2.0 全文。**以 `LICENSE` 文件为准**，按 Apache-2.0 处理。这个差异已记录在 `THIRD-PARTY-NOTICES.txt` 中。
 
-**一处值得注意的合规决策**：GLiNER 的 **v0 / v1 是 `cc-by-nc-4.0`（禁止商用）**，自 **v2 起改为 Apache-2.0**。本项目**锁定 v2**，这本身就是一次许可合规决策——如果误用 v1，本项目将无法以任何允许商业化的许可发布。
+**一处合规决策**：GLiNER **v0 / v1 是 `cc-by-nc-4.0`（禁止商用）**，自 **v2 起改为 Apache-2.0**，因此本项目**锁定 v2**。
 
 ## 测试
 
@@ -92,17 +92,16 @@ npm test              # 全量（golden + 回归 + 单元 + 性能）
 npm run test:watch    # 监听模式
 npm run site:check    # 落地页：Astro/TS 诊断
 npm run site:build    # 落地页：静态构建 → apps/site/dist
-npm run check:versions # 版本/许可/canonical 一致性 + 商店提交预检
 ```
 
-目录地图见 [`docs/spec.md`](docs/spec.md) §12；可复用检验样例与 TC 索引见 [`docs/test-cases.md`](docs/test-cases.md)（完整验收步骤为作者发布文档，自存仓外）。
+目录地图见 [`docs/spec.md`](docs/spec.md) §12；可复用检验样例与 TC 索引见 [`docs/test-cases.md`](docs/test-cases.md)。
 
 ## 技术栈
 
 - Vue 3 + Pinia + Tailwind CSS 4 + Reka UI
 - @crxjs/vite-plugin（Manifest V3 构建）
 - gliner + @xenova/transformers + onnxruntime-web（GLiNER 模型，WASM，可选增强）
-- 模型远程加载（主源 ModelScope 镜像，回退 huggingface.co；Range 断点续传 + 指数退避重试 + 停滞看门狗 + Cache Storage 落盘，重开侧栏零下载；失败时静默降级为纯正则，UI 显示降级状态）
+- 模型远程加载（主源 ModelScope 镜像 → 回退 huggingface.co；断点续传 + 落盘缓存，重开侧栏零下载；失败时降级为纯正则，UI 显示降级状态）
 
 ## 发布
 
@@ -127,11 +126,11 @@ npm run release:pack                # 两个可直接上架的 zip + SHA256SUMS 
 | [`TODO.md`](TODO.md) | 当前状态与未结事项 |
 | 落地页 `/changelog/` | 面向用户的更新记录（中英双语） |
 
-设计文档**有意随代码公开**：本项目不申请任何专利，设计本身即构成可实施的现有技术（见 [PATENTS.md](PATENTS.md)）。`site-ai-offscreen-host.md` 与 `local-sanitize-proxy.md` 描述 1.0.0 **之后**的两条线，现在就公开正是为了不留空窗期。
+设计文档**有意随代码公开**：`site-ai-offscreen-host.md` 与 `local-sanitize-proxy.md` 描述 1.0.0 **之后**的两条线，现在就公开（见 [PATENTS.md](PATENTS.md)）。
 
 ## 贡献方式
 
-本项目由作者**单人维护**，**不接收代码合并请求**——这是有意的维护策略，不是对社区的拒绝（详见 [CONTRIBUTING.md](CONTRIBUTING.md)）。
+本项目由作者**单人维护**，**不接收代码合并请求**——这是有意的维护策略（详见 [CONTRIBUTING.md](CONTRIBUTING.md)）。
 
 欢迎：
 
@@ -142,7 +141,7 @@ npm run release:pack                # 两个可直接上架的 zip + SHA256SUMS 
 ## 署名与商标
 
 - 本项目由 **hadesxiong** 开发并维护。
-- **`ContextWatchdog` 名称与图标是作者的商标**，不在 Apache-2.0 的授权范围内（该许可第 6 条明确排除商标授权，只保留"描述来源"的合理使用）。
+- **`ContextWatchdog` 名称与图标是作者的商标**，不在 Apache-2.0 的授权范围内（该许可第 6 条排除商标授权）。
 - 允许：事实性引用，例如 `Based on ContextWatchdog (https://github.com/hadesxiong/context-watchdog)`。
 - 不允许：把 `ContextWatchdog` 用作你的衍生作品名称、图标或包名；暗示你的作品是官方版本或获得原作者背书。
 

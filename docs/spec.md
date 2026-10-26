@@ -1,20 +1,16 @@
 # ContextWatchdog 产品（技术）说明文档
 
-> 面向开发者与技术评审。快速开始见 `README.md`，检验样例与 TC 目录见 `docs/test-cases.md`，
-> 待办状态见 `TODO.md`，实现轮次与结案沿革见 `CHANGELOG.md`。本文档所有描述以代码为准
-> （`packages/`、`apps/`、`scripts/`；版本 1.0.0）。
+> 面向开发者与技术评审。快速开始见 `README.md`，检验样例与 TC 目录见 `docs/test-cases.md`，待办状态见 `TODO.md`，实现轮次与结案沿革见 `CHANGELOG.md`。本文档所有描述以代码为准（`packages/`、`apps/`、`scripts/`；版本 1.0.0）。
 
 ## 1. 产品定位与功能矩阵
 
-**定位**：AI 对话前的本地数据脱敏浏览器扩展（Chrome / Firefox，Manifest V3）。
-用户在任意站点把文本发给 AI 前，自动检测并替换敏感信息；所有处理在浏览器本地完成，
-文本不出机器（唯一网络行为是可选的模型下载）。
+**定位**：AI 对话前的本地数据脱敏浏览器扩展（Chrome / Firefox，Manifest V3）。用户在任意站点把文本发给 AI 前，自动检测并替换敏感信息；所有处理在浏览器本地完成，文本不出机器（唯一网络行为是可选的模型下载）。
 
 | 功能 | 状态 | 说明 |
 |------|------|------|
 | 侧栏手动脱敏 | ✅ | 粘贴/输入 → 点「检测」→ 检出列表 → 单条/一键脱敏 → 复制 |
 | 正则基础引擎 | ✅ 恒开 | 14 类检测（密钥 5 + PII 7 + 高熵 + 自定义），SW 亦可用 |
-| AI 增强（GLiNER） | ✅ 可选 | 级联触发，仅处理正则未覆盖片段；中文占优片段整段跳过（模型对中文全盲，见 §13-3）；首次需下载 ~183MB 模型（ort wasm ~11MB 随包本地加载，推理本身离线可用） |
+| AI 增强（GLiNER） | ✅ 可选 | 级联触发，仅处理正则未覆盖片段；中文占优片段整段跳过（见 §13-3）；首次需下载 ~183MB 模型（ort wasm ~11MB 随包本地加载，推理本身离线可用） |
 | 检测档案 | ✅ | 内置 5 档（universal / text / code / us / eu）+ 用户自定义（类别/灵敏度/分类型策略/白名单/GLiNER 标签） |
 | 自定义正则规则 | ✅ | ReDoS 双层防护；档案 JSON 剪贴板导入导出 |
 | 粘贴自动拦截 | ✅ 可选 | 逐站授权，粘贴时自动就地替换（正则档；input/textarea 与 contenteditable 均支持，命中显示「已脱敏 N 处」提示） |
@@ -45,16 +41,13 @@
 
 关键约束：
 
-- **模型不在 SW 加载**：`isContentModelReady()` 按上下文判定，SW 内恒为未就绪 →
-  粘贴拦截天然走正则档，侧栏不必开着；
+- **模型不在 SW 加载**：`isContentModelReady()` 按上下文判定，SW 内恒为未就绪 → 粘贴拦截天然走正则档，侧栏不必开着；
 - **无 manifest content_scripts**：粘贴监听仅按授权站点动态注入，未授权站点零接触；
-- 消息契约单一：`PASTE_DETECT { text } → PasteDetectResponse { ok, sanitized, count }`
-  （`src/core/messages.ts`）。
+- 消息契约单一：`PASTE_DETECT { text } → PasteDetectResponse { ok, sanitized, count }`（`src/core/messages.ts`）。
 
 ## 3. 检测管线（core/detector/pipeline.ts）
 
-单入口 `detect(text, profile, config)`，配置仅一个开关 `enableContentDetection`（AI 级联；
-正则为基础引擎恒开，无关闭入口）。处理链：
+单入口 `detect(text, profile, config)`，配置仅一个开关 `enableContentDetection`（AI 级联；正则为基础引擎恒开，无关闭入口）。处理链：
 
 ```
 1. 正则规则     按 profile.enabledCategories 取规则集扫描
@@ -83,17 +76,13 @@
 
 后处理链要点：
 
-- **重叠仲裁**：类型优先级 凭据(3) > PII(2) > 高熵(1)；同级比较 置信度 → span 长度 →
-  出现顺序；完全包含保留容器。保证任意两条检出区间不相交，替换互不切坏；
-- **值传播**：凭据类（优先级 3）且值 ≥8 字符时，全文所有裸露出现一并标记
-  （修复「重复值只识别第一个」）；
-- **占位符规则**：格式 `<<TYPE:N>>`；**同值必同占位符**（跨类型共享映射），
-  替换后同一敏感值在全文恢复为同一原文。
+- **重叠仲裁**：类型优先级 凭据(3) > PII(2) > 高熵(1)；同级比较 置信度 → span 长度 → 出现顺序；完全包含保留容器。保证任意两条检出区间不相交，替换互不切坏；
+- **值传播**：凭据类（优先级 3）且值 ≥8 字符时，全文所有裸露出现一并标记；
+- **占位符规则**：格式 `<<TYPE:N>>`；**同值必同占位符**（跨类型共享映射），替换后同一敏感值在全文恢复为同一原文。
 
 模型侧实体类型经 `entityTypeMap` 归一到 14 个 `DetectionType`：
 
-`ENV_PASSWORD / API_KEY / DB_PASSWORD / JWT / PRIVATE_KEY / HIGH_ENTROPY / EMAIL / PHONE /
-ID_CARD / BANK_CARD / IP_ADDRESS / PLATE / NAME / ADDRESS`
+`ENV_PASSWORD / API_KEY / DB_PASSWORD / JWT / PRIVATE_KEY / HIGH_ENTROPY / EMAIL / PHONE / ID_CARD / BANK_CARD / IP_ADDRESS / PLATE / NAME / ADDRESS`
 
 ## 4. 规则体系（core/detector/rules/，已解耦）
 
@@ -110,15 +99,9 @@ ID_CARD / BANK_CARD / IP_ADDRESS / PLATE / NAME / ADDRESS`
 | `scanner.ts` | 统一扫描器（extractor 按捕获组精确定位原文区间） |
 
 空值、过短（<4）、纯数字、弱密码字典值一律不检出（防误报基线，金样例回归覆盖）。
-短密钥阈值策略（2026-10-18 拍板落地）：无前缀的 8–32 位随机串维持不检测（会话号/
-设备号撞形误报不可控，高熵阈值不动）；独特厂商前缀的官方短格式（Anthropic、HuggingFace、
-npm、GitLab、SendGrid、Postman、Shopify、DigitalOcean、Mailgun、Twilio）按规格精确收录；
-「短但有上下文」由 env/kv 键值规则行锚定兜底。
+短密钥阈值策略：无前缀的 8–32 位随机串不检测（撞形误报不可控，高熵阈值不动）；独特厂商前缀的官方短格式（Anthropic、HuggingFace、npm、GitLab、SendGrid、Postman、Shopify、DigitalOcean、Mailgun、Twilio）按规格精确收录；「短但有上下文」由 env/kv 键值规则行锚定。
 
-**区域规则集（`us` / `eu`，`usRules.ts` / `euRules.ts`）**：区域规则**默认全关**，
-只有选了对应档案（或在自定义档案里勾上该类别）才参与扫描。这不是保守，而是误报控制：
-`\d{3}-\d{2}-\d{4}` 这种形状在任何地区的文本里都可能出现，把它塞进通用集会让所有
-非美区用户承担误报代价。每条规则都带校验，裸正则在真实文本里不可用：
+**区域规则集（`us` / `eu`，`usRules.ts` / `euRules.ts`）**：区域规则**默认全关**，只有选了对应档案（或在自定义档案里勾上该类别）才参与扫描——`\d{3}-\d{2}-\d{4}` 这类形状在任何地区的文本里都可能出现，进通用集会让所有非美区用户承担误报。每条规则都带校验，裸正则在真实文本里不可用：
 
 | 规则 | 校验方式 |
 |------|---------|
@@ -128,24 +111,14 @@ npm、GitLab、SendGrid、Postman、Shopify、DigitalOcean、Mailgun、Twilio）
 | IBAN | ISO 13616 mod-97（15~34 位任意串通过率约 1/97），紧凑与分组写法都收 |
 | 增值税号 | 逐国格式表（希腊用 `EL` 而非 `GR`，这是 VIES 的定义） |
 
-增值税号目前**只有格式校验**（无通用校验位），因此置信度为 `medium`；DE/FR 等
-逐国校验位属后续迭代。
+增值税号目前**只有格式校验**（无通用校验位），因此置信度为 `medium`；DE/FR 等逐国校验位属后续迭代。
 
 ## 5. 档案系统（core/detector/profiles.ts + userProfiles.ts）
 
-- **内置 5 档**（不可删改）：`universal` 不限（全类别，中低置信仅提示）、
-  `text` 通用文本（PII 为主、高熵 strict）、`code` 代码开发（密钥全开、高熵 loose、
-  PII 类默认仅提示）、`us` 美国个人信息 与 `eu` 欧盟个人信息（通用之上追加对应
-  区域类别，`tierLowConfidence: false`——用户显式选区域档，即希望检出的都替换）；
-  五档默认 `EMAIL/HIGH_ENTROPY/IP_ADDRESS = keep`（检出但不替换）；
-- **自定义档案**：类别开关、每类别灵敏度、分类型默认策略（replace/keep，UI 为 Switch）、
-  `tierLowConfidence`、GLiNER 标签集（预设 个人信息集/密钥集/全部/自定义）、
-  值白名单（精确匹配，含传播产生的出现一并豁免）、自定义正则；
-- CRUD 持久化 `chrome.storage.local`（键 `contextwatchdog.userProfiles`），激活档案
-  `contextwatchdog.activeProfile`；内置档案用 `builtin: true` 判定，UI 行为差异
-  （无齿轮/不可删除）全部由该标志驱动；
-- **导入导出**：整库 JSON 走剪贴板（避免文件权限）；导入时重新生成 id、重名档案
-  加数字序号、危险正则被 sanitize 过滤，schema 校验不过的坏数据整条拒绝。
+- **内置 5 档**（不可删改）：`universal` 不限（全类别，中低置信仅提示）、`text` 通用文本（PII 为主、高熵 strict）、`code` 代码开发（密钥全开、高熵 loose、PII 类默认仅提示）、`us` 美国个人信息 与 `eu` 欧盟个人信息（通用之上追加对应区域类别，`tierLowConfidence: false`——用户显式选区域档，即希望检出的都替换）；五档默认 `EMAIL/HIGH_ENTROPY/IP_ADDRESS = keep`（检出但不替换）；
+- **自定义档案**：类别开关、每类别灵敏度、分类型默认策略（replace/keep，UI 为 Switch）、`tierLowConfidence`、GLiNER 标签集（预设 个人信息集/密钥集/全部/自定义）、值白名单（精确匹配，含传播产生的出现一并豁免）、自定义正则；
+- CRUD 持久化 `chrome.storage.local`（键 `contextwatchdog.userProfiles`），激活档案 `contextwatchdog.activeProfile`；内置档案用 `builtin: true` 判定，UI 行为差异（无齿轮/不可删除）全部由该标志驱动；
+- **导入导出**：整库 JSON 走剪贴板（避免文件权限）；导入时重新生成 id、重名档案加数字序号、危险正则被 sanitize 过滤，schema 校验不过的坏数据整条拒绝。
 
 **自定义正则 ReDoS 双层防护**（`rules/customRules.ts`）：
 
@@ -160,20 +133,9 @@ npm、GitLab、SendGrid、Postman、Shopify、DigitalOcean、Mailgun、Twilio）
 
 ## 7. AI 增强：模型与下载机制
 
-**模型**：`onnx-community/gliner_small-v2` 的 `onnx/model_quantized.onnx`（int8 量化，
-183,403,734 字节 ≈183MB）。2026-10-23 曾换多语言 `gliner_multi-v2.1` 修复中文召回，
-其模型能力已验证优秀，但**无浏览器级可用字节**（int8/uint8 量化导出崩坏、fp16/q4f16
-WASM 内存不可行，完整取证见 §13-3），当日回退；中文 AI 支持转 1.1 路线，期间由
-`languageGuard.ts` 在级联入口跳过中文占优片段。运行栈 `gliner` + `onnxruntime-web`（WASM，单线程，
-CSP 需 `wasm-unsafe-eval`）+ `@xenova/transformers`（tokenizer）。场景识别为启发式
-（`sceneDetector.ts`），不占模型。
+**模型**：`onnx-community/gliner_small-v2` 的 `onnx/model_quantized.onnx`（int8 量化，183,403,734 字节 ≈183MB）。换模取证结论见 §13-4（无可 ship 的多语言变体，已回退），中文 AI 支持转 1.1 路线，期间由 `languageGuard.ts` 在级联入口跳过中文占优片段。运行栈 `gliner` + `onnxruntime-web`（WASM，单线程，CSP 需 `wasm-unsafe-eval`）+ `@xenova/transformers`（tokenizer）；场景识别为启发式（`sceneDetector.ts`），不占模型。
 
-**wasm 资产本地化**（2026-10-18）：gliner 默认把 `env.wasm.wasmPaths` 指向 jsdelivr
-CDN（`index.mjs:615`），改传空对象绕过其默认值 → ORT 门面视同「不覆盖」，`locateFile`
-不设置，emscripten 回落到构建时改写好的打包内资产（胶水加载器 `zp` 忽略参数恒用打包内
-模块，ort 1.19.2 实证）→ wasm ~11MB 随扩展分发，**离线推理可用、零 CDN 依赖**；同时
-vite 别名把 gliner 静态引用的 `onnxruntime-web/webgpu|webgl` 打桩（EP 固定 `'wasm'`），
-剔除 21.3MB `jsep.wasm` 死重——产物总量 ~34MB → ~12MB。
+**wasm 资产本地化**：gliner 默认把 `env.wasm.wasmPaths` 指向 jsdelivr CDN（`index.mjs:615`），改传空对象绕过 → emscripten 回落到打包内资产（ort 1.19.2 实证）→ wasm ~11MB 随扩展分发，**离线推理可用、零 CDN 依赖**；vite 别名把 gliner 静态引用的 `onnxruntime-web/webgpu|webgl` 打桩（EP 固定 `'wasm'`），剔除 21.3MB `jsep.wasm` 死重——产物总量 ~34MB → ~12MB。
 
 **下载器**（`modelDownload.ts`，全部依赖可注入以便 node 环境单测）：
 
@@ -183,48 +145,25 @@ vite 别名把 gliner 静态引用的 `onnxruntime-web/webgpu|webgl` 打桩（EP
 | 断点续传 | 会话内 + 跨会话（Cache Storage `?partial`，元数据在条目响应头 `x-model-bytes/total/etag/last-modified/saved-at`，读取三重一致性校验）；仅同源+强 etag 发 `If-Range` |
 | 重试退避 | 指数退避、尊重 `Retry-After`、封顶 16s |
 | 停滞看门狗 | 30s 无字节中断（下次从断点续）；进度心跳续期，杜绝无 Content-Length 的假超时 |
-| 完整性校验 | 字节数不符不入缓存，绝不拼脏数据；缓存层再按**期望字节数**（`MODEL_FILE_BYTES`）复核——`match()` 字节数不符即删除自愈（本地直判、不依赖版本探测，节流/离线时同样生效）、`put()` 拒写抛错让下载流程换源重试。防「完整下完的错误文件」自洽常驻（2026-10-23 实机回归：上游 URL 漂移致前代模型存进新 key、探测两侧同值永远 current） |
+| 完整性校验 | 字节数不符不入缓存，绝不拼脏数据；缓存层再按**期望字节数**（`MODEL_FILE_BYTES`）复核——`match()` 字节数不符即删除自愈（本地直判、不依赖版本探测，节流/离线时同样生效）、`put()` 拒写抛错让下载流程换源重试。防「完整下完的错误文件」自洽常驻（上游 URL 漂移会让探测两侧同值永远 current） |
 | 多窗口去重 | storage 单键锁 `contextwatchdog.modelLock`（owner + 30s 心跳 TTL + 进度转发）；抢锁方等待显示「另一窗口下载中」，等待 ≤~5 分钟超时后自行下载；接管前再查缓存 |
-| 缓存失效 | 缓存 key 固定（不带版本号）；命中后 1 字节探测（`Range: bytes=0-0`，5s 超时）**三级比对 ETag → Last-Modified → 总长**；⚠️ 浏览器跨源只读得到 CORS 安全列表头（ModelScope CDN 无 `Access-Control-Expose-Headers` → ETag/Content-Range 读不到，206 的 `content-length=1` 绝不当总长，否则全量 ≠ 1 误判 stale → 每个探测窗重下全量模型，TC-06-9 回归）；离线/信息不可知时优先沿用缓存；旧 `?v=` key 一次性搬迁（字节数非本模不搬）；换模尝试遗留的孤儿条目一次性清扫（`PREDECESSOR_MULTI_FP16_MODEL_CACHE_URL` + `PREDECESSOR_MULTI_INT8_MODEL_CACHE_URL`，各含其 `?partial`；⚠️ 清扫清单严禁包含现役 `MODEL_CACHE_URL`/`LEGACY_MODEL_CACHE_URL`——回退后它们就是当前 key，误删会导致每次启动重下全量模型） |
+| 缓存失效 | 缓存 key 固定（不带版本号）；命中后 1 字节探测（`Range: bytes=0-0`，5s 超时）**三级比对 ETag → Last-Modified → 总长**；⚠️ 跨源只读仅得 CORS 安全列表头（ModelScope CDN 无 `Access-Control-Expose-Headers` → ETag/Content-Range 读不到），206 的 `content-length=1` 绝不当总长，否则全量 ≠ 1 误判 stale → 每个探测窗重下全量模型（TC-06-9 回归）；离线/信息不可知时优先沿用缓存；旧 `?v=` key 一次性搬迁（字节数非本模不搬）；换模尝试遗留的孤儿条目一次性清扫（`PREDECESSOR_MULTI_FP16_MODEL_CACHE_URL` + `PREDECESSOR_MULTI_INT8_MODEL_CACHE_URL`，各含其 `?partial`；⚠️ 清扫清单严禁包含现役 `MODEL_CACHE_URL`/`LEGACY_MODEL_CACHE_URL`——误删会导致每次启动重下全量模型） |
 | 单飞门闩 | `createSingleFlight`：并发加载复用同一 promise，重试不产生并行下载 |
 | 内存释放 | `initialize()` 后置空对 183MB ArrayBuffer 的引用（ORT session 已持 wasm 堆副本）；前后打 JS 堆快照日志 |
 
-**UI 语义**：只有确认走网络下载（`onDownloadStart`）才显示 toast 与进度条；
-**缓存命中全程静默**（仅 console 日志），杜绝「先闪首次需下载再变已命中」的误导。
+**UI 语义**：只有确认走网络下载（`onDownloadStart`）才显示 toast 与进度条；**缓存命中全程静默**（仅 console 日志），杜绝「先闪首次需下载再变已命中」的误导。
 
 ## 8. 粘贴自动拦截
 
-- **授权模型**：`optional_host_permissions`（`https://*/*` + `http://*/*`，
-  不含宽泛的 `<all_urls>`）+ 运行时 `chrome.permissions.request`（必须用户手势）
-  ——**不申请 `<all_urls>`**，未授权站点零接触；
-- **站点条目语义**（`engine/src/sites.ts`）：裸域名一并覆盖其子域
-  （`deepseek.com` 命中 `chat.deepseek.com`，无需逐个添加）；带路径的条目按目录
-  边界命中（`/docs` 命中 `/docs` 与 `/docs/x`，不命中 `/docspage`）；写 `http` 的
-  条目视为协议不限；多条命中时取最具体的一条（路径最长，再看主机名最长）。
-  授权时一并申请 `*.` 子域 origin，否则子域匹配得到却没有注入权限；
-- **注入时机**：`tabs.onUpdated`（loading 且 URL 匹配）+ 站点列表变化时对已开页面即时注入；
-  `chrome.scripting.executeScript({ allFrames: true })`，无 manifest 常驻脚本；
-- **就地替换策略**：input/textarea 走「先插入后就地替换」（不阻塞输入）；站点规范化
-  与匹配在 `engine/src/sites.ts`（单测 24 例）；插入区间推导与改写守卫为纯函数
-  （`content/pasteText.ts`，单测 6+2 例）；
-- **contenteditable 策略**：富文本区域做不了逐字校验（innerText 与 Range.toString 对
-  `<div>/<br>` 的换行建模互不一致、Lexical/ProseMirror 类编辑器会重排 DOM）→
-  「阻止默认 → 选区快照 → 检测 → `execCommand('insertText')` 插入」：快照 Range 随
-  后续 DOM 编辑自动调整（语义等价「文本发散即放弃」守卫且更稳），走编辑器标准输入
-  管线（beforeinput/input + 撤销栈），异常路径一律补插原文不吞粘贴；
-- **轻提示**：改写生效时视口右上「已脱敏 N 处」（2s 自消、pointer-events:none、
-  纯内联样式——不依赖也不污染宿主页面的 CSS/主题）；
-- **守卫**：`password`/隐藏输入框绝不处理；input/textarea 插入文本与剪贴板逐字吻合
-  才改写；检测期间用户继续输入（文本发散）即放弃；单次超 20,000 字符在入口层直接
-  真放行（此前仅 SW 侧 slice 截断检测范围，入口照单全收会用截断结果整体改写、
-  吞掉尾部文本——已修）；
-- **AI 二次升级**（Chrome/Edge）：input/textarea 粘贴时，正则结果先落地并立即回写；
-  SW 在回包之后按「全局 AI ∧ 本站 AI ∧ 宿主就绪」决定是否让 offscreen 宿主重跑一次完整检测。
-  四道守卫（用户未继续输入 / 正则结果仍在原位 / AI 确有增量 / 8s 内）全部通过才二次替换，
-  toast 改为「AI 增强后共脱敏 N 处」；失败或超时一律保留正则结果，绝不回退原文。
-  contenteditable 本期仍只走正则档。
-- **已知限制**：Firefox 无 `chrome.offscreen`，粘贴链路的 AI 升级不可用（侧栏手动检测仍可用）；
-  其他浏览器未授权站点零注入、零接触。
+- **授权模型**：`optional_host_permissions`（`https://*/*` + `http://*/*`，不含宽泛的 `<all_urls>`）+ 运行时 `chrome.permissions.request`（必须用户手势）——**不申请 `<all_urls>`**，未授权站点零接触；
+- **站点条目语义**（`engine/src/sites.ts`）：裸域名一并覆盖其子域（`deepseek.com` 命中 `chat.deepseek.com`，无需逐个添加）；带路径的条目按目录边界命中（`/docs` 命中 `/docs` 与 `/docs/x`，不命中 `/docspage`）；写 `http` 的条目视为协议不限；多条命中时取最具体的一条（路径最长，再看主机名最长）。授权时一并申请 `*.` 子域 origin，否则子域匹配得到却没有注入权限；
+- **注入时机**：`tabs.onUpdated`（loading 且 URL 匹配）+ 站点列表变化时对已开页面即时注入；`chrome.scripting.executeScript({ allFrames: true })`，无 manifest 常驻脚本；
+- **就地替换策略**：input/textarea 走「先插入后就地替换」（不阻塞输入）；站点规范化与匹配在 `engine/src/sites.ts`（单测 24 例）；插入区间推导与改写守卫为纯函数（`content/pasteText.ts`，单测 6+2 例）；
+- **contenteditable 策略**：富文本无法逐字校验（innerText 与 Range.toString 对 `<div>/<br>` 的换行建模不一致、Lexical/ProseMirror 类编辑器会重排 DOM）→「阻止默认 → 选区快照 → 检测 → `execCommand('insertText')` 插入」：快照 Range 随后续 DOM 编辑自动调整，走编辑器标准输入管线（beforeinput/input + 撤销栈），异常路径一律补插原文不吞粘贴；
+- **轻提示**：改写生效时视口右上「已脱敏 N 处」（2s 自消、pointer-events:none、纯内联样式——不依赖也不污染宿主页面的 CSS/主题）；
+- **守卫**：`password`/隐藏输入框绝不处理；input/textarea 插入文本与剪贴板逐字吻合才改写；检测期间用户继续输入（文本发散）即放弃；单次超 20,000 字符在入口层直接真放行；
+- **AI 二次升级**（Chrome/Edge）：input/textarea 粘贴时，正则结果先落地并立即回写；SW 在回包之后按「全局 AI ∧ 本站 AI ∧ 宿主就绪」决定是否让 offscreen 宿主重跑一次完整检测。四道守卫（用户未继续输入 / 正则结果仍在原位 / AI 确有增量 / 8s 内）全部通过才二次替换，toast 改为「AI 增强后共脱敏 N 处」；失败或超时一律保留正则结果，绝不回退原文。contenteditable 本期仍只走正则档。
+- **已知限制**：Firefox 无 `chrome.offscreen`，粘贴链路的 AI 升级不可用（见 §13-1）；其他浏览器未授权站点零注入、零接触。
 
 ## 9. 权限与安全模型
 
@@ -240,16 +179,9 @@ vite 别名把 gliner 静态引用的 `onnxruntime-web/webgpu|webgl` 打桩（EP
 | `offscreen` | 模型宿主（Chrome/Edge；Firefox 构建会移除） |
 | `optional_host_permissions` | 粘贴拦截逐站授权（https + http，运行时按需申请；条目可带路径） |
 
-**CSP**（extension_pages）：`script-src 'self' 'wasm-unsafe-eval'; object-src 'self';
-connect-src 'self' https:`——无 `http:`/`ws:`；`wasm-unsafe-eval` 为 ORT WASM 必需
-（Firefox MV3 同样要求显式声明）。
+**CSP**（extension_pages）：`script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; connect-src 'self' https:`——无 `http:`/`ws:`；`wasm-unsafe-eval` 为 ORT WASM 必需（Firefox MV3 同样要求显式声明）。
 
-**隐私承诺的代码依据**：全项目仅模型下载一处 `fetch`（`modelDownload.ts`）；
-AI 关闭即零网络；检测/替换全部本地；扩展无遥测、无统计（落地页可选的自托管
-Umami 访问统计见 §11.1，env 门控、默认关闭）。
-
-**其他**：自定义正则 ReDoS 双层防护（§5）；粘贴拦截四重守卫（§8）；
-CSP 收紧后扩展页无任何外部脚本/连接可能。
+**隐私承诺的代码依据**：全项目仅模型下载一处 `fetch`（`modelDownload.ts`）；AI 关闭即零网络；检测/替换全部本地；扩展无遥测、无统计（落地页可选的自托管 Umami 访问统计见 §11.1，env 门控、默认关闭）。
 
 ## 10. 存储清单（chrome.storage.local）
 
@@ -266,68 +198,32 @@ CSP 收紧后扩展页无任何外部脚本/连接可能。
 | Cache Storage `?partial` 条目 | 模型断点续传分片（元数据在响应头） |
 | Cache Storage `contextwatchdog.invalid/models/...` | 模型成品缓存（合成 origin，规避扩展页 HTTP 缓存差异） |
 
-**chrome.storage.session**：`contextwatchdog.modelHost` 保存宿主状态
-（phase / percent / received / total / waiting / downloadStarted / error / updatedAt），
-由 offscreen 宿主经 Port 上报、SW 代写；侧栏订阅 `storage.onChanged` 渲染。
+**chrome.storage.session**：`contextwatchdog.modelHost` 保存宿主状态（phase / percent / received / total / waiting / downloadStarted / error / updatedAt），由 offscreen 宿主经 Port 上报、SW 代写；侧栏订阅 `storage.onChanged` 渲染。
 
 ## 11. 构建与双目标
 
-- 技术栈：Vite + CRXJS（单一输入 manifest，靠 `side_panel`/`service_worker` 发现打包入口；
-  分叉输入会漏打包）+ vue-tsc 类型检查 + vitest；
+- 技术栈：Vite + CRXJS（单一输入 manifest，靠 `side_panel`/`service_worker` 发现打包入口；分叉输入会漏打包）+ vue-tsc 类型检查 + vitest；
 - `npm run build` → Chrome `dist/`；
-- `npm run build:firefox` → `vite build --mode firefox` 仅切 outDir，键转换集中在
-  `scripts/postbuild.mjs`：`service_worker → scripts`、`side_panel → sidebar_action`、
-  移除 `sidePanel` 权限、补 `browser_specific_settings.gecko`
-  （`contextwatchdog@contextwatchdog.invalid`，min 121）；
-- SW 运行时探测 `chrome.sidePanel.open` → 回退 `chrome.sidebarAction.open`，
-  同一份 SW 代码服务双浏览器；**面板开合状态查询同样分叉**（`background/panelState.ts`）：
-  Chrome/Edge 走 `runtime.getContexts`「存在即打开」（复数 filter）；Firefox 既无该
-  API 也无任何侧栏开关事件，走 `sidebarAction.isOpen()` ∪ 弹窗兜底窗口的
-  `storage.session` 自追踪（`windows.get` 探活 + `type === 'popup'` 复用防线，零新增
-  权限）。FF 上挂件点击受 user-gesture 限制（content script 消息不算手势，MDN /
-  bug 1800401）必开弹窗兜底，按钮文案按 `panelKind` 形态如实显示（「打开脱敏面板」/
-  「面板已打开」，不冒充侧栏）；
-- **vite root 指向 `packages/extension`**（而非仓库根）：manifest 入口路径保持包内
-  相对形式（`src/sidepanel/index.html`），产物布局与重构前逐字节一致，运行时无需改
-  `chrome.runtime.getURL`。副作用：Tailwind 扫描范围恰好收敛在扩展包内（扫仓库根会把
-  `package-lock.json` 里的英文单词当类名）；`scripts/postbuild.mjs` 抽查产物 CSS 的
-  utility 与设计 token，缺任一即构建**硬失败**；
-- 设计 token 经别名 `@tokens/tokens.css` 被 `style.css` 引用，**产物内完整内联**
-  （同样有构建期校验）。
+- `npm run build:firefox` → `vite build --mode firefox` 仅切 outDir，键转换集中在 `scripts/postbuild.mjs`：`service_worker → scripts`、`side_panel → sidebar_action`、移除 `sidePanel` 权限、补 `browser_specific_settings.gecko`（`contextwatchdog@contextwatchdog.invalid`，min 121）；
+- SW 运行时探测 `chrome.sidePanel.open` → 回退 `chrome.sidebarAction.open`，同一份 SW 代码服务双浏览器；**面板开合状态查询同样分叉**（`background/panelState.ts`）：Chrome/Edge 走 `runtime.getContexts`「存在即打开」（复数 filter）；Firefox 既无该 API 也无任何侧栏开关事件，走 `sidebarAction.isOpen()` ∪ 弹窗兜底窗口的 `storage.session` 自追踪（`windows.get` 探活 + `type === 'popup'` 复用防线，零新增权限）。FF 上挂件点击受 user-gesture 限制（content script 消息不算手势）必开弹窗兜底，按钮文案按 `panelKind` 形态如实显示（「打开脱敏面板」/「面板已打开」，不冒充侧栏）；
+- **vite root 指向 `packages/extension`**（而非仓库根）：manifest 入口路径保持包内相对形式（`src/sidepanel/index.html`），运行时无需改 `chrome.runtime.getURL`。副作用：Tailwind 扫描范围收敛在扩展包内（扫仓库根会把 `package-lock.json` 里的英文单词当类名）；`scripts/postbuild.mjs` 抽查产物 CSS 的 utility 与设计 token，缺任一即构建**硬失败**；
+- 设计 token 经别名 `@tokens/tokens.css` 被 `style.css` 引用，**产物内完整内联**（同样有构建期校验）。
 
 ### 11.1 落地页（`apps/site`）
 
-Astro 静态站点（`output: 'static'`），产物是纯 HTML + 一个 CSS 文件，**默认零客户端 JS**
-（`dist` 下不会出现 `.js`）。唯一例外是可选的自托管 Umami 访问统计：`UMAMI_*` env 配置后注入
-一个**外链**脚本（`check:versions` 的外链白名单只放行这一个地址；脚本不落 `dist`，产物无 `.js`
-的事实不变），未配置时产物与未接入时逐字节一致。命令（仓库根执行）：`site:dev` / `site:build` /
-`site:preview` / `site:check` / `site:evidence`。
+Astro 静态站点（`output: 'static'`），产物是纯 HTML + 一个 CSS 文件，**默认零客户端 JS**（`dist` 下不会出现 `.js`）。唯一例外是可选的自托管 Umami 访问统计：`UMAMI_*` env 配置后注入一个**外链**脚本（`check:versions` 的外链白名单只放行这一个地址；脚本不落 `dist`，产物无 `.js` 的事实不变），未配置时产物与未接入时逐字节一致。命令（仓库根执行）：`site:dev` / `site:build` / `site:preview` / `site:check` / `site:evidence`。
 
-> **不要**在 `apps/site` 里单独 `npm install`：仓库未启用 npm workspaces（留到本地代理
-> 阶段），Astro 装在仓库根 `devDependencies`，脚本用 `astro --root apps/site` 调用。
+> **不要**在 `apps/site` 里单独 `npm install`：仓库未启用 npm workspaces（留到本地代理阶段），Astro 装在仓库根 `devDependencies`，脚本用 `astro --root apps/site` 调用。
 
 三条不改的原则：
 
-1. **视觉来自 `packages/design-tokens/tokens.css`**（经 `@tokens` 别名 `@import`），
-   与扩展同一个源——两边配色/圆角结构上不可能漂移。站点不引 Tailwind。
-2. **版本号与测试数不手写**。版本号构建期从 `packages/extension/src/manifest.json` 注入
-   （`vite.define` → `__EXTENSION_VERSION__`）；测试数与探针数由
-   `npm run site:evidence` 跑一遍真实套件后写入 `evidence.json`。
-3. **未上架的渠道不渲染成链接**。渠道 URL 为空时页面显示「即将上架」，而不是一个点了
-   打不开的 URL。URL 来自 `apps/site/.env`（gitignored，模板 `.env.example`）——
-   这些是**部署身份**（域名 / 商店页 / 备案号），不进仓库，因为 fork 之后
-   不该静默继承别人的它们。
+1. **视觉来自 `packages/design-tokens/tokens.css`**（经 `@tokens` 别名 `@import`），与扩展同一个源，配色/圆角不会漂移。站点不引 Tailwind。
+2. **版本号与测试数不手写**。版本号构建期从 `packages/extension/src/manifest.json` 注入（`vite.define` → `__EXTENSION_VERSION__`）；测试数与探针数由 `npm run site:evidence` 跑一遍真实套件后写入 `evidence.json`。
+3. **未上架的渠道不渲染成链接**。渠道 URL 为空时页面显示「即将上架」，而不是一个点了打不开的 URL。URL 来自 `apps/site/.env`（gitignored，模板 `.env.example`）——这些是**部署身份**（域名 / 商店页 / 备案号），不进仓库（fork 不应继承他人部署身份）。
 
-结构要点：`src/pages/{index,en/index,privacy,en/privacy,changelog,…}.astro` 双语四类页；
-`src/layouts/Base.astro` 管 `<head>`（hreflang / canonical / og）+ 页头页脚；
-`src/i18n/{zh,en}.json` 两语言键集合一致由单测强制（部署前检查清单随发布 runbook
-移出仓库，作者自持）。
+结构要点：`src/pages/{index,en/index,privacy,en/privacy,changelog,…}.astro` 双语四类页；`src/layouts/Base.astro` 管 `<head>`（hreflang / canonical / og）+ 页头页脚；`src/i18n/{zh,en}.json` 两语言键集合一致由单测强制（部署前检查清单随发布 runbook 移出仓库，作者自持）。
 
-部署路径（**可带子路径**）：`SITE_URL` 允许形如 `https://aa.bb.com/context-watchdog`。
-它的 pathname 派生 Astro 的 `base`（`scripts/lib/site-links.mjs` 的 `basePathFrom`），
-站内 href 的前缀取 `import.meta.env.BASE_URL`（`i18n.siteBase`），canonical / hreflang 取
-`origin + 含 base 的站内路径`——三者同源，不会漂移；未配置时 `base` 为 `/`，产物与根路径
-部署完全一致。托管时把 `dist` 整个挂到该子路径下（产物内不含前缀）。
+部署路径（**可带子路径**）：`SITE_URL` 允许形如 `https://aa.bb.com/context-watchdog`。它的 pathname 派生 Astro 的 `base`（`scripts/lib/site-links.mjs` 的 `basePathFrom`），站内 href 的前缀取 `import.meta.env.BASE_URL`（`i18n.siteBase`），canonical / hreflang 取 `origin + 含 base 的站内路径`——三者同源，不会漂移；未配置时 `base` 为 `/`，产物与根路径部署完全一致。托管时把 `dist` 整个挂到该子路径下（产物内不含前缀）。
 
 ## 12. 测试体系
 
@@ -340,64 +236,31 @@ Astro 静态站点（`output: 'static'`），产物是纯 HTML + 一个 CSS 文�
 | `tests/regression/`（2） | 历史缺陷回归（含@密码、重复值、重叠、CJK 偏移、吞值） |
 | `tests/perf/`（1） | 长文本基准（5000 字 < 2s） |
 
-原则：下载器/管线等纯逻辑全部依赖注入，node 环境可单测；真机判定项（视觉/真实下载/
-权限弹窗/真实推理）登记在 `docs/test-cases.md` 的 TC 目录（完整步骤与逐条判据为作者
-发布文档，自存仓外），不与自动化重叠。
+原则：下载器/管线等纯逻辑全部依赖注入，node 环境可单测；真机判定项（视觉/真实下载/权限弹窗/真实推理）登记在 `docs/test-cases.md` 的 TC 目录（完整步骤与逐条判据为作者发布文档，自存仓外），不与自动化重叠。
 
 ## 13. 已知限制
 
-1. Firefox 无 `chrome.offscreen`：粘贴链路的 AI 二次升级不可用（正则档不受影响），
-   侧栏手动检测仍走 LocalHost；Chrome/Edge 的粘贴 AI 需要全局 AI + 本站 AI + 宿主就绪；
+1. Firefox 无 `chrome.offscreen`：粘贴链路的 AI 二次升级不可用（正则档不受影响），侧栏手动检测仍走 LocalHost；Chrome/Edge 的粘贴 AI 需要全局 AI + 本站 AI + 宿主就绪；
 2. AI 模型 ~183MB 首次下载依赖网络（支持断点续传与多窗口去重）；
-3. **中文 AI 不可用（2026-10-23 换模取证后回退，1.0.0 终态）**：small-v2 骨干为
-   microsoft/deberta-v3-small（纯英文 128K SPM 词表），中文字符全部塌缩为 [UNK]，
-   encoder 对中文内容全盲——2026-10-18 实机「真召回为零 + 0.25–0.65 区间单字乱指
-   幻觉（「户」→姓名 0.456、「订」→邮箱 0.330）」即此失效模式，与阈值/门禁无关
-   （形状门禁 `entityShape.ts` 只负责拦幻觉、救不了召回）。兜底：`languageGuard.ts`
-   的 `isCjkDominant` 在 AI 级联入口跳过中文占优片段（CJK 字母数 ≥ 拉丁字母数即跳过，
-   混合文本如「请帮我联系 John Smith」保拉丁实体）——对全盲模型喂中文只会产出
-   幻觉，跳过后中文退化为纯正则——固定形状目标（手机号/身份证/银行卡/邮箱等）
-   由正则覆盖，跳过相对当前模型零检测损失（模型对中文本就全盲，跑与不跑同结果）。
-   中文姓名/地址的 AI 召回转 1.1 目标；对用户的表述不作「全覆盖」类绝对承诺，
-   站点 FAQ 采用稳妥口径（受限于模型大小，AI 对部分通用中文文本识别并不稳定）；
-4. **换模取证：无任何可 ship 的 multi-v2.1 变体（2026-10-23 完整证据链）**：
-   曾换多语言 gliner_multi-v2.1（mdeberta-v3-base，中文在词表内；切词对中文逐字
-   成词，提供字级 span 边界）试图修复 §13-3 的全盲缺陷。本地 harness（`gliner`
-   node/web 双入口 + 同一 span-level 接线 + ModelScope 真文件，ORT-WASM 1.19.2
-   内核）取证：
-   ① 质量面——small-v2 同接线英文 0.95–0.98 阳性对照通过（harness 无辜）；
-   multi-v2.1 分词器中文出真 id（李=95290 非 [UNK]，词表无辜）；同仓 `model_int8`
-   （= `model_quantized`，349,120,924B）与 `model_uint8`（349,120,961B）两套 quanto
-   静态量化导出在**所有语言**上输出全负 logits（英文送分题 max sigmoid 仅 0.15、
-   0.25 阈值全零召回）——双位宽同崩，是量化配方算坏了 span 打分头；`model_fp16.onnx`
-   （579,717,643B）质量完好：英文 0.97、中文「李雷」0.90「韩梅梅」0.72「大街1号」
-   0.52、推理 ~0.5s（远在 TC-07-9 的 8s 级联窗内）；`model_q4f16.onnx`
-   （471,795,362B）中文衰减（0.75/0.46/0.34，姓名掉出敏感线）；
-   ② 内存面——ORT-WASM 无 fp16 算子，fp16/q4f16 权重被迫全量升位双份驻留：
-   实测建会话后 RSS 分别 3.2GB / 2.8GB，对比 small-v2 int8 的 1.5GB（实机流畅
-   基线）均 2× 超标 → 浏览器标签页内存海啸（实机表现为「Initializing models
-   卡很久」），结构性问题、配置绕不过，不可 ship；
-   ③ 决策——回退 small-v2（本包当前源与字节），中文 AI 召回转 1.1 路线
-   （本机 torch 重量化排除 span 打分头 + GitHub Release 托管，作者侧清单自存仓外），
-   期间 CJK 守卫消灭幻觉面。形似词幻觉（如 2 字词→姓名）对拉丁文本仍属零样本
-   模型固有风险，形状门禁常开兜底；
+3. **中文 AI 不可用（1.0.0 终态，换模取证后回退）**：small-v2 骨干为 microsoft/deberta-v3-small（纯英文 128K SPM 词表），中文字符全部塌缩为 [UNK]，encoder 对中文内容全盲——实机表现为零召回与单字幻觉，与阈值无关（形状门禁 `entityShape.ts` 只负责拦幻觉、救不了召回）。兜底：`languageGuard.ts` 的 `isCjkDominant` 在 AI 级联入口跳过中文占优片段（CJK 字母数 ≥ 拉丁字母数即跳过，混合文本如「请帮我联系 John Smith」保拉丁实体）；跳过后中文退化为纯正则——固定形状目标（手机号/身份证/银行卡/邮箱等）由正则覆盖，相对当前模型零检测损失。中文姓名/地址的 AI 召回转 1.1 目标；对用户的表述不作「全覆盖」类绝对承诺，站点 FAQ 采用稳妥口径（受限于模型大小，AI 对部分通用中文文本识别并不稳定）；
+4. **换模取证：无任何可 ship 的 multi-v2.1 变体（2026-10-23 完整证据链）**：多语言 gliner_multi-v2.1（mdeberta-v3-base，中文在词表内、切词逐字成词）曾用于修复 §13-3 的全盲缺陷，本地 harness（`gliner` node/web 双入口 + 同一 span-level 接线 + ModelScope 真文件，ORT-WASM 1.19.2 内核）取证结论：
+   ① 质量——同仓 `model_int8`（= `model_quantized`，349,120,924B）与 `model_uint8`（349,120,961B）两套 quanto 静态量化导出在**所有语言**上输出全负 logits——双位宽同崩，是量化配方算坏了 span 打分头（harness、分词器均经对照排除）；`model_fp16.onnx`（579,717,643B）质量完好（英文 0.97、中文「李雷」0.90、推理 ~0.5s，远在 TC-07-9 的 8s 级联窗内）；`model_q4f16.onnx`（471,795,362B）中文衰减，姓名掉出敏感线；
+   ② 内存——ORT-WASM 无 fp16 算子，fp16/q4f16 权重被迫全量升位双份驻留：建会话后 RSS 分别 3.2GB / 2.8GB，对比 small-v2 int8 的 1.5GB（实机流畅基线）均 2× 超标，结构性问题、配置绕不过，不可 ship；
+   ③ 决策——回退 small-v2（本包当前源与字节），中文 AI 召回转 1.1 路线（本机 torch 重量化排除 span 打分头 + GitHub Release 托管，作者侧清单自存仓外），期间 CJK 守卫消灭幻觉面。形似词幻觉（如 2 字词→姓名）对拉丁文本仍属零样本模型固有风险，形状门禁常开兜底；
 5. tokenizer/config 由 gliner 内部 transformers 下载，走其自带缓存，不受 §10 版本管理。
 
 ## 14. 实测数据（2026-10-18，Chrome，TC-06-4 / A-4 结案）
 
-> ℹ️ 本节数值基于当前模型（183MB 的 `gliner_small-v2`）。2026-10-23 的多语言换模
-> 尝试已取证回退（见 §13-4），模型与测量时一致，**基线仍然有效**；1.1 若换模需复测。
+> ℹ️ 本节数值基于当前模型（183MB 的 `gliner_small-v2`）。2026-10-23 的多语言换模尝试已取证回退（见 §13-4），模型与测量时一致，**基线仍然有效**；1.1 若换模需复测。
 
-- JS 堆快照（`performance.memory.usedJSHeapSize`；Chromium 专有，Firefox 静默跳过），
-  走缓存命中路径（模型 174.9MB 从 Cache Storage 物化为 ArrayBuffer）：
+- JS 堆快照（`performance.memory.usedJSHeapSize`；Chromium 专有，Firefox 静默跳过），走缓存命中路径（模型 174.9MB 从 Cache Storage 物化为 ArrayBuffer）：
 
   | 时点 | JS 堆 | 说明 |
   |---|---|---|
   | 模型下载完成 | **179.3 MB** | ≈ 模型 ArrayBuffer + 页面基线，符合预期 |
-  | 初始化完成并释放引用（未 GC 时刻） | **224.5 MB** | 高于前值属正常：ORT 建会话在 JS 侧解析 175MB protobuf 的对象图转为垃圾、`modelBuffer` 局部绑定尚在 `runLoad` 作用域（async 跨 await 保守保活），GC 前均计入 `usedJSHeapSize` |
+  | 初始化完成并释放引用（未 GC 时刻） | **224.5 MB** | 高于前值属正常：ORT 建会话在 JS 侧解析 175MB protobuf 的对象图垃圾、`modelBuffer` 绑定仍在 `runLoad` 作用域内保守保活，GC 前均计入 `usedJSHeapSize` |
 
-- 口径说明：模型本体在 ORT wasm 线性内存，**不计入** `usedJSHeapSize`；此组数值仅验证
-  JS 侧引用管理（§7 下载器表「内存释放」行），不代表进程总内存。
+- 口径说明：模型本体在 ORT wasm 线性内存，**不计入** `usedJSHeapSize`；此组数值仅验证 JS 侧引用管理（§7 下载器表「内存释放」行），不代表进程总内存。
 
 ## 15. 项目结构与引擎边界
 
@@ -454,51 +317,30 @@ packages/extension/                # 扩展（宿主层）
     ├── shims/                     # 构建期打桩（ort GPU 子路径）
     └── style.css                  # 引入 @tokens/tokens.css + Tailwind theme 映射
 
-apps/site/                         # 落地页（Astro 静态站点，默认零客户端 JS——结构见 §11，
-                                   # 可选 Umami 统计经 env 门控；部署前检查随发布 runbook 移出仓库）
+apps/site/                         # 落地页（Astro 静态站点，默认零客户端 JS——结构见 §11）
 public/                            # 仓库级共享静态资源（icons）
-tests/  scripts/  docs/            # 测试 / 构建与探针脚本 / 文档（设计线两份同在
-                                   # docs/ 顶层：防御性公开，索引见根 README）
+tests/  scripts/  docs/            # 测试 / 构建与探针脚本 / 文档（索引见根 README）
 ```
 
-**引擎边界**：引擎通过别名 `@engine/*` 被扩展引用（`tsconfig.json` 与 `vite.config.ts`
-各自声明）。**引擎不依赖任何宿主 API**，本目录**禁止**静态 import：
+**引擎边界**：引擎通过别名 `@engine/*` 被扩展引用（`tsconfig.json` 与 `vite.config.ts` 各自声明）。**引擎不依赖任何宿主 API**，本目录**禁止**静态 import：
 
 - `chrome`、`node:*` —— 宿主 API，连 `import type` 都不行，必须注入适配器；
 - `vue`、`pinia`、`reka-ui` —— UI 属于宿主层；
-- `gliner`、`onnxruntime-web`、`onnxruntime-common`、`@xenova/transformers`、
-  `@huggingface/jinja` —— 模型运行时属于宿主层，必须可替换；
+- `gliner`、`onnxruntime-web`、`onnxruntime-common`、`@xenova/transformers`、`@huggingface/jinja` —— 模型运行时属于宿主层，必须可替换；
 - `packages/extension` 下的任何文件（反向依赖，`import type` 也算）。
 
-**允许**：对宿主全局做 `typeof chrome === 'undefined'` 守卫式访问，前提是同时提供可注入
-的适配器（`createChromeStorage` 这类）——引擎能在 Node 下被 vitest 直接跑起来、`tests/`
-全部用例不需要浏览器环境，靠的就是这条。这条约束有自动化断言保护
-（`tests/unit/engineBoundaries.test.ts`，含「本节禁用清单与测试一致」的对账）——它是
-同一份代码能同时服务浏览器扩展与后续 Node 代理服务的前提。
+**允许**：对宿主全局做 `typeof chrome === 'undefined'` 守卫式访问，前提是同时提供可注入的适配器（`createChromeStorage` 这类）——`tests/` 全部用例不需要浏览器环境，靠的就是这条。该约束有自动化断言保护（`tests/unit/engineBoundaries.test.ts`，含「本节禁用清单与测试一致」的对账）。
 
-模型运行时（`packages/extension/src/model/`）与检测管线（`packages/engine/`）之间
-只有一道接口：`InferenceBackend`。宿主在启动时 `installModelBackend()` 注册自己的实现；
-未注册时 `getInferenceBackend()` 返回 `null`，管线自动退化为纯正则。这也是 `tests/`
-里全部用例能在 Node 下直接跑起来的原因。
+模型运行时（`packages/extension/src/model/`）与检测管线（`packages/engine/`）之间只有一道接口：`InferenceBackend`。宿主在启动时 `installModelBackend()` 注册自己的实现；未注册时 `getInferenceBackend()` 返回 `null`，管线自动退化为纯正则。
 
 ## 16. 界面语言（i18n）
 
-词条只有**一份**：`packages/extension/src/i18n/locales/{en,zh_CN}.json`。它同时供两个
-消费方使用——UI 走自带 `t()`（需要运行时切换语言，字典必须进包），manifest 的
-`__MSG_*__` 与 service worker 的 `chrome.i18n.getMessage` 走 `_locales/*/messages.json`
-（Chrome 原生机制，且不必把字典打进 SW 包）。后者由 `scripts/generate-locales.mjs`
-在构建时从前者生成，**不手抄**。
+词条只有**一份**：`packages/extension/src/i18n/locales/{en,zh_CN}.json`，供两个消费方共用——UI 走自带 `t()`（需运行时切换语言，字典必须进包）；manifest 的 `__MSG_*__` 与 service worker 的 `chrome.i18n.getMessage` 走 `_locales/*/messages.json`，由 `scripts/generate-locales.mjs` 在构建时从前者生成，**不手抄**。
 
-键名一律 snake_case：Chrome 的 `messages.json` 只接受 `[a-zA-Z0-9_@]`，用点号分层
-就无法共用一份清单。
+键名一律 snake_case：Chrome 的 `messages.json` 只接受 `[a-zA-Z0-9_@]`，用点号分层就无法共用一份清单。
 
-语言来源：`contextwatchdog.locale`（localStorage，显式选择，同步可读）→
-`chrome.i18n.getUILanguage()` → `navigator.language` → `en`。设置入口在侧栏的
-「检测引擎状态」面板里。
+语言来源：`contextwatchdog.locale`（localStorage，显式选择，同步可读）→ `chrome.i18n.getUILanguage()` → `navigator.language` → `en`。设置入口在侧栏的「检测引擎状态」面板里。
 
-**占位符也会跟着语言走**：替换后写进文本的是 `<<手机号>>` 还是 `<<PHONE>>`，取决于
-当前界面语言。引擎自己读不到浏览器 API，因此由宿主在启动时 `setPlaceholderLocale()`
-注入；解析侧同时接受两种语言的名称，所以切换语言后旧映射表仍可还原。
+**占位符也会跟着语言走**：替换后写进文本的是 `<<手机号>>` 还是 `<<PHONE>>`，取决于当前界面语言。引擎自己读不到浏览器 API，因此由宿主在启动时 `setPlaceholderLocale()` 注入；解析侧同时接受两种语言的名称，所以切换语言后旧映射表仍可还原。
 
-`tests/unit/i18n.test.ts` 兜住四类「构建全绿、界面才露馅」的漂移：新文案只写中文、
-词条只加了一门语言、`t('xxx')` 拼错、manifest 的 `__MSG_*__` 没有对应词条。
+`tests/unit/i18n.test.ts` 拦截四类「构建全绿、界面才露馅」的漂移：新文案只写中文、词条只加一门语言、`t('xxx')` 拼错、manifest 的 `__MSG_*__` 无对应词条。

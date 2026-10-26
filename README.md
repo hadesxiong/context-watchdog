@@ -43,10 +43,10 @@ Every row below can be checked in this repository instead of taken on faith:
 
 | Claim | How to verify |
 |-------|---------------|
-| **The extension never sends your text to a server** | `rg -n '\bfetch\s*\(' packages/extension/src` → only two hits, both in `modelDownload.ts` (each an injectable `fetchImpl` defaulting to `globalThis.fetch`, used solely to download the model). No `XMLHttpRequest` / `sendBeacon` / `WebSocket` / `EventSource` anywhere |
-| **The only network activity is the model download** | Same as above. It only happens after you explicitly enable the AI tier, and only against whitelisted model sources |
+| **The extension never sends your text to a server** | `rg -n '\bfetch\s*\(' packages/extension/src` → only two hits, both in `modelDownload.ts` (injectable `fetchImpl`, used solely to download the model). No `XMLHttpRequest` / `sendBeacon` / `WebSocket` / `EventSource` anywhere |
+| **The only network activity is the model download** | Same as above; only after you explicitly enable the AI tier, only against whitelisted model sources |
 | **Zero contact with unauthorised sites** | `rg -n 'content_scripts\|all_urls' packages/extension/src/manifest.json` → no match. The manifest declares no `content_scripts` and requests only `optional_host_permissions`, granted per site by the user |
-| **No telemetry of any kind (the extension)** | No analytics SDK, no crash reporting, no behavioural tracking anywhere in the extension source; inspect the bundle yourself after `npm run build`. The landing page ships **zero** analytics by default; deployments may opt into self-hosted Umami (page views only, no cookies, no text), gated by `UMAMI_*` env vars in `apps/site/.env.example` and disclosed on its privacy page |
+| **No telemetry of any kind (the extension)** | No analytics SDK, no crash reporting, no behavioural tracking anywhere in the extension source — inspect the bundle yourself after `npm run build`. The landing page ships **zero** analytics by default (optional self-hosted Umami: see *Data flow and privacy*) |
 | **Credential fields are never processed** | `password` inputs and hidden fields are skipped at `isTextEditable`, with a guard on both the paste-injection and side-panel paths |
 | **Releases are verifiable** | Each Release ships `sha256` sums; licences and third-party notices travel with the bundle (`LICENSE` / `NOTICE` / `THIRD-PARTY-NOTICES.txt`) |
 
@@ -69,7 +69,7 @@ The same content, written as a store-submittable policy page, lives at `/privacy
 
 ## Third-party components and model attribution
 
-`THIRD-PARTY-NOTICES.txt` is generated at build time and distributed with the bundle (required by Apache-2.0 §4 and by MIT's copyright/licence notice clause). Here is the human-readable version:
+`THIRD-PARTY-NOTICES.txt` is generated at build time and ships with the bundle. Human-readable version:
 
 | Component | Purpose | Licence |
 |-----------|---------|---------|
@@ -83,7 +83,7 @@ The same content, written as a store-submittable policy page, lives at `/privacy
 
 > ※ `gliner`'s `package.json` declares MIT, but the `LICENSE` file inside the package is the full Apache-2.0 text. **The `LICENSE` file wins**, so it is treated as Apache-2.0. This discrepancy is recorded in `THIRD-PARTY-NOTICES.txt`.
 
-**One compliance decision worth noting**: GLiNER **v0/v1 are `cc-by-nc-4.0` (non-commercial)**, and the licence changed to Apache-2.0 starting with **v2**. This project **pins v2**, which is itself a licensing decision — had we used v1 by mistake, this project could not have been released under any licence permitting commercial use.
+**One compliance decision worth noting**: GLiNER **v0/v1 are `cc-by-nc-4.0` (non-commercial)**; the licence changed to Apache-2.0 in **v2**, so this project **pins v2**.
 
 ## Tests
 
@@ -92,17 +92,16 @@ npm test              # everything (golden + regression + unit + perf)
 npm run test:watch    # watch mode
 npm run site:check    # landing page: Astro/TS diagnostics
 npm run site:build    # landing page: static build → apps/site/dist
-npm run check:versions # version/licence/canonical consistency + store pre-flight
 ```
 
-The directory map lives in [`docs/spec.md`](docs/spec.md) §12; reusable verification fixtures (sample texts) and the TC index are in [`docs/test-cases.md`](docs/test-cases.md) (full acceptance steps are the author's release document, held outside the repo).
+The directory map lives in [`docs/spec.md`](docs/spec.md) §12; reusable verification fixtures (sample texts) and the TC index are in [`docs/test-cases.md`](docs/test-cases.md).
 
 ## Tech stack
 
 - Vue 3 + Pinia + Tailwind CSS 4 + Reka UI
 - @crxjs/vite-plugin (Manifest V3 build)
 - gliner + @xenova/transformers + onnxruntime-web (GLiNER model, WASM, optional enhancement)
-- Remote model loading (primary source: ModelScope mirror; fallback: huggingface.co; Range-resumable download + exponential-backoff retries + a stall watchdog + Cache Storage persistence, so reopening the panel downloads nothing; on failure it silently degrades to pure regex and the UI shows the degraded state)
+- Remote model loading (ModelScope mirror primary → huggingface.co fallback; resumable and cached, so reopening the panel downloads nothing; on failure it degrades to pure regex and the UI shows the degraded state)
 
 ## Release
 
@@ -127,11 +126,11 @@ npm run release:pack                # two store-ready zips + SHA256SUMS → rele
 | [`TODO.md`](TODO.md) | Current status and open items (Chinese) |
 | Landing page `/changelog/` | User-facing release notes, bilingual |
 
-Design documents are **deliberately published with the code**: this project files no patents, so the designs themselves constitute practisable prior art (see [PATENTS.md](PATENTS.md)). `site-ai-offscreen-host.md` and `local-sanitize-proxy.md` describe lines ①/② planned *after* 1.0.0 — published before implementation precisely so there is no gap period.
+Design documents are **deliberately published with the code**: `site-ai-offscreen-host.md` and `local-sanitize-proxy.md` describe lines ①/② planned *after* 1.0.0 — published before implementation (see [PATENTS.md](PATENTS.md)).
 
 ## Contributing
 
-This project is maintained by a **single author** and **does not accept code contributions** — a deliberate maintenance policy rather than a rejection of the community (see [CONTRIBUTING.md](CONTRIBUTING.md)).
+This project is maintained by a **single author** and **does not accept code contributions** — a deliberate maintenance policy (see [CONTRIBUTING.md](CONTRIBUTING.md)).
 
 Welcome:
 
@@ -142,7 +141,7 @@ Welcome:
 ## Attribution and trademark
 
 - Developed and maintained by **hadesxiong**.
-- **The `ContextWatchdog` name and icon are the author's trademark** and are not covered by the Apache-2.0 grant (§6 of that licence explicitly excludes trademark rights and preserves only "describing the origin" fair use).
+- **The `ContextWatchdog` name and icon are the author's trademark** and are not covered by the Apache-2.0 grant (§6 of that licence excludes trademark rights).
 - Allowed: factual references such as `Based on ContextWatchdog (https://github.com/hadesxiong/context-watchdog)`.
 - Not allowed: using `ContextWatchdog` as the name, icon, or package name of your derivative; implying that your work is the official version or endorsed by the original author.
 
