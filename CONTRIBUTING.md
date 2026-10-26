@@ -118,7 +118,8 @@ npm run probe:layout       # 全绿
   三处同步更新；`CHANGELOG.md` 头注四条指路若受影响则同动。
 
 以上人工规则之外，改完文档跑一次 `npm run check:docs`：机器校验相对链接与锚点、
-三处地图与 `docs/` 实际文件集一致、测试基线数字跨文档不打架（CHANGELOG 的历史数字豁免）。
+三处地图与 `docs/` 实际文件集一致、测试基线数字跨文档不打架（CHANGELOG 的历史数字豁免）、
+CHANGELOG 轮次圈号不重复。
 
 ---
 

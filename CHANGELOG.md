@@ -1,830 +1,288 @@
 # Changelog
 
-> ContextWatchdog 实现轮次与结案记录（按时间倒序，压缩版）。
-> 技术规格：`docs/spec.md`；手动验收判据：`docs/test-cases.md`；当前状态：`TODO.md`；
-> 设计决策与后续迭代规划：`docs/` 设计线两份（索引见根 README 文档地图）。
-> 单条提交详情见 `git log`；被清退的历史规划文档见 `f35ceae` 之前的 TODO。
+> ContextWatchdog 实现轮次与结案记录（按时间倒序）。
+> 技术规格：`docs/spec.md`；手动验收判据：`docs/test-cases.md`；当前状态：`TODO.md`；设计线两份在 `docs/`。
+> 逐笔改动见 `git log`；被清退的历史规划文档见 `f35ceae` 之前的 TODO。
 
 ## 2026-10-26
 
-### ㉔ 落地页接入自托管 Umami 访问统计（env 门控 + 承诺精确化）
+### ㉝ 落地页接入自托管 Umami 访问统计（env 门控 + 承诺精确化）
 
-- **注入通道**：`UMAMI_WEBSITE_ID / UMAMI_SCRIPT_URL / UMAMI_HOST_URL / UMAMI_DNT` 四键进
-  `apps/site/.env`（部署身份，不进仓库）→ `resolveUmami` 纯函数校验（启用对缺一即错、ID 禁
-  空白/引号/尖括号、URL 必 https 无查询串、修饰项配了没启用只警告）→ `vite.define` 新通道
-  `__UMAMI__` → `Base.astro` 条件渲染标签，**模板零字面量**；仅 `astro build` 注入（dev 流量
-  不进统计），fork 默认零注入、产物与接入前逐字节一致。
-- **护栏**：`check:versions` 外链脚本检查由「出现即 fail」改为白名单——只放行 env 配置的统计
-  地址，启用时每页必须含它（env 改了没重建同样报红）；`siteLinks.test.ts` 新增 7 项
-  `resolveUmami` 用例（23 项）。
-- **部署架构**：Umami 主机挂 Tailscale 内网、零公网暴露；ECS nginx 把**域名根**的 `/umami/`
-  反代回源（收紧版只放行 `script.js` + `/api/`，后台仅内网直连；示例见 `.env.example`），
-  访客只与本站域名通信——`data-host-url` 由 env 显式钉死上报路径。
-- **承诺精确化（中英同步）**：扩展零遥测的承诺一字不动；会被推翻的站点侧字面承诺全部改为
-  「作用域 + 条件披露」——页脚 `static` 拆出 `statsNone/statsUmami`、隐私页 `noCollect` 与
-  数据流拆出 `stats*` 条件键（每种构建产物的声明都为真）、README 双语可核验表与数据流表、
-  SECURITY.md、spec §11.1「零客户端 JS」→「默认零客户端 JS」与 §10 限定词。
+- 注入通道：`UMAMI_WEBSITE_ID / SCRIPT_URL / HOST_URL / DNT` 四键进 `apps/site/.env` → `resolveUmami` 纯函数校验 → `vite.define __UMAMI__` → `Base.astro` 条件渲染，模板零字面量；仅 `astro build` 注入，fork 默认零注入、产物逐字节同形；`check:versions` 外链检查改为 env 白名单。
+- 部署架构：Umami 主机挂 Tailscale 内网零公网暴露，ECS nginx 把域名根的 `/umami/` 反代回源（收紧版只放行 `script.js` + `/api/`），访客只与本站域名通信。
+- 承诺精确化（中英同步）：扩展零遥测承诺不动；站点侧字面承诺改为「作用域 + 条件披露」（页脚/隐私页条件键、README 双语、SECURITY、spec §11.1「默认零客户端 JS」），每种构建产物的声明都为真。
 
 ## 2026-10-23
 
 ### ㉑ 去掉 design/ 层级 —— 设计线三份平铺进 docs/
 
-- **结构收敛**：`docs/design/` 三份（license-patent-and-brand / site-ai-offscreen-host /
-  local-sanitize-proxy）`git mv` 至 `docs/` 顶层、目录撤销——6 份文档单层平铺，角色区分
-  交回 README 文档地图与 CONTRIBUTING 索引承载（路径不再承担分组语义）。
-- **全仓活引用跟随（12 个文件 18 处）**：README 双语地图 ×6 行、CONTRIBUTING 索引行、
-  本文件头注、spec §15 结构树、TODO、PATENTS 正文、落地页 footer `treeUrl('docs')`、
-  engine/extension 注释 ×2、check-docs 模式表、license 设计稿自指 ×3；⑰ 与 474 行等
-  历史提及是存档不改（门禁豁免照旧）。
-- 五道门禁复验：check:docs（首验平铺后的地图与路径）/ typecheck / test 420·33 /
-  site:build（footer 改动）/ check:versions。
+- `docs/design/` 三份 `git mv` 至 `docs/` 顶层、目录撤销，分组语义交回 README 文档地图与 CONTRIBUTING 索引。
+- 全仓活引用跟随（12 文件 18 处：README 双语地图、spec §15 结构树、TODO、PATENTS、落地页 footer、check-docs 模式表等）；历史提及按存档不改。
+- 五道门禁复验：check:docs / typecheck / test 420·33 / site:build / check:versions。
 
 ### ㉒ 移出 license-patent-and-brand.md（可执行内容已由关键文档承载）
 
-- **移出仓库**：定案类「选用思路与想法」文档撤出公开面。其可执行部分本就分布在
-  `LICENSE`（Apache-2.0 全文）/ `PATENTS.md`（专利与现有技术声明全文，中英双语）/
-  `NOTICE`（商标权属与衍生作品三条件）/ `THIRD-PARTY-NOTICES.txt`（第三方依赖许可）/
-  根 README（归属与商标节、prior art 段）/ `CONTRIBUTING`（贡献与 fork 政策）；该文档
-  独有的是决策轨迹、被排除选项与注册建议等思路性内容，按作者裁决不再随仓公开。
-- 引用跟随：README 双语地图行、CONTRIBUTING 索引行、PATENTS 正文、spec 结构树与
-  本文件头注的「三份」字样；㉑ 的三份记述是当时事实，保留。docs/ 现为 5 份。
-- **排期（作者裁决）**：`docs/releasing.md` 计划在 1.0.0 发布流程完成后移出——现阶段
-  它仍是作者自己的发布 runbook，首次发布前不撤。
+- 定案类「思路性」文档撤出公开面：可执行内容分布在 `LICENSE` / `PATENTS.md` / `NOTICE` / `THIRD-PARTY-NOTICES.txt` / 根 README / `CONTRIBUTING`。
+- 决策轨迹、被排除选项与注册建议按作者裁决不再随仓公开；引用跟随，docs/ 现为 5 份。
+- 排期：`docs/releasing.md` 计划 1.0.0 发布完成后移出（㉓ 提前执行）。
 
 ### ㉓ 移出 releasing.md，并对两份文件做全历史清除（作者裁决升级）
 
-- **releasing.md 移出仓库**：作者个人发布 runbook，不面向他人（fork 者无法照单重跑
-  作者的商店账号操作）——㉒ 的「1.0.0 后再撤」排期提前到现即撤出；仓外另存备份。
-- **全历史清除**：`filter-branch` 将 `docs/releasing.md` 及 license 文档共三条历史路径
- （含平铺前 `docs/design/` 旧径）自全部 140 个提交中抹除——未产生变空提交（两文件的
-  改动始终伴随其他改动），140 笔中仅后 46 笔改写哈希，文件出现之前的 94 笔无涉提交
-  原哈希保留（`f35ceae` 等既有引用经核验仍然有效）；需 force push（与此前
-  filter-branch 清理同类）。
-- 引用跟随：README 双语（发布节 + 地图行）、spec（§11 落地页要点 + §15 结构树）、
-  CONTRIBUTING（索引行 + 联动清单）、TODO（状态 + 素材挂账）、links.ts 注释、
-  pack-release 提示语；docs/ 收敛为 4 份（spec / test-cases / 设计线两份）。
+- 作者个人发布 runbook 移出仓库（fork 者无法照单重跑作者的商店账号操作），仓外另存备份。
+- `filter-branch` 将其与 license 文档共 3 条历史路径自全部 140 个提交抹除，仅后 46 笔改写哈希，需 force push。
+- 引用跟随（README / spec / CONTRIBUTING / TODO / `links.ts` / pack-release）；docs/ 收敛为 4 份：spec / test-cases / 设计线两份。
 
 ### ㉔ 真机验收全结案；test-cases 精简为 A 类并全历史清除（作者裁决）
 
-- **验收结案**：Firefox 两缺陷（⑱，判据 = TC-07-8 步骤 6/7 的 Firefox 分支）与
-  TC-02 卡号夹具 Luhn 复跑（⑲）于 2026-10-23 真机复验通过——1.0.0 全部真机验收清零，
-  TODO 状态同步为「收尾完成」。
-- **test-cases.md 内容分层（只留 A 类）**：保留环境准备、样例夹具与复制注意、
-  真机判据主干、附录 A 自动化基线；移出 B 历史叙述（逐轮验收时间戳与根因沿革指针）、
-  C 像素规格（挂件尺寸/字号/间距数值——已固化者以 `probe:widget` 为准；TC-08 整节
-  纯目视细则并为探针指针）、D 排障与防假通过知识（节流盲区复核、复制排障——与顶部
-  复制注意重复者消重）。454 → 425 行，TC 编号骨架全保留，入站引用（spec §13-4/§4、
-  `modelDownload`/`entityShape` 注释、TODO/CHANGELOG 存档提及）逐一核对有效；
-  TC-08-1~5 仅存档提及，按㉑先例不回改。移出内容由作者仓外自存。
-- **全历史清除（方案乙）**：`filter-branch` 将 `docs/test-cases.md` 自 144 个提交的
-  历史中抹除、仅本轮精简版所在提交持有 → 需 force push（与 ㉓ 同类操作；
-  GitHub 端旧提交按 SHA 的短期残留同既往）。
-- 门禁复验：check:docs（基线模式仍命中附录 A）/ typecheck / test 420·33 /
-  probe:layout / probe:widget。
+- 验收结案：Firefox 两缺陷（⑱）与 TC-02 卡号 Luhn 复跑（⑲）真机复验通过，1.0.0 真机验收全部清零。
+- test-cases.md 只留 A 类（环境准备、样例夹具、真机判据主干、附录 A）：454 → 425 行，TC 编号骨架保留，B/C/D 成分移出仓外。
+- `filter-branch` 使该文件仅本轮精简版所在提交持有 → 需 force push；入站引用逐一核对有效。
 
 ### ㉕ test-cases 再收敛 —— 验收判据明细出仓，只留样例与 TC 索引（作者裁决）
 
-- **裁决依据（作者）**：TC 的步骤与逐条预期是 1.0.0 发布前反复调整中产生的**过程产物**
-  （每条都是验收缺陷的即时沉淀，随下一次 UI 改动即腐烂），属个人发布 QA 菜谱，
-  与 releasing.md / roadmap 同族；检验样例则是可独立复用的公共输入夹具，开放保留。
-- **仓内最终形态（425 → 179 行）**：§0 环境准备 + 检验样例 A–F 与复制注意 +
-  **TC 索引（每条编号 + 标题 + 一句核心判据，保证 spec/CHANGELOG/源码注释的
-  TC 引用可解析）** + 附录 A 自动化基线；TC-08 判据指向作者归档。
-- **出仓**：完整验收步骤与逐条预期（含 ㉔ 移出的 B/C/D 成分的全量上下文）存为作者
-  仓外归档 `test-cases-full-archive.md`（原 454 行版）。
-- **引用跟随**：README 双语（正文一句 + 文档表）、CONTRIBUTING（索引行 + 联动清单）、
-  spec（头注 + §12 原则句）、TODO（头注 + 状态句）；4 处源码注释的 TC 编号引用经
-  索引保持可解析，零改动。
-- **二次全历史清除**：filter-branch 仅留最终 tip 持有该文件（㉔ 清除后的 425 行版
-  blob 随之出历史）→ 需 force push。
-- 门禁复验：check:docs / typecheck / test 420·33。
+- 裁决：TC 的步骤与逐条预期是发布 QA 过程产物（随 UI 改动即腐烂），出仓归档；样例夹具是可复用公共输入，开放保留。
+- 仓内最终形态 425 → 179 行：§0 环境 + 样例 A–F + **TC 索引（编号 + 标题 + 一句判据，保证 spec/源码的 TC 引用可解析）** + 附录 A。
+- 二次全历史清除（仅最终 tip 持有该文件）→ 需 force push；README/CONTRIBUTING/spec/TODO 引用跟随，4 处源码 TC 引用零改动。
 
 ### ㉖ 修复「中文 AI 召回为零」缺陷 —— 换用多语言 GLiNER 模型
 
-- **缺陷定性（真机验收暴露）**：样例 D 的姓名/地址从未被 AI 检出，「AI 档补姓名、地址」
-  的对外承诺（落地页 FAQ）不成立。根因查明：前代模型
-  `onnx-community/gliner_small-v2` 骨干为 microsoft/deberta-v3-small（纯英文 128K SPM
-  词表），中文字符全部塌缩为 [UNK]，encoder 对中文内容全盲——2026-10-18 实机记录的
-  「真召回为零 + 0.25–0.65 区间单字乱指幻觉」即此失效模式；此前「系模型能力限制」的
-  归因不准确：存在同发布族的多语言替代，属选型问题（spec §13-3 已重写）。
-- **换模**：`onnx-community/gliner_multi-v2.1`（mdeberta-v3-base 多语言骨干，中文在
-  词表与训练语料内）。接线核实：`max_width` 同为 12、同 span-level 导出 → 推理侧
-  零改动；ModelScope 已镜像同组织仓库 → 白名单源零改动；切词 `/\w+(?:[-_]\w+)*|\S/`
-  对中文逐字成词，恰好提供字级 span 边界。下载器：源 URL、字节数（349,120,924 ≈349MB；
-  fp16 580MB / 全量 1.16GB 弃）、缓存 key 换新 + 前代孤儿缓存一次性清扫
-  （`PREDECESSOR_MODEL_CACHE_URL`，1 字节探测作废旧条目机制照旧）。
-- **代价（如实）**：体积 183→349MB；推理计算量约 5–6 倍（44M→278M 参数）；内存与
-  时延基线待复测（spec §14 已标注前提出处）；换模后中文实际召回**待真机复验**
-  （TC-06-5 判据升级为「应补出 <<姓名>>/<<地址>>」；复验不过则回退换模并诚实化 FAQ）。
-- **文档/文案同步**：spec（§1 功能表、§7 模型与下载器表、§13-2/3 重写、§14 标注）、
-  README 第三方许可表、test-cases TC-06-5、落地页 FAQ 双语 4 处（约 180MB → 约 350MB）、
-  modelDownload/contentDetector 源码注释。
-- 门禁：typecheck / test（modelDownload 夹具数字随常量换签）/ 双目标构建。
+- 定性：前代模型 deberta-v3-small 纯英文词表对中文全盲（字符塌缩 `[UNK]`），「AI 补姓名/地址」承诺不成立——属选型问题，spec §13-3 重写。
+- 换模 `onnx-community/gliner_multi-v2.1`（349MB）：`max_width`/span-level 同构、镜像源同组织，接线与白名单零改动；下载器换字节与缓存 key、清前代孤儿缓存。
+- 代价如实：183 → 349MB、推理 5–6 倍；复验不过则回退（㉚ 兑现），期间不演示未验证输出（㉗）。
 
 ### ㉗ 落地页演示区改版（E8 占位收口）与 TODO 开源化精简
 
-- **demo 区**：删除「演示动图待录制（E8）」占位（演示 GIF 经作者裁决不做）；单一
-  对比块改为案例列表渲染，首期两组——配置与密钥（原案例原样）+ 日常文本·通用文本档
-  （手机号/身份证/银行卡就地替换、邮箱按内置默认保留；夹具改写自样例 B，占位符名与
-  引擎 `placeholder.ts` 双语名表逐一对齐）。AI 增强案例待 ㉖ 换模真机复验通过后补
-  （不演示未验证的输出）。
-- **换模文案补遗**：隐私页「第三方组件」双语行漏改的模型 ID（`gliner_small-v2` →
-  `gliner_multi-v2.1`）随本轮修正；扩展侧词典（`zh_CN/en`）三处「约 180MB」
-  （引擎说明 / 首次下载提示 / 引导页）同因修正为 350MB，七处代码注释数字跟随；
-  下载进度改为**始终并显百分比与 MB**（旧实现仅在无总长时给 MB——大小是可核验信息），
-  且 MB 换算统一为十进制口径（旧 ÷1048576 会把总长显示成 333、与文案 349 对不上）；
-  前代模型的 `?v=` 历史 key 一并纳入换模清扫（`PREDECESSOR_LEGACY_MODEL_CACHE_URL`）。
-- **TODO 开源化精简**（作者裁决）：TODO.md 只保留项目本身的状态/基线/回归命令/空待办
-  ——S1–S5 长叙事与 Firefox 缺陷细节回归 CHANGELOG 沿革；F8 打 tag / F7 互链 / 素材 /
-  push 等个人运维与换模复验清单迁出至作者仓外待办（`author-todo.md`，与 releasing.md
-  同族）。换模复验未结状态如实挂当前状态区。
-- 门禁：site:check / site:build / check:docs / typecheck / test 420·33。
+- demo 区删「演示动图」占位（作者裁决不做），改两组案例列表（占位符名与 `placeholder.ts` 双语名表对齐）；AI 案例待 ㉖ 复验通过再补。
+- 换模文案补遗：隐私页模型 ID、三处「约 180MB」→ 350MB、下载进度恒显百分比 + MB（十进制口径）、前代历史缓存 key 纳入清扫。
+- TODO 开源化精简（作者裁决）：只留状态/基线/回归命令/空待办，长叙事与个人运维迁出仓外。
 
 ### ㉘ 修复模型下载源指向前代模型（换模漏改）+ 缓存期望字节数守卫
 
-- **真机报障**：「换模后下载提示仍是 183MB、AI 检测无变化」。根因：㉖ 换模替换了
-  `MODEL_FILE_BYTES`/缓存 key/`tokenizerPath`，却漏改 `MODEL_SOURCES` 数组——两个源站
-  URL 仍指向前代 `gliner_small-v2`。于是 183MB 前代模型被「完整下完」存进新缓存 key，
-  版本探测两侧同为 183,403,734 永远判定「current」；`tokenizerPath` 却已是 multi-v2.1
-  的 250K 词表，**分词器与 ONNX 词表错配、推理失败被静默吞掉** → 表现为进度总长
-  183MB 且 AI 零召回（D 案例无变化），两个症状一条根。
-- **修复**：`MODEL_SOURCES` 更正为 `onnx-community/gliner_multi-v2.1`（ModelScope 主源 +
-  HuggingFace 兜底）。重载后由守卫自动清掉污染缓存并重下正确模型，无需手工清存储。
-- **期望字节数守卫**（缓存层新不变式：只允许 `MODEL_FILE_BYTES` 字节永久化）：
-  `match()` 字节数不符 → 删除并返回 null 自愈（本地直判、不依赖版本探测，24h 节流
-  或离线时同样生效）；`put()` 字节数不符 → 拒写抛错，下载流程换源重试、最终失败带
-  详情浮出，绝不静默用错模型；`migrateLegacy()` 非本模字节不搬迁。专治「完整下完的
-  错误文件」自洽常驻这一类故障（Content-Length 与探测比对都拦不住）。
-- 单测新增 `createBrowserModelCache` 守卫三例（伪 caches 实现）；423 tests · 33 files 全绿。
+- 真机报障「下载仍 183MB、AI 零召回」：㉖ 换模漏改 `MODEL_SOURCES`——分词器已是 250K 词表而 ONNX 仍指前代，推理失败被静默吞掉，两个症状一条根。
+- 修复：`MODEL_SOURCES` 更正为 multi-v2.1 双源，重载后由守卫自动清污染缓存重下。
+- 新增期望字节数守卫（缓存层不变式：只允许 `MODEL_FILE_BYTES` 字节持久化）：不符即删/拒写自愈，专治「完整下完的错文件」；+3 单测，423 tests · 33 files。
 
 ### ㉙ 换用 FP16 模型字节 —— int8/uint8 量化导出取证为坏文件
 
-- **背景**：㉖ 换模 + ㉘ 修下载源落地后，真机 D 案例仍零召回。本地 harness
-  （`gliner` node 入口 + 同一 span-level 接线，ModelScope 真文件）取证定案：
-  - **阳性对照通过**：前代 small-v2 同接线英文 0.95–0.98 全检出 → harness/接线无辜；
-    multi-v2.1 分词器对中文出真 id（李=95290，非 [UNK]）→ 词表无辜；
-  - **坏在量化**：同仓 `model_int8`（= `model_quantized`，349,120,924B）与
-    `model_uint8`（349,120,961B）在**所有语言**上输出全负 logits（英文送分题
-    max sigmoid 仅 0.15、0.25 阈值全零）——双位宽同崩，quanto 静态量化配方把
-    span 打分头算坏了；
-  - **fp16 完好**：`model_fp16.onnx`（579,717,643B ≈580MB）同 harness 英文 0.97、
-    中文「李雷」0.90「韩梅梅」0.72「大街1号」0.52（样例 D 期望召回成立），
-    推理 ~0.5s；并以 gliner **web** 入口 + `onnxruntime-web` 1.19.2（WASM 内核）
-    端到端复核通过（生产同款路径，中英文各 ~0.5s，远在 8s 级联窗内）。
-- **变更**：`MODEL_SOURCES` → `onnx/model_fp16.onnx`（双源）；`MODEL_FILE_BYTES`
-  → 579717643；缓存 key → `.../model_fp16.onnx`，旧 int8 条目（含 `?partial`）纳入
-  `PREDECESSOR_MULTI_INT8_MODEL_CACHE_URL` 清扫；期望字节数守卫（㉘）自动拒收
-  349MB 坏字节；文案口径 350→580MB、「量化版」→「半精度版」（扩展/站点双侧词典
-  四文件），代码注释 9 处数字跟随。
-- **文档**：spec §1/§7 模型行与清扫清单、§10 配额、§13-3 增「量化崩坏与 FP16
-  选型」取证条、§14 标注改 580MB 待复测；测试夹具字节数同步。
-- **代价与余项**：下载 580MB（+231MB）与内存上升；真机复验（TC-06-5 / TC-07-9 /
-  §14 基线）待执行——若浏览器实测再有异常，备选为自产量化或回退 small-v2（见
-  author-todo 复验清单）。
-- 门禁：typecheck / 423 tests · 33 files / 双目标构建 / site:check·build / check:docs。
+- 本地 harness 取证：多语言版 `model_int8`/`model_uint8` 在所有语言上输出全负 logits（quanto 量化算坏打分头）；`model_fp16` 完好（英文 0.97、中文姓名 0.90/0.72、推理 ~0.5s，web 端到端复核通过）。
+- 变更：源切 `model_fp16.onnx`（579,717,643B），旧 int8 条目纳入清扫，守卫（㉘）自动拒收 349MB 坏字节；文案 350 → 580MB。
+- 余项：真机复验待执行——若内存再异常则回退（㉚ 兑现）；spec §13-3 增量化崩坏取证条。
 
 ### ㉚ 回退 small-v2 —— 无任何可 ship 的 multi-v2.1 变体（FP16 内存实测判死）
 
-- **背景**：㉙ 落地 fp16 换字节后，真机（ORT-WASM 同栈）暴露结构性内存问题——
-  WASM 无 fp16 算子，fp16/q4f16 权重全量升位双份驻留，是配置绕不过的结构性事实：
-  - **内存矩阵**（建会话后 RSS 实测）：small-v2 int8 183MB → **1.5GB**（实机流畅
-    基线）；multi fp16 580MB → **3.2GB** ✗（真机「Initializing models 卡很久」根因）；
-    q4f16 472MB → **2.8GB** ✗——均 2× 超标，浏览器标签页内存海啸，不可 ship；
-  - **质量矩阵**：fp16 中文召回本身完美（「李雷」0.90「韩梅梅」0.72「大街1号」0.52，
-    推理 ~0.5s）——病根只差一份「质量完好 + 内存可行」的字节；q4f16 中文衰减
-    （0.75/0.46/0.34，姓名掉出敏感线）。
-- **裁决**：上游无任何可 ship 变体（int8/uint8 质量崩坏、fp16/q4f16 内存超标）→
-  回退 `gliner_small-v2`（1.0.0 终态）；中文 AI 召回转 **1.1 路线**（本机 torch
-  重量化排除 span 打分头 + GitHub Release 托管）。
-- **变更**：
-  - `MODEL_SOURCES` → small-v2 `onnx/model_quantized.onnx`（双源）；`MODEL_FILE_BYTES`
-    → 183403734；缓存 key → `.../gliner_small-v2/model_quantized.onnx`；期望字节数
-    守卫（㉘）基准随之回归 183MB——用户机上 580MB/349MB 孤儿条目由
-    `PREDECESSOR_MULTI_FP16_*` / `PREDECESSOR_MULTI_INT8_*`（各含 `?partial`）
-    一次性清扫（新增不变式单测：清扫清单严禁与现役 key 交集，否则每次启动自删
-    缓存重下全量）；
-  - 新增 `languageGuard.ts` 的 `isCjkDominant`：AI 级联入口整段跳过中文占优片段
-    （CJK 字母数 ≥ 拉丁字母数；混合文本如「请帮我联系 John Smith」保拉丁实体）——
-    对全盲模型喂中文只会 0.25–0.65 幻觉，跳过后中文退化为纯正则（固定形状目标
-    正则全覆盖，无实际检测损失），幻觉面被彻底消灭；
-  - 文案与说明诚实化：580→183MB、「半精度版」→「量化版」（扩展/站点双侧词典
-    四文件 + 代码注释），站点 FAQ 如实声明「当前模型仅识别英文实体，中文由正则档
-    负责，多语言在路线图」。
-- **文档**：spec §3 增 3c 语言守卫步骤、§1/§7/§10 模型行与配额回归 183MB 口径、
-  §13-3 改「中文 AI 不可用（回退终态）+ CJK 守卫」、§13-4 重写为完整换模证据链
-  （质量→内存→决策）、§14 基线标注改「模型未变仍有效」；TC-06-5 判据改
-  「D 案例就绪也不得多出占位符」；TODO 换模条目改终态与 1.1 路线；README 双语
-  模型行与测试基线同步。
-- 门禁：typecheck / 433 tests · 34 files（+languageGuard 8 +清扫不变式 2）/
-  双目标构建 / site:check·build / check:docs；产物验证：small-v2 双源、183MB
-  文案全仓无 580 残留、清扫常量不含现役 key。
+- 内存矩阵判死：WASM 无 fp16 算子，fp16/q4f16 权重双份驻留 3.2GB / 2.8GB（vs small-v2 int8 1.5GB 流畅基线）均 2× 超标，q4f16 中文质量还衰减——上游无可 ship 变体。
+- 裁决：回退 `gliner_small-v2`（1.0.0 终态，183MB 口径回归），中文 AI 召回转 1.1 路线（本机 torch 重量化 + GitHub Release 托管）。
+- 新增 `languageGuard.ts` CJK 守卫（AI 级联整段跳过中文占优片段，消灭幻觉面）；孤儿缓存清扫 + 防与现役 key 交集不变式；spec §13-3/§13-4 重写，433 tests · 34 files。
 
 ### ㉛ 中文能力说明去绝对化 ——「完全由正则覆盖」改为稳妥口径（作者复审）
 
-- **背景**：作者复审指出「中文内容完全由正则档覆盖」的叙事过于绝对——正则按模式
-  覆盖固定形状，「全」是模式集无法兑现的承诺；FAQ 原句「中文实体由正则档负责」
-  还会让人误以为中文姓名/地址也有兜底（实际两档都不识别，正则没有形状可依）。
-- **变更**：站点两处双语统一为稳妥表述——**「受限于模型大小，AI 增强对部分通用
-  中文文本的识别并不稳定；固定形状目标由恒开的正则档负责（不作「全覆盖」承诺），
-  多语言支持在路线图中」**：`engine.note`（两档下方注脚）与 FAQ「AI 档是否必要」
-  答句收尾，zh/en 原子同步（`SiteDict` 类型层 + `siteI18n` 用例双向校验）。
-- **工程文档同步去「全」**：spec §3 级联 3c、§13-3、`languageGuard.ts` 头注与单测
-  头注的「正则全覆盖，无实际检测损失」→「由正则覆盖，跳过相对当前模型零检测
-  损失」；spec §13-3 补记「用户侧不作绝对承诺，以站点 FAQ 稳妥口径为准」。
-  扩展侧 `about_model_value` 本就带「不作承诺/主要/只作补充」三重缓冲，维持不动。
-- 门禁：typecheck / 433 tests · 34 files / 双目标构建 / site:check·build / check:docs。
+- 作者复审：「中文完全由正则覆盖」过于绝对（模式集无法兑现「全」；姓名/地址两档均不识别）。
+- 站点双语统一稳妥口径（`engine.note` + FAQ）：AI 对部分通用中文不稳定，固定形状目标由正则负责、不作全覆盖承诺，多语言在路线图。
+- 工程文档同步去「全」（spec §3/§13-3、`languageGuard` 头注）；扩展侧三重缓冲文案维持不动。
 
 ### ㉜ 移除打赏与感谢墙 —— 配置链整体下线（作者裁决「用不到了」）
 
-- **范围**：落地页 §9 打赏区块（双收款码 + 说明）与 §7 感谢墙整体删除——感谢墙
-  名单（`data/supporters.json`）本就为空、区块从不渲染，属休眠配置。联动删除
-  `thanks`/`donate` 双语词条、`.pg-donate`/`.pg-qr`/`.pg-thanks*` 样式、
-  `Thanks.astro` 与 `data/supporters.{ts,json}`、单测 `siteSupporters.test.ts`
-  （8 例）；落地页头部注释 9 区块 → 7 区块，叙事链去掉「谁在支持 / 怎么支持」。
-- **配置链下线**：`DONATE_QR_ALIPAY`/`DONATE_QR_WECHAT`（.env.example）、
-  `site-links.mjs` 解析与 `siteLinks.test.ts` 断言、`astro.config.mjs` 构建期
-  data-URI 内联（`IMAGE_MIME`/`inlineDonateQr` 及 `fs`/`path` 导入）、`links.ts`
-  导出、`env.d.ts` 声明、`.gitignore` 的 `apps/site/donate-qr*`、CONTRIBUTING
-  部署身份表的 `DONATE_QR` 行。
-- **提法收口**：FAQ「以后会有付费功能吗」双语答句去掉打赏措辞（改「没有付费解锁
-  的计划」）；扩展 `about_price_value` 去「打赏解锁」（zh；en 本就无此措辞）、
-  CapabilityDialog 头注同步。全仓（除本文件史实）打赏/感谢/DONATE 触点清零。
-- **基线**：433/34 → **425 断言 / 33 文件**（-siteSupporters 8 例），check:docs
-  六处基线 + TODO 期望注释 + spec §12 清单同步；门禁 typecheck / 425 tests ·
-  33 files / 双目标构建 / probe:layout·widget / site:check·build / check:docs。
+- 落地页打赏区块与感谢墙整体删除（名单为空的休眠配置），联动删双语词条、样式、组件与 8 例单测；头部注释 9 → 7 区块。
+- 配置链下线：`DONATE_QR_*` env 键、解析与断言、构建期 data-URI 内联、导出与声明、gitignore、CONTRIBUTING 部署表行全链清零。
+- 基线 433/34 → **425 断言 / 33 文件**，check:docs 六处 + TODO + spec §12 同步。
 
 ## 2026-10-22
 
 ### ⑯ H-1 / H-2 与 TC-07-8/9 真机验收结案
 
-- **H-1 输入区去自动检测**（2026-10-18 落地）真机验收通过 → **TC-02-1 结案**：
-  粘贴与手动输入均不再自动检测，仅「检测」按钮触发；检测后继续编辑旧结果保留。
-- **H-2 落地页安装区改版**（2026-10-19 落地）真机双语目视验收通过 →
-  四并列渠道卡片改 VS Code/GitHub 式下载按钮 + details 下拉面板（零 JS）；
-  应用组未上架渠道占位「即将上架」无死链；分割线评估=保留每节 1px 单色细线。
-- **TC-07-8 站点挂件与逐站 AI 开关、TC-07-9 粘贴链路 AI 二次升级**真机验收通过
-  → 第①条线（S1–S5）全量结案。
+- H-1 输入区去自动检测（仅「检测」按钮触发）与 H-2 落地页安装区改版（下载按钮 + details 下拉、零 JS）真机验收通过。
+- TC-07-8 站点挂件与逐站 AI 开关、TC-07-9 粘贴链路 AI 二次升级真机通过 → 第①条线（S1–S5）全量结案。
 
 ### ⑰ docs/README 整合与改名收尾
 
-- **移出内部工作文档**：`docs/design/release-1.0.0-plan.md` 与 `docs/design/roadmap.md`
-  移出仓库（roadmap 内容与 CHANGELOG 重复，plan 是已执行完的一次性规划），不再随分发。
-- **删除 4 个子 README**，独有内容并入单一真相源：`docs/README.md` 文档索引与更新触发
-  → `CONTRIBUTING.md`；`docs/design/README.md` 索引表 → 根 README 文档地图（双语同步）；
-  `apps/site/README.md` → spec §11.1（落地页：命令/结构/三条不改的原则）+ releasing §7
-  （部署前检查）；`packages/engine/README.md` → spec §15（三宿主表 + 硬约束禁用清单），
-  `engineBoundaries` 测试改为与 spec §15 对账。
-- **新增 `public/icons/logo-dark.svg`**（暗底用浅色变体，纯资产，暂无消费方）。
-- **改名收尾**：origin 指向 `github.com:hadesxiong/context-watchdog`；两个移出文档的
-  全部历史提交经 `git filter-branch` 清除（全仓库短 SHA 重写，push 需 `--force`）。
+- 移出一次性规划与重复文档（release-1.0.0-plan / roadmap）；删 4 个子 README，独有内容并入 CONTRIBUTING / README 地图 / spec §11.1·§15（`engineBoundaries` 测试改为与 spec §15 对账）。
+- 改名收尾：origin 指向 `hadesxiong/context-watchdog`；移出文档历史经 `filter-branch` 清除，push 需 `--force`。
 
 ### ⑱ Firefox 侧栏两缺陷修复（真机验收发现，方案 A 诚实降级）
 
-- **挂件按钮文案撒谎**（按钮亮「侧边栏已打开」，实际打开的是弹窗）：Firefox 的
-  `sidebarAction.open()` 只认用户手势，而挂件 content script 消息**不算手势**
-  （MDN User actions，bug 1800401 维持该行为）→ 点击必然 reject 走 `windows.create`
-  弹窗兜底——平台级死路不可绕，取**方案 A 诚实降级**：协议加可选 `panelKind`
-  （`'sidebar' | 'popup'`，只增不改，OPEN_SIDE_PANEL 回包 / SITE_AI_GET /
-  SITE_AI_PANEL_STATE 三路携带），FF 打开前文案「打开脱敏面板」、弹窗态「面板已打开」
-  （新键 `site_widget_open_panel` / `site_widget_opened_popup`，zh/en 原子同步）；
-  Chrome/Edge 直达真侧栏、文案不变。
-- **侧栏状态反馈恒 false**（`isSidePanelOpen` 在 FF 恒 `undefined`）：FF 既无
-  `runtime.getContexts` 也无任何侧栏开关事件。状态查询抽成 `background/panelState.ts`：
-  Chrome 保持 getContexts「存在即打开」原路径零改动；FF 走 `sidebarAction.isOpen()`
-  （FF 59+、无手势要求）∪ 弹窗兜底窗口自追踪（窗口 id 记 `storage.session`，
-  `windows.get` 探活 + `type === 'popup'` 复用防线，浏览器重启/关窗自动清账，零新增
-  权限）。弹窗创建成功后补 `pushPanelState` 广播——此前弹窗分支开成功不同步，
-  是重复点击叠窗的另一半。
-- **单测 +17**（`tests/unit/panelState.test.ts`，403→420 / 33 文件）：两平台状态
-  语义、⑮ 复数 filter 回归防线、窗口 id 复用防线、文案键按宿主选择。
-- **probe:widget Windows 修复**：未打包扩展 ID 在 Windows 上由路径的 **UTF-16LE**
-  字节哈希（Chromium `id_util.cc::GenerateIdForPath` 与 `tools/crx_id/crx_id.py`
-  注释明写），探针原按 UTF-8 推 ID 与浏览器不符 → 导航 404 死在「扩展未加载」；
-  收尾 `rmSync` 加重试（SIGKILL 后文件锁释放常晚于 300ms，原先全绿也会 EPERM
-  exit 1）。Chromium 151 复测 20 项全过。文档同步：TC-07-8 步骤 6/7 补 FF 分支判据。
+- 挂件按钮文案撒谎：FF 的 `sidebarAction.open()` 只认用户手势、content script 消息不算（bug 1800401）→ 协议加 `panelKind`，文案按宿主选择（zh/en 原子同步），Chrome/Edge 不变。
+- 侧栏状态恒 false：FF 无 `getContexts` 也无开关事件 → 抽 `background/panelState.ts`（Chrome 原路径零改动；FF 走 `sidebarAction.isOpen()` ∪ 弹窗自追踪，零新增权限），弹窗创建成功补广播。
+- 单测 +17（panelState，403 → 420/33）；probe:widget 修 Windows 扩展 ID 推导（UTF-16LE 字节哈希）与 rmSync 重试，20 项全过。
 
 ### ⑲ 样例 B 银行卡夹具换 Luhn 合法卡号（真机验收发现）
 
-- **TC-02 样例 B 的卡号 `6222021202021234568` 校验位不合法**（实跑项目 `isValidLuhn`
-  = false，sum=65 余 5）：正则档的 Luhn 门按设计「校验位错误的卡号故意不检出以防误报」，
-  文档却称该号「校验位合法、应检出」——预期永不可达，**引擎行为正确，坏的是夹具**。
-  换为同前缀合法 19 位 `6222021202021234563`（实跑 Luhn 通过），正例与 19 位上界覆盖
-  保住。自动化 420 全绿未暴露：golden 与 Luhn 单测各用别的合法号，`entityShape` 只验
-  位数不验 Luhn。纯文档改动，基线 420/33 不变。
+- 夹具卡号 `6222021202021234568` Luhn 不合法（实跑余 5），文档却称「校验位合法、应检出」——预期永不可达；引擎行为正确，坏的是夹具。
+- 换为同前缀合法 19 位 `6222021202021234563`，保住正例与 19 位上界覆盖；纯文档改动，基线 420/33 不变。
 
 ### ⑳ check:docs 文档结构门禁（结构审计收尾）
 
-- **新增 `npm run check:docs`**（`scripts/check-docs.mjs`，与 check:versions 同族）：
-  机器校验全仓 md 的相对链接与锚点、README 双语地图/CONTRIBUTING 索引与 `docs/`
-  实际文件集三方一致、测试基线数字跨文档一致（CHANGELOG 历史数字与历史移出记录
-  豁免）。bf162bb 的人工同步规则自此有执行器，漂移当场报红。
-- **补上 ⑱ 遗漏的四处「当前性」基线数字**：README 双语 `(403 assertions)`、
-  spec §12 `403 断言 / 32 文件`（单元目录 25→26，实数 4+26+2+1=33）、设计稿
-  回归清单「当前基线 403 项」→ 全部对齐 420/33。这批正是建门禁模式表对账时
-  抓出来的（CHANGELOG 内的 403 为历史存档，未动）。
+- 新增 `npm run check:docs`（`scripts/check-docs.mjs`）：机器校验 md 相对链接/锚点、README×2 地图 + CONTRIBUTING 索引与 `docs/` 文件集三方一致、测试基线跨文档一致（历史数字豁免）。
+- 补上 ⑱ 遗漏的四处「当前性」基线（README×2 / spec §12 / 设计稿回归清单）对齐 420/33——建门禁对账时当场抓出。
 
 ## 2026-10-21
 
 ### ⑮ 挂件「已打开」状态查询修复（真机验收发现，最后一个已知问题）
 
-- **`panelOpen` 恒 false 的根因：`runtime.getContexts` 的 filter 字段写错**（验收现象：
-  ⑪ 修完推送后按钮仍不实时——别处打开侧栏后挂件按钮仍是可点的「在侧边栏中打开」；
-  点按钮后短暂「已打开」、约 2s 后被状态轮询翻回可点）：`isSidePanelOpen` 的两段查询
-  都写成**单数**字段（`tabId` / `documentUrl`），而该 API 的 filter 只认**复数数组**形态
-  （`tabIds` / `documentUrls`）——单数字段被运行时以 `Unexpected property` 直接**抛错**，
-  外层 catch 吞掉返回 `undefined` ⇒ 挂件侧 `panelOpen = state.panelOpen === true` 恒为
-  false。即这条查询自 ⑩ 落地起就没对过；探针此前只验「点击回包切已打开态」，恰好都在
-  2s 轮询首个 tick 前收起了面板，轮询真值从未被覆盖到。
-- **语义改为「存在即打开」**：实测侧栏 context 的 `tabId: -1`（不绑定标签页），按 tab
-  过滤既不可行也无必要——工具栏图标、侧栏选择器、挂件按钮打开的侧栏一律算开；弹窗
-  降级段同样改用 `documentUrls` 复数字段。代价：别个窗口开着侧栏时本窗口挂件也显示
-  已打开（API 不给窗口关联，注释已写明取舍）。
-- **probe:widget 扩到 20 项**：新增「展开态轮询一个周期后仍保持已打开（不被
-  panelOpen=false 翻回）」与「页面重载后挂件初始即已打开禁用态」两道回归防线——
-  两项都在缺陷态（单数 filter）build 上实测 FAIL、修复态 PASS，确认对症。
-  顺带修掉探针自身的几何缺陷：无头下侧栏是真侧栏、会挤压页面视口，挂件随之移动，
-  原先按打开前视口算死的 fab 坐标会落空（打在 body 上被「外点收起」顺手收起面板，
-  造成假绿/假红）——所有按钮点击改为按节点盒模型取中心。
-- 文档同步：TC-07-8 步骤 6/7 补判据（轮询不翻回、别处打开后初始即已打开）；
-  附录 A / TODO / site-ai-offscreen-host 设计文档的挂件探针基线 18 → 20 项。
-  测试数不变（403 项 / 32 文件）。
+- 根因：`runtime.getContexts` 的 filter 写成单数字段（`tabId`/`documentUrl`），运行时直接抛错被 catch 吞掉 ⇒ `panelOpen` 恒 false——该查询自 ⑩ 起就没对过。
+- 语义改「存在即打开」（侧栏 context 不绑定标签页，按 tab 过滤不可行）；弹窗段同步改复数字段。
+- probe:widget 扩到 20 项（两道新防线在缺陷态实测 FAIL、修复态 PASS），探针几何改按节点盒模型取中心修假绿；文档基线 18 → 20 项。
 
 ### ⑭ 命令行口令直连形态漏检修复（真机验收发现）
 
-- **`mysql -p'<口令>'` 不再漏检**（漏检实例：`-u lantu_app -p'Qy7#mP2!vL9@'` 原样穿过，
-  该段整段唯独这条未被识别）：旧 CLI 口令规则要求旗标后必须有空白（`\s+`），mysql 的
-  直连引号形 `-p'…'`/`-p"…"`、直连裸值形 `-p<口令>`、以及 `--password=<口令>` 等号形
-  全部不命中。规则重写为三形态并存：分隔形（`-p x` / `-password x` / `--password=x`，
-  可引号包裹）、直连引号形、直连裸值形；引号包裹时 span 只锚内层口令本体。
-- **直连裸值的精度锚放进正则**：首字符必须字母数字、体不含 `=`、且必含一个非字母数字
-  下划线的符号位——`-pretty`/`-P3306`/`-pathfile`（纯字母数字短选项变体）、`-port=8080`
-  （等号选项值）、散文 `--passphrase` 全部零误报。开发中修掉一个关键缺陷：符号位判断类
-  必须显式排除空白与引号，否则紧随值后的空格会被当成「符号位」，精度锚整体失效。
-  取舍：直连裸值为纯字母数字的口令不检出（宁缺勿误，与 ⑫ 的纯字母取舍一致）。
-- **span 按组长度精确定位**（替换 `indexOf(value)` 猜位置）：`--password word` 时旧实现
-  把 `word` 在旗标内部命中、span 错位进 `--password` 中段。`naturalPasswordRules` 同步
-  对成对引号的值内缩一层——否则 `--password="…"` 的散文分支 span 含引号且早 1 位，
-  重叠仲裁会赢下 CLI 的精确 span（两规则 span 收敛后由 `deduplicateByPosition` 合并）。
-- 单测扩到 **403 项（32 文件）**：新增 `cliPasswordRules.test.ts` 11 项（检出 7 + 精度
-  防线 4，覆盖 2026-10-21 真机原文与三形态回归）；evidence 同步 403/85。
+- `mysql -p'<口令>'` 等三形态漏检：旧规则要求旗标后必须空白 → 重写为分隔形/直连引号形/直连裸值形并存，span 只锚内层口令本体。
+- 直连裸值精度锚进正则（首字符字母数字、体不含 `=`、必含符号位）：`-pretty`/`-P3306`/`-port=8080` 零误报；纯字母数字口令宁缺勿误不检出。
+- span 按组长度精确定位（弃 `indexOf` 猜位）；单测 +11 → 403 项 / 32 文件。
 
 ### ⑬ 粘贴链路执行「保留」判定 + 挂件侧栏状态推送补全（真机验收发现）
 
-- **粘贴拦截不再无条件全替换**（验收现象：识别项判定为「保留」，粘贴出去仍被脱敏）：
-  旧实现两处都直接 `sanitizeText`（replaceAll，忽略档案策略），SW 正则首答还把请求
-  携带的档案丢了（`detect(text)` 走默认档）。现把 keep/replace 判定上收到 engine：
-  `profiles.ts` 新增 `resolveDefaultAction`（原 store 本地实现迁入，侧栏 / SW /
-  offscreen 三链共用），`replacer` 新增 `sanitizeWithProfile(text, items, profile)`——
-  SW 正则首答与 AI 二次升级都改走它，邮箱/高熵/IP 等判定为「保留」的项在粘贴改写与
-  升级结果中保持原文，与设置页默认策略一致。
-- **挂件按钮状态推送补全**（验收现象：侧栏开关状态仍不实时）：⑪ 的推送在
-  `onOpened/onClosed` 事件不带 `tabId`（用户从工具栏图标开关**全局侧栏**）时被直接
-  丢弃——`pushPanelState` 改为无 tabId 时**广播**到所有标签页（未授权站点没有挂件，
-  `sendMessage` reject 静默吞掉，有挂件的授权站点才会更新）。另在 `OPEN_SIDE_PANEL`
-  成功后主动推一次开态，打开路径不再依赖 `onOpened` 是否触发。
-- 单测扩到 **392 项（31 文件）**：新增 `sanitizeWithProfile.test.ts` 4 项（universal
-  档真机场景 keep 生效 / `sanitizeText` 无条件替换对照组 / 显式 `defaultActions` 覆盖 /
-  `tierLowConfidence` 分层）；evidence 同步 392/85。
+- 粘贴拦截不再无条件全替换：keep/replace 判定上收 engine（`resolveDefaultAction` + `sanitizeWithProfile` 三链共用），SW 正则首答修掉丢档案问题，「保留」项粘贴后保持原文。
+- 挂件状态推送补全：事件不带 tabId（工具栏开全局侧栏）时改为广播；`OPEN_SIDE_PANEL` 成功后主动推一次开态。
+- 单测 +4（`sanitizeWithProfile`）→ 392 项 / 31 文件。
 
 ### ⑫ 散文口令与 sk- 厂商段密钥漏检修复（真机验收发现）
 
-- **自然语言口令检出**（漏检实例：`新密码是 Qy7#mP2!vL9@` 原样穿过）：既有口令规则
-  全部只锚结构化语法（`KEY=value`/YAML/JSON/CLI/连接串），散文声明一条不命中。新增
-  `naturalPasswordRules`：关键词（密码/口令/通行码/password/passwd/pwd/passphrase）
-  + 必需连接词（是/为/is/:/：/=）+ ASCII 值域 `[!-~]{4,}`。三层精度防线——连接词必需、
-  中文谓词落不进值域（「密码不能为空」不匹配）、值必须含数字或非字母（挡
-  `password is required` 纯字母表语），再叠 shouldSkipValue（过短/纯数字/弱口令）。
-  类型 `ENV_PASSWORD`（占位符 `<<密码>>`）、high 置信 ⇒ 各档默认替换。
-- **sk- 厂商段密钥不再只落高熵**（漏检实例：`sk-live-<hex>` 未替换——OpenAI 规则
-  `sk-[alnum]` 被中间的 `-live-` 整段打断，只剩 HIGH_ENTROPY，而 universal 的
-  `HIGH_ENTROPY=keep` 使其原样保留）：新增 `sk-<小写厂商段>-<≥32 位小写十六进制体>`
-  规则并置 high（⇒ 默认替换）；精度锚在「体必须是连续纯小写十六进制」，既有
-  `sk-an-` 混合大小写 FP 防线用例不破。
-- 单测扩到 **388 项（30 文件）**：`naturalPasswordRules.test.ts` 7 项（检出 4 + 精度
-  防线 3，含真机原句与「工单里涉及的密码和 API Key 仅用于测试识别」零误报）+ sk-
-  厂商段 4 项；`engineBoundaries` 按引擎文件数展开自动 +2。evidence 同步 388/85。
+- 新增 `naturalPasswordRules`（关键词 + 必需连接词 + ASCII 值域三层精度防线），散文口令 `新密码是 …` 不再原样穿过；类型 ENV_PASSWORD、high 置信 ⇒ 默认替换。
+- 新增 `sk-<厂商段>-<≥32 位小写 hex>` 规则并置 high，`sk-live-…` 不再只落高熵被 keep 放走；既有混合大小写 FP 防线不破。
+- 单测 +13 → 388 项 / 30 文件；`engineBoundaries` 按引擎文件数自动展开。
 
 ### ⑪ 侧栏开关原生事件实时推送（`onOpened`/`onClosed`）
 
-- **「别处关掉侧栏 → 按钮复位」从轮询压到即时**：⑩ 里关闭靠挂件 2s 轮询发现，
-  最坏要等一个周期。现叠加浏览器原生推送——SW 注册 `sidePanel.onOpened`（Chrome 141+）
-  与 `onClosed`（142+），事件一到即经 `tabs.sendMessage` 把 `panelOpen` 推给该标签页
-  顶层的挂件，按钮立即翻转。轮询保留作兜底：旧浏览器无此事件、以及收起态下
-  「宿主仍在收敛」的同步，都仍走原路径。
-- **新增消息契约 `SITE_AI_PANEL_STATE`**（`@engine/messages`）：只带 `panelOpen` 一个
-  字段的 SW → 挂件单向推送；挂件端新增 `onMessage` 监听，收到即重画。推送不动
-  `opening`/`openFailed`——那是本页「打开请求」自己的生命周期，仍由 `OPEN_SIDE_PANEL`
-  回包收尾。旧浏览器注册处用特性检测跳过，零副作用。
-- `probe:widget` 扩到 **18 项**：新增「推送关闭 → 按钮立即复位为可点」「推送打开 →
-  按钮立即置回已打开态」，从扩展上下文按 `tabs.sendMessage` 同款投递驱动。
+- SW 注册 `sidePanel.onOpened/onClosed`（Chrome 141/142+），事件即推 `panelOpen` 给顶层挂件按钮即时翻转；2s 轮询保留兜底。
+- 新增消息契约 `SITE_AI_PANEL_STATE`（单字段单向推送，不动 opening/openFailed 生命周期；旧浏览器特性检测跳过）。
+- probe:widget 扩到 18 项（推送开/关 → 按钮立即复位/置回）。
 
 ### ⑩ 挂件交互与站点匹配打磨（子域、按钮态、实时性、间距）
 
-- **站点匹配支持子域**（`@engine/sites`）：裸域名一并覆盖其所有子域——`deepseek.com`
-  同样命中 `chat.deepseek.com`；`*.a.com` 与 `a.com` 等价（`*.` 只作书写提示，不入库）。
-  授权时把本域与 `*.` 两条 origin 一起申请，否则子域页面匹配得到却没权限注入（IP 与
-  带端口的条目没有子域，不申请）；多条命中时路径相同则取主机名更长的那条。
-- **「在侧边栏中打开」按钮改为状态控件**（修「点了就失效」）：上一版成功后没人复位
-  `disabled`/`cursor`，留下永久灰态 + 转圈光标，看起来像点了没反应或疑似在跑后台任务。
-  现在三种态由 `render` 重建——在途 `wait` + 半透明、成功切「侧边栏已打开」禁用态、
-  失败就地提示 3s 后复位。
-- **按钮状态实时**：SW 用 `runtime.getContexts` 查侧栏真实开关（弹窗兜底按文档 URL 认），
-  挂件展开期间每 2s 同步一次，收起即停——在别处关掉侧栏能立刻反映回按钮。
-- **「尚未就绪」提示不再误导**（修「模型下载完第一次开页面仍提示未就绪」）：SW 在
-  `SITE_AI_GET` 时若「全局开 ∧ 本站开 ∧ 宿主没跑」就预热模型宿主（模型文件早已在本地，
-  秒级就绪），挂件轮询自己翻到可用；本站开关开着而宿主还没就绪时文案改说「正在启动」，
-  而不是「尚未就绪」。收起态若仍在收敛，放慢到 4s 继续同步到就绪为止。
-- **暗色下面板与按钮加边框**（0.18 → 0.3）并加强投影：0.18 在深色页面上几乎看不见，
-  面板与背景连成一片。
-- **展开后边距与间距放宽**：面板内边距 14 → 16px、头部下边距 8 → 12px、行间距
-  10 → 12px、提示上下边距 6/12 → 10/14px、打开按钮内边距 9 → 10px。
-- `probe:widget` 扩到 **16 项**：新增「暗色下面板带能与背景区分开的边框」与
-  「打开后切成已打开态（禁用且不留转圈光标）」；`sites` 单测扩到 **24 项**（覆盖子域匹配，
-  全量 375 项）。
+- 站点匹配支持子域（裸域名覆盖全部子域，授权连 `*.` origin 一起申请；多条命中取主机名最长者）。
+- 「在侧边栏中打开」改状态控件（在途/成功/失败三态由 render 重建，修永久灰态）；SW 每 2s 同步真实开关，`SITE_AI_GET` 时预热宿主，「尚未就绪」改「正在启动」。
+- 暗色边框 0.18 → 0.3、间距与字号放宽；probe:widget 扩到 16 项，sites 单测 24 项，全量 375。
 
 ### ⑨ 挂件主题配色 + 站点写法完善（含「打开侧栏」修复）
 
-- 挂件与「已脱敏 N 处」toast 的配色改为**跟随页面明暗主题**（`prefers-color-scheme`，
-  与设计 token 同一开关条件）：亮色白底墨字、暗色深底浅字，mark 同步换色。注入侧不能写
-  `<style>`（宿主 `style-src` 会拦），色板在 JS 里取值、样式走 CSSOM，切换时整体重绘，
-  不用刷新页面。
-- 收起按钮由圆形改为 **12px 圆角矩形**（与面板/卡片同规格），mark 略放大（按钮 26px、
-  面板头部 20px）；正文字号 13 → 14px、提示 11 → 13px、收起 × 16 → 18px。
-- toast 同步调大：13px / 6×12 → **15px / 9×14**，圆角 8 → 10px，并同样跟随主题。
-- 修复「在侧边栏中打开」点了没反应：`sidePanel.open()` 只认用户手势，而 SW 此前先
-  `await` 授权校验再调用，手势已经过期（实测报 `may only be called in response to a user
-  gesture`，页面侧毫无反馈）。现在**同步发车**（授权校验并行进行，只决定回包内容）；
-  侧栏 API 不可用（无头/旧版）或手势失效时，同一份面板页面退回 `windows.create` 弹窗；
-  真失败时按钮就地提示「打开失败，请点扩展图标」。
-- 站点写法完善（`@engine/sites`）：
-  - **支持带路径**：`a.com/docs` 命中 `/docs` 及其子页，按目录边界匹配（`/docspage` 不命中）；
-    手写的 `a.com/docs/*` 子树写法原样保留；列表条目原样显示，逐站开关的键即该条目。
-  - **只写一级路径 / 多级路径都认**，查询与锚点丢弃、结尾斜杠归一。
-  - **显式写 http 视为协议不限**：站点从 http 跳到 https 后照样命中；授权时把
-    http/https（带路径时再加精确路径 + 子树）两条一起申请，
-    `optional_host_permissions` 补上 `http://*/*`（localhost 与 127.0.0.1 不再是唯一例外）。
-  - 多条命中取最具体的一条（保证逐站开关键唯一）；SW 授权改为按 `sender.url` 在用户列表里
-    解析条目，页面不再上报 pattern（隔离世界内容不可信，带路径的条目页面也算不出来）。
-- 侧栏 header 去掉「AI脱敏助手」副标题，只留品牌锁标（`app_subtitle` 文案键一并删除）。
-- `probe:widget` 扩到 **14 项**：新增 12px 圆角矩形、亮/暗两套 mark 配色（CDP 模拟
-  `prefers-color-scheme`）、以及「点击后侧栏或弹窗面板真的打开了」；`sites` 单测扩到 20 项
-  （全量 371 项）。
+- 挂件与 toast 配色跟随页面明暗主题（注入侧禁写 `<style>`，色板 JS 取值走 CSSOM）；字号、圆角、暗色边框整体调优。
+- 修「点了没反应」：`sidePanel.open()` 只认手势 → 同步发车（授权校验并行），API 不可用退 `windows.create` 弹窗，真失败就地提示。
+- 站点写法完善：支持带路径（目录边界匹配）、http 视为协议不限、多条取最具体；SW 按 `sender.url` 解析条目，页面不上报 pattern。probe:widget 扩到 14 项，全量 371。
 
 ### ⑧ 页面挂件放大并换上白色 logo
 
-- 收起态圆形按钮 **28 → 44px**（触控目标下限），展开面板 **248 → 280px**、内边距 12 → 14px、
-  标题 12 → 13px；按钮里的「AI」字样换成看门狗 mark，面板头部左侧加同款 mark。
-- mark 染成白色（挂件底色恒为深色）。取图方式：SW 用 `?raw` 读 `public/icons/logo.svg`
-  并换色，随 `args` 传进注入函数，`DOMParser` 落地——不用 `<img src>` / `fetch`，
-  既不看宿主页面 `img-src` 的脸色，也不用往 `web_accessible_resources` 加条目。
-  换 logo 只改资产一处，工具栏图标与挂件同步。
-- `probe:widget` 扩到 **11 项**：新增收起态 44×44，以及穿透 closed Shadow DOM 断言
-  两枚 `svg path` 的 `fill === '#fff'`（端到端验证 ?raw → args → 解析 → 染色）。
+- 收起按钮 28 → 44px（触控下限）、面板 248 → 280px；「AI」字样换看门狗 mark。
+- mark 经 SW `?raw` 读源 SVG 换白随 `args` 传入落地（不看宿主 `img-src` 脸色、不加 WAR 条目）；换 logo 只改资产一处。
+- probe:widget 扩到 11 项（穿透 closed Shadow DOM 断言两枚 svg fill）。
 
 ### ⑦ 品牌图标换新（新 logo 接入插件 / 落地页 / README）
 
-- `public/icons` 清理改名（保留 `logo` / `logo-1` 两名，作者调整过尺寸与边距的最终稿）：
-  纯看门狗 → `logo.svg`（400×400）、看门狗 + 字标锁标 → `logo-1.svg`（1414×400）；
-  旧盾牌 mark、`public/` 根下未被任何地方引用的 `public/icon.svg`、以及导出过程中的
-  临时文件一并删除。两份源 SVG 补上缺失的 `viewBox`
-  （否则按 CSS 尺寸放缩时图形不跟随）。
-- 新增 `logo-1-dark.svg`（同形、墨色换成暗色主题前景色 #fafafa）。README、站点头、
-  侧栏头部统一用 `<picture>` + `prefers-color-scheme` 切换，与设计 token 同一套条件；
-  favicon 是独立文件读不到页面变量，沿用自带 `<style>` + media query 的做法。
-- 接入：插件 manifest 图标仍由 `npm run icons` 从 `logo.svg` 生成 16/32/48/128；
-  侧栏左上与落地页页头换成 `logo-1` 锁标（高 36px，页头原「图标 + 文字」删除）；
-  落地页 favicon 改用 `logo.svg` 几何；两份 README 各加入 `logo-1`（宽 260px）。
-- 随之失去引用的 `packages/extension/src/ui/Logo.vue` 与 `apps/site/src/components/Mark.astro` 删除。
-- 发布包按新图标重打：`release/contextwatchdog-1.0.0-{chrome,firefox}.zip` + `SHA256SUMS`。
+- `public/icons` 清理定稿：`logo.svg`（看门狗）+ `logo-1.svg`（锁标，补 viewBox），新增 `logo-1-dark.svg` 暗色变体，README/站点/侧栏用 `<picture>` 切换。
+- manifest 图标仍由 `npm run icons` 生成；落地页页头与侧栏换锁标；失引用的 `Logo.vue`/`Mark.astro` 删除；发布包按新图标重打。
 
 ## 2026-10-20
 
 ### ⑥ 挂件常驻（× = 收起）
 
-- 页面挂件改为常驻：移除 `siteWidgetHidden` 存储键、`SITE_WIDGET_HIDE` 消息与站点删除时的
-  相关清理；`×` / `Esc` / 点击面板外都只**收起面板**（`expanded = false`），右下角圆形按钮
-  始终保留。旧 profile 里的残留值不再读取，零用户无迁移。
-- 常驻加固：`MutationObserver` 在挂载时立即启动，页面清 DOM 后自动重挂；另加 3 秒心跳兜住
-  `document.open/write` 与 `documentElement` 被整体替换；`SITE_AI_GET` 瞬时失败不再卸载挂件；
-  状态回包前开关一律禁用（含 `ready=false`），避免显示错状态或误点。
-- `probe:widget` 新增「页面删除 host → 自动重挂」断言（共 8 项）；TC-07-8 第 5 步改为常驻判据。
-- 发布包重打：`release/contextwatchdog-1.0.0-{chrome,firefox}.zip` + `SHA256SUMS`。
+- 挂件常驻：移除隐藏存储键与消息，`×`/`Esc`/点外只收起面板、右下按钮始终保留（旧残留值不读，零迁移）。
+- 加固：MutationObserver 即挂 + 3s 心跳兜 `document.open/write`；瞬时失败不卸载；状态回包前开关一律禁用。
+- probe:widget 新增「删 host 自动重挂」（共 8 项）；发布包重打。
 
 ### ⑤ S5：收尾（挂件探针 + 宿主销毁 + 文档）
 
-- 新增 `npm run probe:widget`：无头 Chrome 实测授权站点挂件出现、iframe 内不出现、
-  未授权站点零注入、不产生横向滚动条、不往 body 塞节点。运行期临时给
-  `dist/manifest.json` 加测试站 `host_permissions`，结束后原样恢复；新版正式版 Chrome
-  忽略 `--load-extension`，脚本优先使用 Chrome for Testing / Chromium。
-- 宿主销毁实测：`MODEL_HOST_CLOSE` 后 offscreen 目标数 1 → 0、`hasDocument=false`、
-  `storage.session` 快照清空（模型内存随文档销毁回落到基线）。
-- 文档：`spec.md` 改写「拦截为正则档」的已知限制，补 `offscreen` 权限与逐站/宿主 session 键；
-  `test-cases.md` 新增 TC-07-8（挂件与逐站开关）、TC-07-9（AI 二次升级）与探针基线；
-  `releasing.md` 发布前检查加入 `probe:widget`。
-- 发布包按当前代码重打：`release/contextwatchdog-1.0.0-{chrome,firefox}.zip` + `SHA256SUMS`。
+- 新增 `npm run probe:widget`：无头 Chrome 实测授权站点挂件出现、iframe 内/未授权站点不出现、不产生横向滚动条；临时改 manifest 授权后原样恢复。
+- 宿主销毁实测（offscreen 目标 1 → 0、session 快照清空）；spec / test-cases / releasing 文档同步；发布包重打。
 
 ### ④ S3：粘贴链路 AI 二次升级（数据面）
 
-正则先落地，AI 只做增量；任何失败都保留正则结果：
-
-- `PASTE_DETECT` 新增可选 `token`；content script 对 input/textarea 在正则结果落地后记录
-  `appliedText / range / valueAfterApply / appliedAt` 快照。
-- SW 回包之后按 `effectiveAI = 全局 ∧ 本站 ∧ 宿主就绪` 决定是否 `detectViaModelHost(原文)`，
-  成功后向原 tab/frame 发 `PASTE_AI_RESULT{ token, sanitized, count }`。
-- content script 四道守卫（用户未继续输入 / 正则结果仍在原位 / AI 确有增量 / 8s TTL）
-  全过才二次替换并修正光标，toast 改为「AI 增强后共脱敏 N 处」；否则丢弃。
-- 守卫的可测版本在 `content/pasteText.ts` 的 `planAiUpgrade()`，注入函数内含等价副本；
-  单测覆盖 value-changed / range-moved / no-increment / expired 与三种光标位置。
-- contenteditable 本期仍只走正则档；Firefox 无宿主，粘贴 AI 升级不可用
-  （侧栏手动检测不受影响）。
-
-实测（Chrome for Testing + 真实模型）：正则先脱敏 3 处，AI 补出姓名后共 4 处，
-toast 显示「AI 增强后共脱敏 4 处」。
-基线：typecheck 0 / 360 tests（29 文件）/ 双目标构建通过。
+- 正则先落地、AI 只做增量、失败保留正则结果：`PASTE_DETECT` 加 `token`，SW 按 `effectiveAI` 决定 `detectViaModelHost`，成功回 `PASTE_AI_RESULT`。
+- content script 四道守卫（未继续输入 / 正则结果在位 / AI 有增量 / 8s TTL）全过才二次替换并修光标；可测版 `planAiUpgrade()` 单测覆盖。
+- contenteditable 本期只走正则，Firefox 无宿主不可用。实测 3 → 4 处；基线 360 tests / 29 文件。
 
 ### ③ S4：页面挂件与逐站 AI 开关（控制面）
 
-授权站点的右下角新增一个自包含挂件，AI 是否生效由「全局 × 本站」两层开关决定：
-
-- `@engine/settings`：`AI_ENABLED_KEY` / `SITE_AI_ENABLED_KEY` / `SITE_WIDGET_HIDDEN_KEY`
-  与 `isEffectiveAI()`（全局 ∧ 本站 ∧ 宿主就绪），键名只此一处。
-- `SITE_AI_GET` / `SITE_AI_SET` / `SITE_WIDGET_HIDE` / `OPEN_SIDE_PANEL`：
-  SW 侧双校验——`sender.url` 推导的 pattern 必须与请求一致，且在授权列表内；
-  页面隔离世界里的消息内容不可信。
-- 挂件与粘贴监听共用 `__contextWatchdogInstalled`，只挂顶层文档（`allFrames` 注入但不进 iframe）；
-  全内联样式 + Shadow DOM 隔离，`MutationObserver` 在自身被移除时重挂。
-- 全局 AI 关闭或宿主未就绪时，开关禁用并显示原因；未授权站点零注入。
-- 删除站点时 SW 自动清理 `siteAiEnabled` / `siteWidgetHidden`，重新添加回到默认关闭。
-
-实测（Chrome for Testing）：授权站点顶层出现挂件（fixed / z-index 2147483647）、
-iframe 内没有、未授权站点没有、页面无横向滚动条。
-基线：typecheck 0 / 352 tests / 双目标构建通过。
+- 授权站点右下自包含挂件，AI 生效 = 全局 × 本站 × 宿主就绪；未授权站点零注入，全局关/宿主未就绪时开关禁用并显示原因。
+- SW 侧双校验：`sender.url` 推导 pattern 必须与请求一致且在授权列表（页面隔离世界消息不可信）；挂件全内联 + Shadow DOM，移除自动重挂。
+- 删除站点时清理 `siteAiEnabled`/`siteWidgetHidden`；基线 352 tests。
 
 ### ② S2：侧栏改为模型宿主客户端
 
-Chrome/Edge 下侧栏不再自己加载模型，改为向 SW 请求、订阅宿主状态；Firefox 仍走本地加载：
-
-- `stores/detection.ts`：`initNER()` 先探测宿主能力（`MODEL_HOST_STATUS`），支持则发
-  `MODEL_HOST_ENSURE`，进度/就绪/错误全部由 `storage.session['contextwatchdog.modelHost']`
-  驱动；`detectText()` 在 AI 就绪时经 `MODEL_HOST_DETECT` 走宿主，失败或未就绪回退本地正则。
-- 关闭全局 AI 时发 `MODEL_HOST_CLOSE` 销毁 offscreen 文档，并清掉 session 状态快照。
-- SW 的 ENSURE 改为立即回包（首次下载可能数分钟，占着消息通道没有意义）；
-  文档/端口起不来时写一条 error 状态，避免面板一直转圈。
-- 宿主状态与既有 UI 字段一一映射，组件零改动；60s 停滞超时在宿主路径同样生效。
+- Chrome/Edge 侧栏不自载模型：先探 `MODEL_HOST_STATUS`，支持则 `MODEL_HOST_ENSURE`，进度/就绪/错误全由 `storage.session` 驱动，失败或未就绪回退本地正则；Firefox 仍本地加载。
+- 关全局 AI 发 `MODEL_HOST_CLOSE` 销毁 offscreen；ENSURE 立即回包（首下可能数分钟），失败写 error 状态避免面板转圈；组件零改动。
 
 ### 品牌改名：PasteGuard → ContextWatchdog
 
-项目更名为 **ContextWatchdog**（中文描述语：**文本守卫**）。这是发布前的纯身份调整，
-不改变任何检测、判定或替换逻辑：
-
-- 包名 `context-watchdog` / `@contextwatchdog/*`；9 个 `chrome.storage` 键前缀改为
-  `contextwatchdog.*`（零用户、未发布，不做迁移）。
-- 扩展名、描述、侧栏与 offscreen 标题、日志前缀 `[ContextWatchdog]`、图标 `aria-label`、
-  发布包名 `contextwatchdog-<version>-<target>.zip`。
-- 站点、README、设计文档与品牌政策同步；中文首次出现处标注「文本守卫」。
-- gecko id 暂为占位 `contextwatchdog@contextwatchdog.invalid`，AMO 首次上传前替换。
+- 发布前纯身份调整、零行为变更：包名、9 个 storage 键前缀、扩展名/描述/标题/日志前缀/发布包名、站点与文档全同步；中文首次出现标注「文本守卫」。
+- gecko id 占位 `contextwatchdog@contextwatchdog.invalid`，AMO 首次上传前替换。
 
 ### ① S1：offscreen 模型宿主骨架
 
-Chrome/Edge 下模型运行时移出任何 UI 上下文，放进唯一的 offscreen 文档：
-
-- 新增 `src/offscreen/{index.html,host.ts}`（ENSURE / DETECT / PING）与
-  `src/modelHost/{protocol,state,client}.ts`（协议、状态归并纯函数、SW 侧客户端）。
-- SW 经 Port `pg-model-host` 路由请求，并用 `chrome.offscreen.hasDocument()` 幂等创建文档；
-  `createDocument` 并发冲突时复查后再继续。SW 回收重启后由宿主自动重连。
-- `manifest.json` 加 `offscreen` 权限；`vite.config.ts` 加 offscreen HTML 入口
-  （**必须在 `rolldownOptions.input`**：Vite 8 下写 `rollupOptions.input` 会被静默丢弃）；
-  Firefox 目标不产出该入口，`postbuild.mjs` 同时过滤 `offscreen` 权限。
-- 新增 `tests/unit/modelHost.test.ts`（10 例）：状态迁移与端口消息守卫。
-
-两个实测发现（已写进代码注释与设计文档）：
-
-1. **offscreen 文档只暴露 `chrome.runtime`** —— `chrome.storage` / `chrome.i18n` 均为
-   `undefined`。所以状态由宿主经 Port 上报、SW 代写 `storage.session`；占位符语言改用
-   `navigator.language`。原设计里「宿主自己写 session」是错的。
-2. **构建体积没有翻倍**：offscreen 入口 chunk 2.2KB，ORT / transformers / gliner 与侧栏
-   共用同一批 chunk，`dist` 仍为 12MB。原计划的 `manualChunks` 不需要。
-
-验收（Chrome for Testing 151 + `--load-extension dist`；品牌版 Chrome 137+ 已忽略该参数）：
-文档创建 → 模型加载（进度经 SW 写入 session）→ DETECT 回包含正则与模型双来源 items
-→ `closeDocument` 后 `hasDocument()` 为 false。Firefox 构建无 offscreen 入口与权限。
+- 模型运行时移出 UI 上下文进唯一 offscreen 文档（ENSURE/DETECT/PING + 协议/状态/客户端；SW 经 Port 路由、幂等创建、自动重连），`manifest` 加 `offscreen` 权限。
+- 实测两发现：offscreen 只暴露 `chrome.runtime`（storage/i18n 为 undefined ⇒ 状态经 Port 上报、SW 代写）；chunk 仅 2.2KB 共用同批依赖，dist 仍 12MB。
+- vite 入口必须写 `rolldownOptions.input`（Vite 8 下 `rollupOptions` 被静默丢弃）；Firefox 目标不产出口径；+`modelHost` 单测 10 例。
 
 ### 站点部署身份改走 `.env`（域名 / 商店链接 / 备案 / 收款码）
 
-源码是公开的，而上面这些值描述的是**这一份部署**。放在仓库里，别人 fork 之后会
-静默继承：canonical 指向作者的站、下载按钮导向作者的商店页、页脚挂着别人的备案号
-（等于冒用备案）、打赏二维码把访客的钱导向作者账户。
-
-- 新增 `apps/site/.env.example`（全量键名与降级行为）与 `scripts/lib/site-links.mjs`
-  （`resolveSiteLinks` / `parseHttpsBase` / `normalizeRepository` / `channelStates`，
-  纯函数 + 12 例单测）。`astro.config.mjs` 在配置阶段读 env 并通过 `vite.define`
-  注入 `__SITE_LINKS__`，页面里拿到的仍是构建期常量（prerender chunk 里可安全使用）。
-- **删掉 `apps/site/src/data/links.json`**：`available` 不再手写布尔值，改由「URL 是否为空」
-  派生——状态与链接在类型上不可能再对不上。
-- 仓库与 Release 的链接改由 `package.json#repository` 派生（一个字段驱动源码 / Release /
-  Issues 与扩展 `manifest.homepage_url` 的后续接入），fork 改一处即可。
-- 中文页的「阅读源码」与「下载」按语言指向镜像（`GITEE_URL`，为空回退 GitHub）；
-  深度链接（LICENSE / NOTICE / PATENTS / docs）与 Issues 固定指 GitHub——镜像的默认
-  分支名不保证是 `main`，写死路径会 404。
-- `check:versions` 不再读 JSON，改为「env 合法性 + 产物自洽」两段：逐页核对 canonical
-  路径，并核对产物里的域名与当前 `SITE_URL` 一致（改了 env 忘了重建会被抓住）；
-  `--release` 要求 `SITE_URL` 已配、至少一个商店渠道已配。
-- 缺 `SITE_URL` 时普通构建只警告（fork 仍可构建出相对链接的产物），发布构建用
-  `SITE_REQUIRE_URL=1` 直接失败——避免静默产出一份没有 canonical 的线上站点。
-- 部署相关（nginx / 证书 / 上传）明确排除在仓库之外；文档只保留「构建命令 / 产物路径 /
-  需要哪些 env」。
-- 页脚新增备案行（`ICP_BEIAN` / `POLICE_BEIAN`，留空则不渲染）。国内托管站点的法定义务，
-  同时也不能被 fork 继承——冒用备案是法律问题。
-- 打赏收款码：`DONATE_QR` 指向本地图片，构建期读成 data URI 内联（图片不进仓库、
-  站点保持零外部请求）；固定白底，避免深色主题下二维码扫不出来；缺省仍是占位文案。
-- `CONTRIBUTING.md` 的 fork 做法补上第 5 步「填自己的部署身份」与留空降级表。
+- 动机：这些值描述「这一份部署」，放仓库会被 fork 静默继承（canonical/商店/备案/收款码全成作者的——冒用备案是法律问题）。
+- 新增 `.env.example` + `site-links.mjs`（纯函数 + 12 例单测），`vite.define __SITE_LINKS__` 注入；删 `links.json`（available 由 URL 是否为空派生）；仓库链接由 `package.json#repository` 派生，中文页镜像走 `GITEE_URL`、深度链接固定 GitHub。
+- `check:versions` 改「env 合法性 + 产物自洽」两段；缺 `SITE_URL` 普通构建警告、`SITE_REQUIRE_URL=1` 发布构建直接失败；备案行留空不渲染；CONTRIBUTING 补第 5 步部署身份。
 
 ### 发布标签改为 `<version>-<target>`
 
-- tag 形态从 `ext-v1.0.0` / `site-v1.0.0` 改为 `1.0.0-ext` / `1.0.0-site`（本地应用用 `-app`）。
-  不用 `v` 前缀（它不增加任何信息）；`ext` / `site` / `app` 是**发布产物**的边界，不是渠道边界
-  —— 一个 `-ext` Release 同时挂 Chrome 与 Firefox 两个包，所以不叫 `-crx`。
-- 规则与查重抽为 `scripts/lib/version-tag.mjs`（`formatVersionTag` / `parseVersionTag` /
-  `tagsForVersion` / `tagMatchesVersion`），`check-versions` 改为一次查三个 tag 是否占用；
-  新增 `tests/unit/versionTag.test.ts`，其中「旧形态必须认不出来」是反向断言——改名时漏改
-  一处，`check-versions` 会以为标签没被占用，这条会先红。
-- 版本核心限定三段数字：预发布号（`1.0.0-rc.1`）会与 target 后缀抢 semver 的 pre-release 段，
-  排序语义不可预期，因此直接禁止；要发预发布就把版本写进主体。
-- 两个已知副作用已写进 `docs/releasing.md`：GitHub 会把 `1.0.0-ext` 自动判为 pre-release
-  （建 Release 时手动取消勾选），同时保持「Set as the latest release」勾选
-  （`{repo}/releases/latest` 依赖它）。
+- tag 形态 `1.0.0-ext` / `-site` / `-app`：不用 `v` 前缀；target 是发布产物边界而非渠道（一个 `-ext` Release 挂 Chrome 与 Firefox 双包）。
+- 规则抽 `scripts/lib/version-tag.mjs`，check-versions 一次查三个 tag；「旧形态必须认不出来」是反向断言；版本核心禁预发布号（与 semver pre-release 段冲突）。
+- 已知副作用：GitHub 自动判 pre-release，建 Release 时需手动取消勾选。
 
 ## 2026-10-19
 
 ### 1.0.0 发布前 · 验收体验修正
 
-作者按 A–F 产物做了一轮手工验收，以下是随后的修正（同属 1.0.0，未改变任何行为契约）：
-
-- **界面（侧栏）**
-  - 「界面语言」移到设置面板**首位**（原在引擎开关之后），边距与其它区块同构
-    （`px-4 pt-4`，`pb=0`，由下一块的 `pt-4` 合成 16px 间距）；面板标题随之从
-    「检测引擎状态」改为「设置」——它早已不止装引擎开关（还有语言与粘贴拦截）。
-  - **修**：切语言后「模式」名称不更新。根因是 reka-ui 的 `SelectValue` 显示的是
-    候选项**挂载时**抓取的 `textContent` 快照（`SelectItemText` 挂到游离
-    `DocumentFragment` 里采集），不随语言变化。改为直接渲染响应式的 `profileLabel()`。
-  - **修**：长文本检测时遮罩不上屏 / spin 卡死。根因是 `waitForPaint` 用 rAF 当
-    「已绘制」的证据，而 rAF 回调发生在**绘制之前**——遮罩的 DOM 更新与检测的同步长任务
-    落在同一任务里，那一帧的绘制被整段跳过。改为 rAF 之后再让出一个宏任务（渲染步骤
-    恰在其间），并给遮罩与按钮 spinner 加 `will-change-transform` 提升为合成层，
-    主线程被占时动画仍由合成器驱动。时序屏障抽为 `lib/paintBarrier.ts` 并加**顺序单测**
-    （改回旧写法会立刻变红；`probe:layout` 那条 rAF 断言对这类退化是假阴性，注释已注明）。
-  - **修**：自定义档案的「检测类别」勾选项被压窄 → 改流式换行（词条长度差异很大，
-    单行 flex 会把「美国区域规则（社保号 / 税号 / 电话）」挤成窄块）。
-  - **修**：切语言后底部三个操作按钮换行、按钮栏高度跳动 → 改为单行不换行 + 省略号
-    （省略号需要一层包裹元素，`Button` 的 slot 是裸文本节点）。
-  - **修**：语言下拉框的聚焦态与其它输入框不一致（用了 `ring-2` 且不透明边框，而
-    `Input`/`textarea` 是 `ring-1` + 聚焦时边框透明）→ 统一为后者的写法。
-    自定义档案编辑器里的两个 `<select>` 是同一个毛病，一并改掉。
-- **落地页**
-  - 删除「几处设计取舍」整块与对应导航项（叙事上冗余）。
-  - 删除安装区「渠道仍在审核中…」与「同一份源码构建…sha256」两段说明——前者把
-    「介绍页」写成了「等待中的状态」，后者与「可核验的隐私承诺」重复。
-  - 「下载」改「安装」；四个渠道由单列长条改为**矩形卡片一行**（`auto-fit`，宽屏四并排）。
-  - hero 去掉安装按钮，只留「阅读源码」；安装区去掉引导句（「三个商店渠道之外…」）
-    与每个渠道的说明文字——手动安装步骤在 GitHub Release 页上有，页面上抄一遍既长
-    又不保证同步，卡片只留「名称 + 状态/跳转标记」并保持 flex-col。
-  - 隐私承诺六条说明的文案长度对齐（zh 74–88 / en 147–163 字符，误差 ≤1 行），
-    使卡片高度一致；`pg-channel-hint` 规则随说明文字一并删除。
-- **权限收窄**：`optional_host_permissions` 去掉宽泛的 `http://*/*`，保留
-  `https://*/*` + `http://localhost/*` + `http://127.0.0.1/*`（本地调试用）。
-  明文 http 站点不再可授权，减少商店审核摩擦。
-- **清理**：删除未使用的 devDeps（`autoprefixer` / `postcss`——Tailwind 4 走
-  `@tailwindcss/vite` 内置 Lightning CSS，`postcss` 仍作为 vite 传递依赖存在）；
-  文档里的测试基线数字同步（含 `docs/spec.md` / `docs/test-cases.md`）。
-- **基线**：typecheck 0 error / **311 passed（25 文件）** / 双目标构建零警告 /
-  `probe:layout` 全通过 / 站点 0 诊断、4 页 0 JS。
+- 侧栏：「界面语言」移首位、标题改「设置」；修切语言不更新（SelectValue 快照）、长文本遮罩不上屏（rAF 时序，抽 `lib/paintBarrier.ts` + 顺序单测）、类别勾选压窄、按钮换行与聚焦态不一致。
+- 落地页：删「设计取舍」块与两段说明；四渠道改矩形卡片一行；hero 去安装按钮；隐私承诺六条长度对齐。
+- 权限收窄（去 `http://*/*`，仅留 https + localhost）；删未用 devDeps；基线 311 passed / 25 文件。
 
 ### 1.0.0 发布准备 A–F · 关键节点结案
 
-本轮完成 A–D（A–F 六个关键节点）：
-
-- **A 许可与文档**（`f2b8a4e`）：`LICENSE`（Apache-2.0 全文）、`NOTICE`、`PATENTS.md`、
-  `CONTRIBUTING.md`、`SECURITY.md`；`scripts/third-party-notices.mjs` 生成
-  `THIRD-PARTY-NOTICES.txt` 并随产物分发（Apache-2.0 §4 / MIT 通知条款要求）。
-  许可选型逐条对齐作者诉求——Apache-2.0 §4(b)(c)(d) 强制署名 + 标注改动 + 随附 NOTICE，
-  §6 不授予商标。**不申请专利**，转防御性公开。
-- **B/C 目录重排**（`8f5b06c`、`52ba7b9`）：`src/core` → `packages/engine`（宿主无关，
-  带边界断言护栏）、`src` → `packages/extension`、设计 token 抽出 `packages/design-tokens`。
-  引擎侧引入 `InferenceBackend` 抽象：模型运行时不进引擎，宿主注入；未注册时管线自动
-  退化为纯正则——这也是全部用例能在 Node 下直接跑的前提。
-- **D i18n + 区域规则集 + 能力矩阵**（`08ef0b4`、`cef55ae`、`df3793a`）：
-  - 单一 catalog（`packages/extension/src/i18n/locales/*.json`）同时供 UI 的 `t()` 与
-    manifest/SW 的 `_locales` 使用，后者构建时生成、不手抄；占位符语言随界面语言切换
-  - 区域规则集 `us`/`eu` **默认全关**：SSN 号段校验、EIN 带标签 + 前缀校验、
-    NANP 电话、IBAN mod-97、VAT 逐国格式
-  - 能力矩阵面板（头部 ℹ）把三轴分开说明（界面语言 / 区域规则集 / 模型语言能力），
-    唯一一处明确「模型语言能力不承诺」
-  - README 双语（`README.md` 英文 + `README.zh-CN.md` 中文）；设计文档公开进 `docs/design/`
-- **基线**：typecheck 0 error / **307 passed（24 文件）** / 双目标构建零警告 /
-  （本节点结案时的基线；随后「验收体验修正」一轮把用例补到 311 passed / 25 文件）
-  `probe:layout` 全通过。新增护栏：引擎依赖白名单、产物 `ort-wasm` 恰好一份、
-  `.vue` 无未翻译汉字、`_locales` key ≡ catalog、i18n 词条完整性。
-- **E Astro 落地页**：`apps/site/`，`output: 'static'`，产物**零客户端 JS**；
-  视觉 `@import` 自 `packages/design-tokens/tokens.css`（与扩展同源）；版本号构建期
-  从扩展 manifest 注入；测试/探针数由 `scripts/site-evidence.mjs` 实测写入；
-  未上架渠道渲染为「即将上架」而非死链（`links.json` 状态与链接不一致会让构建失败）。
-- **F 发布就绪**：`scripts/check-versions.mjs`（版本一致性 + 许可文件随附 + 落地页 canonical +
-  产物 `eval` 预检 + tag 占用；`--release` 模式回答「现在能打 tag 了吗」）、
-  `scripts/pack-release.mjs`（打包 zip + `SHA256SUMS`，回读校验根目录有 manifest）；
-  操作手册见 `docs/releasing.md`。**顺带修掉一处合规缺口**：产物此前只带了 LICENSE 与
-  第三方声明，**漏了 NOTICE**（Apache-2.0 §4(d) 要求随附），构建不会因此报错，
-  已补入包并加了硬护栏。另新增隐私权政策页（`/privacy/`、`/en/privacy/`，CWS 表单必填）。
-
-待做：F7 互链（等 `siteUrl`）与 F8 打 tag（**由作者确认后执行**）；
-另有三项待作者产出的资产：演示 GIF、打赏收款码、商店截图/promo。
+- A 许可与文档（Apache-2.0 + NOTICE + PATENTS + CONTRIBUTING + SECURITY + 第三方声明生成器；不申请专利，转防御性公开）；B/C 目录重排（core → `packages/engine` 带边界断言护栏、`InferenceBackend` 宿主注入——全部用例可在 Node 直跑的前提）。
+- D i18n + 区域规则集 + 能力矩阵（单一 catalog 供 `t()` 与 `_locales`、区域集默认全关、README 双语）；E Astro 落地页（静态、零客户端 JS、token 同源、未上架渠道渲染「即将上架」）；F 发布就绪（check-versions + pack-release，顺带补上漏发的 NOTICE，新增隐私页）。
+- 基线（结案时）：typecheck 0 / 307 passed / 24 文件 + 五道新护栏。
 
 ## 2026-10-18
 
 ### 版本探测误判重下修复 · G-1 结案
 
-- **缺陷**：实机「首次下载 → 二次打开重下 183MB → 三次起正常」。根因：ModelScope CDN 不发
-  `Access-Control-Expose-Headers`，浏览器跨源读不到 ETag/Content-Range（CORS 安全列表外），
-  1 字节探测把 206 的 `content-length=1`（`Range: 0-0` 的响应体长）当总长 → 183MB ≠ 1 误判
-  stale → 清缓存重下；探测成功又刷新 24h 节流，缺陷被掩盖成「第三次起正常」。
-  node 单测注入 fetch 无 CORS 过滤，故自动化测不出。
-- **修复**（`c031a28`）：三级比对 ETag → Last-Modified（CORS 安全列表头，恒可见）→ 总长；
-  206 的总长只信 Content-Range（可见时）、200 才用 Content-Length；三级皆无信息 → unknown
-  沿用缓存（离线优先）。下载与断点续传随条目保存 `X-Model-Last-Modified`。补浏览器视角专测
-  3 例，测试基线 187 → 190。
-- **验证**：TC-06-9 实测通过（含节流盲区复核：清 `contextwatchdog.lastModelProbe` 后探测真实执行、
-  判定「版本一致」、零重下）。
+- 缺陷「首下 → 二次打开重下 → 三次起正常」：ModelScope CDN 不发 `Access-Control-Expose-Headers`，1 字节探测把 206 的 `content-length=1` 当总长误判 stale；node 单测无 CORS 过滤故测不出。
+- 修复（`c031a28`）：三级比对 ETag → Last-Modified → 总长（206 只信 Content-Range），皆无则沿用缓存离线优先；下载随条目存 `X-Model-Last-Modified`。
+- TC-06-9 实测通过（含节流盲区复核）；基线 187 → 190。
 
 ### 四项后续候选落地 · F-1/F-2/F-3 结案
 
-- `da040df`：移除未使用的 `contextMenus` 权限声明（全 src 零引用）。
-- `6eca2d7`：粘贴拦截强化——contenteditable 富文本区支持（阻止默认 + 选区快照 +
-  `execCommand('insertText')`，检测异常补插原文不吞粘贴、多行可整体撤销）；改写生效右上
-  「已脱敏 N 处」轻提示（2s 自消、不堆叠、未检出无提示）；>20000 字符粘贴入口层真放行
-  （修复此前仅 SW 截断、入口吞尾部文本的缺陷）。
-- `7840f78`：短密钥族规则——「前缀即证据」阈值策略：独特前缀官方格式收录 10 家，
-  Mailgun/Twilio 无分隔符置 medium；无前缀短串维持不检测（FP 不可控），
-  「短但有上下文」由 env/kv 规则兜底。
-- **验证**：TC-07-6 / TC-07-7 / TC-02-7 2026-10-18 实测通过。
+- 移除未用 `contextMenus` 权限；粘贴拦截强化（contenteditable 富文本、右上「已脱敏 N 处」轻提示、>20000 字入口层放行修吞尾）；短密钥族「前缀即证据」阈值策略（10 家独特前缀收录，无前缀短串维持不检测）。
+- TC-07-6 / TC-07-7 / TC-02-7 实测通过。
 
 ### AI 推理链路实机修复与运行时收敛
 
-- `09c081b`：GLiNER `modelType` 改 `span-level`（推理从未真正跑通的首因）；`37708bd`：
-  `maxWidth` 改 12、锁 onnxruntime-web 1.19.2。
-- `d92b6bc`：检出形状门禁（`entityShape.ts`）——拦截 GLiNER 中文单字幻觉的错误替换
-  （`户`→姓名、`订`→邮箱）。
-- `7a48c8c` + `07669f9`：ort wasm 资产本地化（`wasmPaths:{}` 走本地 + webgpu/webgl 打桩剔
-  21.3MB jsep）、移除 @huggingface/transformers——产物 ~34MB → ~12.1MB，断网推理可用、
-  零 CDN 依赖。
-- `ff7a6e8`：A-4 heap 实测数据回填 spec §14（179.3 → 224.5 MB 口径说明）。
-- **验证**：TC-06-5、TC-06-8 实测通过；GLiNER-small-v2 中文真召回为零系模型能力限制
-  （spec §13-4）。
+- `modelType` 改 span-level（推理从未跑通的首因）、`maxWidth` 12、锁 onnxruntime-web 1.19.2；检出形状门禁（`entityShape.ts`）拦中文单字幻觉替换。
+- ort wasm 资产本地化（`wasmPaths:{}` 走本地 + 打桩剔 21.3MB jsep）、移除 @huggingface/transformers：产物 ~34MB → ~12.1MB、断网推理可用、零 CDN。
+- TC-06-5/8 实测通过；「中文零召回系模型能力限制」的归因后于 ㉖ 修正为选型问题。
 
 ### E 组 UI 收尾（`0d7a9b2`…`f35ceae`，7 commits）
 
-- 档案下拉齿轮点击竞态修复；设置弹窗三段结构（标题固定/正文滚动/底部 sticky、分隔线通宽）、
-  底部一行四按钮、默认策略改 Switch；引擎面板区块全宽贴边、描述 2 行省略、入口改齿轮；
-  输入焦点统一细 ring；拦截输入/添加按钮等高；隐藏新标签页按钮。
-- **验证**：TC-04-3 / TC-07-2 / TC-08-1~5 实测通过。
+- 档案下拉齿轮点击竞态修复；设置弹窗三段结构、底部四按钮、默认策略 Switch；引擎面板区块与入口齿轮化；输入焦点统一细 ring；拦截输入/添加按钮等高。
+- TC-04-3 / TC-07-2 / TC-08-1~5 实测通过。
 
 ### 文档体系收敛
 
-- `63cd1f0`：TODO 清退历史规划（Phase 1-5 旧计划与 valueExtractor / MobileBERT /
-  50GB GLiNER 等过时条目）；
-- `0d7d7c9`：四份阶段验证文档合并为单份 `docs/test-cases.md`（样例 A–F + TC-01~09）；
-- `293cdf2`：`docs/spec.md` 技术说明成文（开发者/技术评审定位）。
+- TODO 清退过时规划（Phase 1-5 旧计划与 valueExtractor / MobileBERT / 50GB GLiNER 等）；四份阶段验证文档合并为 `docs/test-cases.md`（样例 A–F + TC-01~09）；`docs/spec.md` 技术说明成文。
 
 ## 2026-10-17
 
 ### D 组 UX 实测反馈（`6df1167`…`eb5b0da`，5 commits）
 
-- `6df1167`：缓存命中全程静默（杜绝「先闪首次需下载再变已命中」误导窗口）；`f676c97`：
-  档案下拉放大、说明入选项、齿轮绑定自定义档案；`10a9a05`：正则改恒开基础引擎、场景识别
-  并入 AI；`e4c1dfc`：弹窗标题放大一档、全局边框 token 加深。
-- **验证**：TC-06-2/3、TC-04-1/2、TC-06-1、TC-08-1 实测通过（缓存静默语义后曾被版本探测
-  缺陷破坏，2026-10-18 随 `c031a28` 修复后完整成立）。
+- 缓存命中全程静默（杜绝「先闪首次需下载」误导窗口）；档案下拉放大与齿轮绑定自定义档案；正则改恒开基础引擎、场景识别并入 AI；弹窗标题放大、边框 token 加深。
+- TC-06-2/3、TC-04-1/2、TC-06-1、TC-08-1 实测通过（缓存静默语义后被版本探测缺陷破坏，随 `c031a28` 修复后完整成立）。
 
 ### 遗留项 A/B/C 收尾、粘贴拦截地基与探测首修（`684c7b2`…`95cbf29`）
 
-- `684c7b2`（A 组）：下载健壮性——跨会话续传、多窗口去重锁、缓存版本探测、内存引用释放；
-  `09527ed`（B 组）：废弃文件与死代码清理、Switch 把手颜色令牌化；
-  `b03b6b6` + `1f51991`（C 组）：粘贴自动拦截（逐站授权 + 先插入后就地替换 + SW 正则档）、
-  Firefox 121+ 侧栏兼容、CSP 收紧；`dc6c974`：双目标构建消除 manifest 键警告。
-- `7aa2b4f`：CRLF 多行粘贴静默失效修复（剪贴板换行归一化 + 原生 setter + 放弃路径日志）。
-- `3c9c700`：版本探测首修——跨源 ETag 误判清缓存改比总长、离线跳过、24h 节流（浏览器
-  CORS 头可见性盲区后于 2026-10-18 发现并修复，见 G-1）。
-- 同轮 UI 迭代：档案 Tab 改下拉（`db0df56`）、引擎 Switch 开关（`01c9945`）、置信度徽章
-  高=红（`896e25c`）、首启引导弹窗（`76ae1e7`）。
-- **验证**：TC-01-2 / TC-07-1 等实测通过；样例 A 行 1 顶格复核确认漏检系复制带前导空白
-  （env 规则 `^` 锚点失配），非缺陷。
+- 下载健壮性（跨会话续传、多窗口去重锁、版本探测、内存释放）；死代码清理；粘贴自动拦截地基（逐站授权 + 先插后替 + SW 正则档）、Firefox 121+ 侧栏兼容、CSP 收紧；双目标构建消 manifest 警告。
+- CRLF 多行粘贴静默失效修复；版本探测首修（盲区后于 2026-10-18 G-1 完成）；档案 Tab 下拉、引擎 Switch、置信度徽章、首启引导等 UI 迭代。
+- TC-01-2 / TC-07-1 实测通过；样例 A 行 1 漏检系复制带前导空白（`^` 锚点失配），非缺陷。
 
 ## 2026-10-16
 
 ### Phase 1-5 与下载器地基（`7e8bbbe`…`0ce7d20`）
 
-- `7e8bbbe` Phase 1+2：正确性修复与双轨检测体系；`001e32d` Phase 3+4+5：工程化加固与
-  自定义档案体系；`c61fbd4`：shadcn 主题化、Logo、配置弹窗与 NER 下载修复；
-- `023e866`：模型下载源切换 ModelScope（修 transformers env 配置）；
-- `bb9adb8`：断点续传与缓存落盘，修假超时与重试无效。
+- Phase 1+2 正确性修复与双轨检测体系；Phase 3+4+5 工程化加固与自定义档案体系；shadcn 主题化、Logo、配置弹窗与 NER 下载修复。
+- 模型下载源切换 ModelScope（修 transformers env 配置）；断点续传与缓存落盘，修假超时与重试无效。
 
 ## 2026-09-11 ~ 09-15 · v0.0.1 MVP（`a29cb7c`…`eddc86e`）
 

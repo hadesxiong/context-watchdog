@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// 文档结构一致性检查：相对链接 / 锚点 / 反引号路径 / 三处文档地图 / 测试基线数字。
+// 文档结构一致性检查：相对链接 / 锚点 / 反引号路径 / 三处文档地图 / 测试基线数字 / 轮次圈号唯一性。
 // 人工规则见 CONTRIBUTING.md「文档索引与更新触发」；这里把可机器判定的部分变成硬失败。
 // 用法：npm run check:docs（无参数；失败 exit 1，纳入回归）
 import { execSync } from 'node:child_process'
@@ -187,6 +187,29 @@ if (fileValues.size > 1) {
 }
 if (baselineOk && testValues.size === 1 && fileValues.size === 1) {
   pass(`测试基线 ${testHits.length} 处一致：${[...testValues][0]} 项 / ${[...fileValues][0]} 文件`)
+}
+
+// ------------------------------------------------ 5) CHANGELOG 轮次圈号唯一性
+
+// 圈号是手维护编号（重号真实发生过）；只验唯一、不验顺序——历史区文件序与号序本就不严格单调。
+const changelogRounds = read('CHANGELOG.md').split(/\r?\n/).filter((l) => l.startsWith('### '))
+const roundByCircled = new Map()
+let circledCount = 0
+let circledProblems = 0
+for (const heading of changelogRounds) {
+  const circled = heading.match(/[①-⑳㉑-㉜]/u)?.[0]
+  if (!circled) continue
+  circledCount += 1
+  const prev = roundByCircled.get(circled)
+  if (prev) {
+    circledProblems += 1
+    fail(`CHANGELOG 轮次圈号重复 ${circled}：「${prev.trim()}」与「${heading.trim()}」`)
+  } else {
+    roundByCircled.set(circled, heading)
+  }
+}
+if (circledProblems === 0) {
+  pass(`CHANGELOG 轮次圈号 ${circledCount} 个唯一`)
 }
 
 // ---------------------------------------------------------------- 输出
