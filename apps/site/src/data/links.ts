@@ -74,3 +74,6 @@ export const manualChannel = (locale: SiteLocale): ChannelLink & { key: 'manual'
 /** 页脚备案（为空则不渲染该行） */
 export const icp = config.icp
 export const police = config.police
+
+/** 访问统计（可选，自托管 Umami）——同属部署身份，字段全部来自 UMAMI_* env */
+export const umami = __UMAMI__

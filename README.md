@@ -18,7 +18,7 @@ Two ways to use it:
 npm install
 npm run build           # Chrome bundle → dist/        (load via chrome://extensions)
 npm run build:firefox   # Firefox bundle → dist-firefox/ (about:debugging → This Firefox → Load Temporary Add-on → pick dist-firefox/manifest.json)
-npm run test            # run the suite (429 assertions)
+npm run test            # run the suite (436 assertions)
 ```
 
 ## Architecture
@@ -46,7 +46,7 @@ Every row below can be checked in this repository instead of taken on faith:
 | **The extension never sends your text to a server** | `rg -n '\bfetch\s*\(' packages/extension/src` → only two hits, both in `modelDownload.ts` (each an injectable `fetchImpl` defaulting to `globalThis.fetch`, used solely to download the model). No `XMLHttpRequest` / `sendBeacon` / `WebSocket` / `EventSource` anywhere |
 | **The only network activity is the model download** | Same as above. It only happens after you explicitly enable the AI tier, and only against whitelisted model sources |
 | **Zero contact with unauthorised sites** | `rg -n 'content_scripts\|all_urls' packages/extension/src/manifest.json` → no match. The manifest declares no `content_scripts` and requests only `optional_host_permissions`, granted per site by the user |
-| **No telemetry of any kind** | No analytics SDK, no crash reporting, no behavioural tracking in the repository; inspect the bundle yourself after `npm run build` |
+| **No telemetry of any kind (the extension)** | No analytics SDK, no crash reporting, no behavioural tracking anywhere in the extension source; inspect the bundle yourself after `npm run build`. The landing page ships **zero** analytics by default; deployments may opt into self-hosted Umami (page views only, no cookies, no text), gated by `UMAMI_*` env vars in `apps/site/.env.example` and disclosed on its privacy page |
 | **Credential fields are never processed** | `password` inputs and hidden fields are skipped at `isTextEditable`, with a guard on both the paste-injection and side-panel paths |
 | **Releases are verifiable** | Each Release ships `sha256` sums; licences and third-party notices travel with the bundle (`LICENSE` / `NOTICE` / `THIRD-PARTY-NOTICES.txt`) |
 
@@ -61,8 +61,9 @@ The same content, written as a store-submittable policy page, lives at `/privacy
 | AI model inference | **on-device** (WASM / ONNX Runtime); never leaves the machine |
 | Model download | whitelisted model sources (ModelScope → huggingface.co fallback); **model files only, no user data is ever uploaded** |
 | Site authorisation | granted per site, stored in `chrome.storage.local`; unauthorised sites are never touched |
-| Telemetry / analytics / crash reporting | **none** |
-| Third-party analytics SDKs | **none** |
+| Telemetry / crash reporting | **none** — in the extension and on the landing page |
+| Third-party analytics SDKs | **none** — the landing page's optional analytics is self-hosted first-party Umami, never a third-party SDK |
+| Landing page visit statistics | optional self-hosted Umami (page views only, no cookies, no text), enabled via `UMAMI_*` env vars — **off by default**; it never touches the extension bundle |
 
 **No cloud, no backend, no accounts.** This is a fully offline tool — apart from the initial AI model download, it is fully functional with the network unplugged.
 

@@ -137,6 +137,45 @@ export function resolveSiteLinks(env, pkg = {}) {
   }
 }
 
+/**
+ * 解析访问统计（可选，自托管 Umami）的部署参数；同属部署身份，留空即不注入。
+ * 启用对缺一抛错；WEBSITE_ID 原样进 HTML 属性，禁空白与引号/尖括号；
+ * 修饰项（HOST_URL / DNT）配了没启用只警告。
+ * @param {Record<string, string | undefined>} env
+ * @returns {{ enabled: boolean, websiteId: string, scriptUrl: string, hostUrl: string, dnt: boolean, warnings: string[] }}
+ */
+export function resolveUmami(env) {
+  const websiteId = read(env, 'UMAMI_WEBSITE_ID')
+  const scriptUrl = parseHttpsBase(read(env, 'UMAMI_SCRIPT_URL'), 'UMAMI_SCRIPT_URL', {
+    allowPath: true
+  })
+  const hostUrl = parseHttpsBase(read(env, 'UMAMI_HOST_URL'), 'UMAMI_HOST_URL', { allowPath: true })
+  const dntRaw = read(env, 'UMAMI_DNT')
+
+  if (/[\s"'<>]/.test(websiteId)) {
+    throw new Error('UMAMI_WEBSITE_ID 不应包含空白或引号/尖括号（它会原样进入 HTML 属性）')
+  }
+  if (dntRaw !== '' && dntRaw !== 'true' && dntRaw !== 'false') {
+    throw new Error(`UMAMI_DNT 只接受 true / false（当前 ${JSON.stringify(dntRaw)}）`)
+  }
+  if (Boolean(websiteId) !== Boolean(scriptUrl)) {
+    throw new Error(
+      'UMAMI_WEBSITE_ID 与 UMAMI_SCRIPT_URL 必须同填：' +
+        '只有 ID 没有脚本地址（统计发不出去），或只有地址没有 ID（不知道记给谁站）都不允许'
+    )
+  }
+
+  const enabled = websiteId !== ''
+  const warnings = []
+  if (!enabled && (hostUrl !== '' || dntRaw !== '')) {
+    warnings.push(
+      'UMAMI_HOST_URL / UMAMI_DNT 已设置但统计未启用（缺 UMAMI_WEBSITE_ID 或 UMAMI_SCRIPT_URL），本次不注入'
+    )
+  }
+
+  return { enabled, websiteId, scriptUrl, hostUrl, dnt: dntRaw === 'true', warnings }
+}
+
 /** 渠道状态摘要（check-versions 与构建日志共用，避免两处各写一套判断） */
 export function channelStates(links) {
   return CHANNEL_KEYS.map((key) => ({

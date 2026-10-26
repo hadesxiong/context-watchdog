@@ -8,7 +8,7 @@
 // 内容与 README 的「数据流与隐私声明」一节同源，改一处要一起改（口径不一致
 // 在审核时是会被追问的）。
 import { dict, type SiteLocale } from '@site/i18n'
-import { issuesUrlFor } from '@site/data/links'
+import { issuesUrlFor, umami } from '@site/data/links'
 
 interface Props {
   locale: SiteLocale
@@ -24,7 +24,9 @@ const d = dict(locale)
     <p class="pg-note">{d.privacyPage.updated}</p>
 
     <div class="pg-card" style="margin-top: 1.75rem;">
-      <p style="font-size: 1rem; color: var(--foreground);">{d.privacyPage.noCollect}</p>
+      <p style="font-size: 1rem; color: var(--foreground);">
+        {`${d.privacyPage.noCollect}${umami.enabled ? d.privacyPage.statsUmami : d.privacyPage.statsNone}`}
+      </p>
     </div>
 
     <h2 class="pg-section-title" style="margin-top: 2.5rem;">{d.privacyPage.flowTitle}</h2>
@@ -37,6 +39,10 @@ const d = dict(locale)
           </details>
         ))
       }
+      <details open>
+        <summary>{d.privacyPage.statsStage}</summary>
+        <p>{umami.enabled ? d.privacyPage.statsWhenOn : d.privacyPage.statsWhenOff}</p>
+      </details>
     </div>
 
     <h2 class="pg-section-title" style="margin-top: 2.5rem;">{d.privacyPage.verifyTitle}</h2>

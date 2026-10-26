@@ -245,7 +245,8 @@ connect-src 'self' https:`——无 `http:`/`ws:`；`wasm-unsafe-eval` 为 ORT W
 （Firefox MV3 同样要求显式声明）。
 
 **隐私承诺的代码依据**：全项目仅模型下载一处 `fetch`（`modelDownload.ts`）；
-AI 关闭即零网络；检测/替换全部本地；无遥测、无统计。
+AI 关闭即零网络；检测/替换全部本地；扩展无遥测、无统计（落地页可选的自托管
+Umami 访问统计见 §11.1，env 门控、默认关闭）。
 
 **其他**：自定义正则 ReDoS 双层防护（§5）；粘贴拦截四重守卫（§8）；
 CSP 收紧后扩展页无任何外部脚本/连接可能。
@@ -296,8 +297,10 @@ CSP 收紧后扩展页无任何外部脚本/连接可能。
 
 ### 11.1 落地页（`apps/site`）
 
-Astro 静态站点（`output: 'static'`），产物是纯 HTML + 一个 CSS 文件，**零客户端 JS**
-（`dist` 下不会出现 `.js`）。命令（仓库根执行）：`site:dev` / `site:build` /
+Astro 静态站点（`output: 'static'`），产物是纯 HTML + 一个 CSS 文件，**默认零客户端 JS**
+（`dist` 下不会出现 `.js`）。唯一例外是可选的自托管 Umami 访问统计：`UMAMI_*` env 配置后注入
+一个**外链**脚本（`check:versions` 的外链白名单只放行这一个地址；脚本不落 `dist`，产物无 `.js`
+的事实不变），未配置时产物与未接入时逐字节一致。命令（仓库根执行）：`site:dev` / `site:build` /
 `site:preview` / `site:check` / `site:evidence`。
 
 > **不要**在 `apps/site` 里单独 `npm install`：仓库未启用 npm workspaces（留到本地代理
@@ -328,7 +331,7 @@ Astro 静态站点（`output: 'static'`），产物是纯 HTML + 一个 CSS 文�
 
 ## 12. 测试体系
 
-`npm test`：**429 断言 / 33 文件**（`npm run typecheck` 0 错误为另一道闸）：
+`npm test`：**436 断言 / 33 文件**（`npm run typecheck` 0 错误为另一道闸）：
 
 | 目录 | 内容 |
 |------|------|
@@ -451,8 +454,8 @@ packages/extension/                # 扩展（宿主层）
     ├── shims/                     # 构建期打桩（ort GPU 子路径）
     └── style.css                  # 引入 @tokens/tokens.css + Tailwind theme 映射
 
-apps/site/                         # 落地页（Astro 静态站点，零客户端 JS——结构见 §11，
-                                   # 部署前检查随发布 runbook 移出仓库）
+apps/site/                         # 落地页（Astro 静态站点，默认零客户端 JS——结构见 §11，
+                                   # 可选 Umami 统计经 env 门控；部署前检查随发布 runbook 移出仓库）
 public/                            # 仓库级共享静态资源（icons）
 tests/  scripts/  docs/            # 测试 / 构建与探针脚本 / 文档（设计线两份同在
                                    # docs/ 顶层：防御性公开，索引见根 README）

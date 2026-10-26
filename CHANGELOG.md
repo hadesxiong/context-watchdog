@@ -5,6 +5,26 @@
 > 设计决策与后续迭代规划：`docs/` 设计线两份（索引见根 README 文档地图）。
 > 单条提交详情见 `git log`；被清退的历史规划文档见 `f35ceae` 之前的 TODO。
 
+## 2026-10-26
+
+### ㉔ 落地页接入自托管 Umami 访问统计（env 门控 + 承诺精确化）
+
+- **注入通道**：`UMAMI_WEBSITE_ID / UMAMI_SCRIPT_URL / UMAMI_HOST_URL / UMAMI_DNT` 四键进
+  `apps/site/.env`（部署身份，不进仓库）→ `resolveUmami` 纯函数校验（启用对缺一即错、ID 禁
+  空白/引号/尖括号、URL 必 https 无查询串、修饰项配了没启用只警告）→ `vite.define` 新通道
+  `__UMAMI__` → `Base.astro` 条件渲染标签，**模板零字面量**；仅 `astro build` 注入（dev 流量
+  不进统计），fork 默认零注入、产物与接入前逐字节一致。
+- **护栏**：`check:versions` 外链脚本检查由「出现即 fail」改为白名单——只放行 env 配置的统计
+  地址，启用时每页必须含它（env 改了没重建同样报红）；`siteLinks.test.ts` 新增 7 项
+  `resolveUmami` 用例（23 项）。
+- **部署架构**：Umami 主机挂 Tailscale 内网、零公网暴露；ECS nginx 把**域名根**的 `/umami/`
+  反代回源（收紧版只放行 `script.js` + `/api/`，后台仅内网直连；示例见 `.env.example`），
+  访客只与本站域名通信——`data-host-url` 由 env 显式钉死上报路径。
+- **承诺精确化（中英同步）**：扩展零遥测的承诺一字不动；会被推翻的站点侧字面承诺全部改为
+  「作用域 + 条件披露」——页脚 `static` 拆出 `statsNone/statsUmami`、隐私页 `noCollect` 与
+  数据流拆出 `stats*` 条件键（每种构建产物的声明都为真）、README 双语可核验表与数据流表、
+  SECURITY.md、spec §11.1「零客户端 JS」→「默认零客户端 JS」与 §10 限定词。
+
 ## 2026-10-23
 
 ### ㉑ 去掉 design/ 层级 —— 设计线三份平铺进 docs/

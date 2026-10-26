@@ -35,3 +35,23 @@ interface SiteLinksConfig {
 }
 
 declare const __SITE_LINKS__: SiteLinksConfig
+
+/**
+ * 由 astro.config.mjs 经 vite.define 注入的访问统计参数（UMAMI_* env，见 .env.example）。
+ * enabled=false 时 Base.astro 不渲染标签；warnings 只在配置阶段打印。
+ */
+interface UmamiConfig {
+  /** 启用对（WEBSITE_ID + SCRIPT_URL）齐全且处于构建模式时为 true */
+  enabled: boolean
+  /** → data-website-id */
+  websiteId: string
+  /** → script src；也是 check:versions 外链白名单的比对值 */
+  scriptUrl: string
+  /** → data-host-url；空串 = 不输出该属性 */
+  hostUrl: string
+  /** → data-do-not-track="true"；false = 不输出该属性 */
+  dnt: boolean
+  warnings: string[]
+}
+
+declare const __UMAMI__: UmamiConfig

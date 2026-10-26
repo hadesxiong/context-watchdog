@@ -1,7 +1,7 @@
 // Astro 配置（落地页）
 //
 // 三条约束决定了这里几乎没什么可配的：
-//   1. output: 'static' —— 全站零客户端 JS（唯一的例外是「复制」按钮）
+//   1. output: 'static' —— 全站默认零客户端 JS（例外：复制按钮、可选的 Umami 统计外链，UMAMI_* env 门控）
 //   2. 设计 token 走 @tokens 别名指向 packages/design-tokens/tokens.css，
 //      与扩展同一个源 → 视觉结构上不可能漂移
 //   3. 不引 Tailwind / 图标库 / 动效库 / web font：站点样式直接用 token 变量写普通 CSS，
@@ -17,7 +17,7 @@ import { defineConfig } from 'astro/config'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { loadEnv } from 'vite'
-import { channelStates, resolveSiteLinks } from '../../scripts/lib/site-links.mjs'
+import { channelStates, resolveSiteLinks, resolveUmami } from '../../scripts/lib/site-links.mjs'
 
 const here = (p) => fileURLToPath(new URL(p, import.meta.url))
 /** apps/site/ —— 也是 .env 的查找目录 */
@@ -47,6 +47,11 @@ if (typeof extensionVersion !== 'string' || !/^\d+\.\d+\.\d+/.test(extensionVers
 
 const packageJson = JSON.parse(readFileSync(src('../../package.json'), 'utf8'))
 const links = resolveSiteLinks(env, { repository: packageJson.repository })
+
+// 访问统计（可选）：仅 astro build 注入，dev 流量不进统计；半配置直接抛错
+const resolvedUmami = resolveUmami(env)
+for (const warning of resolvedUmami.warnings) console.warn(`[site] ${warning}`)
+const umami = MODE === 'production' ? resolvedUmami : { ...resolvedUmami, enabled: false }
 
 // 缺 SITE_URL 时：普通构建只警告（别人 clone / fork 也能构建出相对链接的产物），
 // 但要发布时用 SITE_REQUIRE_URL=1 把自己钉死 —— 否则会静默产出一份没有 canonical
@@ -85,7 +90,8 @@ export default defineConfig({
   vite: {
     define: {
       __EXTENSION_VERSION__: JSON.stringify(extensionVersion),
-      __SITE_LINKS__: JSON.stringify(links)
+      __SITE_LINKS__: JSON.stringify(links),
+      __UMAMI__: JSON.stringify(umami)
     },
     resolve: {
       alias: {

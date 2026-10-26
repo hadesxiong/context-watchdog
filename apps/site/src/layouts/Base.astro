@@ -13,7 +13,17 @@ import brandLogo from '../../../../public/icons/logo-1.svg'
 import brandLogoDark from '../../../../public/icons/logo-1-dark.svg'
 import { dict, localePath, siteBase, otherLocale, localeLabel, type SiteLocale } from '@site/i18n'
 import { extensionVersion } from '@site/data/version'
-import { releasesUrlFor, repoUrlFor, blobUrl, treeUrl, siteUrl, hasCanonicalOrigin, icp, police } from '@site/data/links'
+import {
+  releasesUrlFor,
+  repoUrlFor,
+  blobUrl,
+  treeUrl,
+  siteUrl,
+  hasCanonicalOrigin,
+  icp,
+  police,
+  umami
+} from '@site/data/links'
 
 interface Props {
   locale: SiteLocale
@@ -44,6 +54,18 @@ const absolute = (p: string): string => (origin ? origin + p : p)
 const canonical = absolute(pagePath(locale))
 
 const pageTitle = d.meta.title
+
+// 属性全部由 UMAMI_* env 派生，enabled=false 时不渲染；
+// is:inline：要原样输出的外链标签，不让 Astro 打包处理
+const umamiScriptAttrs: Record<string, string | boolean> | null = umami.enabled
+  ? {
+      src: umami.scriptUrl,
+      defer: true,
+      'data-website-id': umami.websiteId,
+      ...(umami.hostUrl ? { 'data-host-url': umami.hostUrl } : {}),
+      ...(umami.dnt ? { 'data-do-not-track': 'true' } : {})
+    }
+  : null
 ---
 
 <!doctype html>
@@ -74,6 +96,12 @@ const pageTitle = d.meta.title
 
     <!-- 主题色跟随系统，与扩展一致（token 文件里就是媒体查询切换） -->
     <meta name="color-scheme" content="light dark" />
+
+    {
+      umamiScriptAttrs && (
+        <script is:inline {...umamiScriptAttrs}></script>
+      )
+    }
   </head>
 
   <body>
@@ -123,7 +151,8 @@ const pageTitle = d.meta.title
           <a href={treeUrl('docs')}>{d.footer.designDocs}</a>
         </div>
         <p>
-          <span class="pg-footer-version">v{extensionVersion}</span> · {d.footer.static}
+          <span class="pg-footer-version">v{extensionVersion}</span> ·{' '}
+          {`${d.footer.static}${umami.enabled ? d.footer.statsUmami : d.footer.statsNone}`}
         </p>
         {
           (icp || police) && (

@@ -100,8 +100,8 @@
         "how": "The manifest declares no content_scripts and no <all_urls>, only optional_host_permissions: injection is on demand, so only sites on your authorised list receive the paste listener and widget. Unauthorised sites get zero listeners and zero DOM probing. Removing a site clears its settings, and the widget mounts only in the top document."
       },
       {
-        "claim": "No telemetry, no analytics, no crash reporting",
-        "how": "There is no analytics, reporting or telemetry SDK in the repository, and no remote switches or config delivery — behaviour is decided by local code and local settings alone. There is no backend server and nowhere to report to; you can build it yourself and inspect the output for any abnormal behaviour, without taking our word for it."
+        "claim": "The extension has no telemetry, no analytics, no crash reporting",
+        "how": "There is no analytics, reporting or telemetry SDK in the extension's source or bundle, and no remote switches or config delivery — behaviour is decided by local code and local settings alone. The extension has no backend server and nowhere to report to; you can build it yourself and inspect the output for any abnormal behaviour, without taking our word for it. If a deployment enables landing-page analytics (self-hosted Umami, page views only, gated by the deployer's env), it is disclosed in the data-flow table of the privacy policy page."
       },
       {
         "claim": "Password fields are never processed",
@@ -159,20 +159,27 @@
     "designDocs": "Design docs",
     "privacy": "Privacy policy",
     "changelog": "Changelog",
-    "static": "This site is static: no client-side scripts (bar one copy button), no CDN, no third-party analytics, no web fonts."
+    "static": "This site is static.",
+    "statsNone": " No client-side scripts (bar one copy button), no web fonts, no third-party analytics.",
+    "statsUmami": " The only client-side scripts are one copy button and self-hosted Umami analytics (page views only, no cookies, no text collected); no web fonts."
   },
   "privacyPage": {
     "title": "Privacy policy",
-    "lead": "In one sentence: we do not collect any of your data. The verifiable details are below.",
-    "noCollect": "ContextWatchdog does not collect, upload or store any of your text or personal information. No account, no telemetry, no third-party analytics SDK.",
+    "lead": "In one sentence: we never collect your text or personal information. The verifiable details are below.",
+    "noCollect": "ContextWatchdog does not collect, upload or store any of your text or personal information. No accounts; the extension has zero telemetry.",
+    "statsNone": " The landing page has no analytics and no third-party SDKs.",
+    "statsUmami": " The landing page counts page views only, via self-hosted Umami: no cookies, and none of your text or personal information is collected.",
     "flowTitle": "Data flow",
     "flowRows": [
       { "stage": "Text detection and replacement", "where": "on-device (service worker or side-panel memory); never leaves your machine" },
       { "stage": "AI model inference", "where": "on-device (WASM / ONNX Runtime); never leaves your machine" },
       { "stage": "Model download", "where": "whitelisted model sources (a ModelScope mirror, falling back to huggingface.co); model files only — user data is never uploaded" },
       { "stage": "Site authorisation", "where": "per-site, stored in chrome.storage.local; unauthorised sites are never touched" },
-      { "stage": "Telemetry / analytics / crash reporting", "where": "none" }
+      { "stage": "Telemetry / crash reporting", "where": "none" }
     ],
+    "statsStage": "Site visit statistics",
+    "statsWhenOn": "self-hosted Umami, reported through this site's own domain: page views only, no cookies, no text or personal information",
+    "statsWhenOff": "none (site analytics are not enabled here)",
     "verifyTitle": "Verify it yourself",
     "thirdPartyTitle": "Third-party components",
     "thirdParty": "The third-party components in use and their licences are listed in THIRD-PARTY-NOTICES.txt (both inside the bundle and in the repository). The model downloaded at runtime is onnx-community/gliner_small-v2 (Apache-2.0).",

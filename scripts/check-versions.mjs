@@ -62,16 +62,25 @@ if (version && manifestVersion && version === manifestVersion) {
 // JSON：这些值描述的是**这一份部署**，fork 之后不该静默继承。校验用的是构建期同一套
 // 纯函数（scripts/lib/site-links.mjs），所以「构建能过但 check 报错」不可能发生。
 import { loadEnv } from 'vite'
-import { channelStates, resolveSiteLinks } from './lib/site-links.mjs'
+import { channelStates, resolveSiteLinks, resolveUmami } from './lib/site-links.mjs'
 
 const STORE_KEYS = ['edge', 'cws', 'amo']
 
+const siteEnv = loadEnv('production', abs('/apps/site'), '')
+
 let siteLinks = null
 try {
-  const env = loadEnv('production', abs('/apps/site'), '')
-  siteLinks = resolveSiteLinks(env, { repository: readJson('/package.json').repository })
+  siteLinks = resolveSiteLinks(siteEnv, { repository: readJson('/package.json').repository })
 } catch (error) {
   fail(`落地页部署身份不合法：${error instanceof Error ? error.message : String(error)}`)
+}
+
+// 访问统计与构建期用同一套纯函数；半配置在这里同样报红
+let umami = null
+try {
+  umami = resolveUmami(siteEnv)
+} catch (error) {
+  fail(`访问统计配置不合法：${error instanceof Error ? error.message : String(error)}`)
 }
 
 if (siteLinks) {
@@ -209,6 +218,8 @@ if (existsSync(siteIndex)) {
   // 比对时两边都要补上，且拼绝对地址时只能用 origin（siteUrl 已含子路径）。
   const siteBase = siteLinks?.basePath ?? ''
   const siteOrigin = siteLinks?.siteUrl ? new URL(siteLinks.siteUrl).origin : ''
+  // 外链脚本白名单：只放行 env 配置的统计地址，启用时每页必须含它
+  const umamiSrc = umami?.enabled ? umami.scriptUrl : ''
   for (const file of htmlFiles) {
     const relative = file.slice(siteDist.length + 1)
     // 构建用 format: 'directory'，子页面服务的真实地址带尾斜杠
@@ -253,9 +264,14 @@ if (existsSync(siteIndex)) {
       }
     }
 
-    // 「零客户端 JS」是这个站点的取向，也写进了文档；有脚本就直接失败
-    if (/<script[^>]+src=/.test(html)) {
-      fail(`落地页 ${relative} 引用了外部脚本——落地页的取向是零客户端 JS`)
+    const scriptSrcs = [...html.matchAll(/<script[^>]+src="([^"]+)"/g)].map((match) => match[1])
+    const rogueSrcs = scriptSrcs.filter((src) => src !== umamiSrc)
+    if (rogueSrcs.length > 0) {
+      fail(`落地页 ${relative} 引用了外部脚本：${rogueSrcs.join('、')}（只允许 .env 配置的 Umami 统计地址）`)
+      scriptProblems += 1
+    }
+    if (umamiSrc && !scriptSrcs.includes(umamiSrc)) {
+      fail(`落地页 ${relative} 缺少配置的 Umami 统计脚本（env 改过？重新跑 npm run site:build）`)
       scriptProblems += 1
     }
   }
@@ -266,7 +282,8 @@ if (existsSync(siteIndex)) {
   }
 
   if (canonicalProblems === 0 && scriptProblems === 0) {
-    pass(`落地页 ${htmlFiles.length} 个页面的 canonical 各自正确、且均无外部脚本`)
+    const scriptNote = umami?.enabled ? '仅含配置的 Umami 统计脚本' : '均无外部脚本'
+    pass(`落地页 ${htmlFiles.length} 个页面的 canonical 各自正确、且${scriptNote}`)
   }
 } else if (release) {
   fail('落地页产物不存在（apps/site/dist/index.html）——先跑 npm run site:build')

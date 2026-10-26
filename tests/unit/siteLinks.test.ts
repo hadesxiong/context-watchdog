@@ -5,7 +5,8 @@ import {
   channelStates,
   normalizeRepository,
   parseHttpsBase,
-  resolveSiteLinks
+  resolveSiteLinks,
+  resolveUmami
 } from '../../scripts/lib/site-links.mjs'
 
 // 落地页部署身份的解析护栏。
@@ -155,5 +156,64 @@ describe('channelStates', () => {
     expect(states).toHaveLength(5)
     expect(states.find((state) => state.key === 'edge')).toMatchObject({ configured: true })
     expect(states.filter((state) => state.configured)).toHaveLength(1)
+  })
+})
+
+describe('resolveUmami', () => {
+  it('全空 = 禁用：不注入，且没有任何警告', () => {
+    const umami = resolveUmami({})
+    expect(umami).toMatchObject({ enabled: false, websiteId: '', scriptUrl: '', hostUrl: '', dnt: false })
+    expect(umami.warnings).toEqual([])
+  })
+
+  it('启用对齐全 = 开启，URL 归一化，DNT 与 hostUrl 各自独立', () => {
+    const umami = resolveUmami({
+      UMAMI_WEBSITE_ID: '3c8f0a1e-1f2b-4c5d-9e8f-0a1b2c3d4e5f',
+      UMAMI_SCRIPT_URL: 'https://product.bearman.site/umami/script.js',
+      UMAMI_HOST_URL: 'https://product.bearman.site/umami/',
+      UMAMI_DNT: 'true'
+    })
+    expect(umami).toMatchObject({
+      enabled: true,
+      websiteId: '3c8f0a1e-1f2b-4c5d-9e8f-0a1b2c3d4e5f',
+      scriptUrl: 'https://product.bearman.site/umami/script.js',
+      hostUrl: 'https://product.bearman.site/umami', // 去尾斜杠（data-host-url 是基址）
+      dnt: true
+    })
+    expect(umami.warnings).toEqual([])
+  })
+
+  it('半配置直接报错（只有 ID 或只有地址都不允许）', () => {
+    expect(() => resolveUmami({ UMAMI_WEBSITE_ID: 'abc12345' })).toThrow(/UMAMI_SCRIPT_URL/)
+    expect(() => resolveUmami({ UMAMI_SCRIPT_URL: 'https://x.example.com/script.js' })).toThrow(
+      /UMAMI_WEBSITE_ID/
+    )
+  })
+
+  it('脚本地址必须是 https、不带查询串与锚点', () => {
+    const pair = { UMAMI_WEBSITE_ID: 'abc12345' }
+    expect(() => resolveUmami({ ...pair, UMAMI_SCRIPT_URL: 'http://x.example.com/script.js' })).toThrow(/https/)
+    expect(() => resolveUmami({ ...pair, UMAMI_SCRIPT_URL: 'https://x.example.com/script.js?v=1' })).toThrow(
+      /查询串/
+    )
+    expect(() => resolveUmami({ ...pair, UMAMI_SCRIPT_URL: 'x.example.com/script.js' })).toThrow(/不是合法 URL/)
+  })
+
+  it('websiteId 会进 HTML 属性，出现空白/引号/尖括号即报错', () => {
+    expect(() => resolveUmami({ UMAMI_WEBSITE_ID: 'ab c12345' })).toThrow(/空白|引号/)
+    expect(() => resolveUmami({ UMAMI_WEBSITE_ID: 'ab"c12345' })).toThrow(/引号/)
+    expect(() => resolveUmami({ UMAMI_WEBSITE_ID: 'ab<c12345' })).toThrow(/引号/)
+  })
+
+  it('DNT 只认 true / false / 空', () => {
+    expect(resolveUmami({ UMAMI_DNT: 'false' }).dnt).toBe(false)
+    expect(() => resolveUmami({ UMAMI_DNT: '1' })).toThrow(/UMAMI_DNT/)
+  })
+
+  it('修饰项单独出现 = 配了没启用：不报错，但给出警告', () => {
+    const umami = resolveUmami({ UMAMI_HOST_URL: 'https://x.example.com/umami', UMAMI_DNT: 'true' })
+    expect(umami.enabled).toBe(false)
+    expect(umami.warnings).toHaveLength(1)
+    expect(umami.warnings[0]).toMatch(/未启用/)
   })
 })

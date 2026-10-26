@@ -18,7 +18,7 @@ ContextWatchdog（文本守卫）是面向 AI 工作流的本地检测与脱敏�
 npm install
 npm run build           # Chrome 包 → dist/，加载到 chrome://extensions
 npm run build:firefox   # Firefox 包 → dist-firefox/，about:debugging → 此 Firefox → 加载临时附加组件 → 选 dist-firefox/manifest.json
-npm run test            # 运行测试套件（429 项断言）
+npm run test            # 运行测试套件（436 项断言）
 ```
 
 ## 架构
@@ -46,7 +46,7 @@ npm run test            # 运行测试套件（429 项断言）
 | **扩展不会把你的文本发送到任何服务器** | `rg -n '\bfetch\s*\(' packages/extension/src` → 只有 `modelDownload.ts` 两处（且都是可注入的 `fetchImpl`，默认取 `globalThis.fetch`，仅用于下载模型）。全仓库无 `XMLHttpRequest` / `sendBeacon` / `WebSocket` / `EventSource` / `navigator.sendBeacon` |
 | **唯一的出网行为是模型下载** | 同上。只有在用户主动开启 AI 档后才会发生，且只访问白名单模型源 |
 | **未授权站点零接触** | `rg -n 'content_scripts\|all_urls' packages/extension/src/manifest.json` → 无匹配。manifest 不声明 `content_scripts`，只申请 `optional_host_permissions`，由用户逐站授权 |
-| **不采集任何遥测数据** | 仓库内无统计 SDK、无崩溃上报、无行为追踪；构建产物可用 `npm run build` 后自行检查 |
+| **扩展不采集任何遥测数据** | 扩展源码与产物内无统计 SDK、无崩溃上报、无行为追踪；构建产物可用 `npm run build` 后自行检查。落地页默认零统计，可选的自托管 Umami（仅页面浏览、无 cookie、不采集文本）由 `apps/site/.env.example` 里的 `UMAMI_*` env 开关控制，并在其隐私页如实披露 |
 | **凭据类数据绝不处理** | `password` 类型与隐藏输入框在 `isTextEditable` 处一律跳过，且在粘贴注入与侧栏两条链路上都有护栏 |
 | **发布产物可校验** | 每个 Release 附 `sha256`；许可与第三方声明随产物分发（`LICENSE` / `NOTICE` / `THIRD-PARTY-NOTICES.txt`） |
 
@@ -61,8 +61,9 @@ npm run test            # 运行测试套件（429 项断言）
 | AI 模型推理 | **本地**（WASM / ONNX Runtime），不离开设备 |
 | 模型下载 | 白名单模型源（ModelScope → huggingface.co 回退）；**仅下载模型文件，不上传任何用户数据** |
 | 站点授权 | 逐站授权，存于 `chrome.storage.local`；未授权站点零接触 |
-| 遥测 / 统计 / 崩溃上报 | **无** |
-| 第三方分析 SDK | **无** |
+| 遥测 / 崩溃上报 | **无** —— 扩展内与落地页上均无 |
+| 第三方分析 SDK | **无** —— 落地页可选统计是自托管的第一方 Umami，不是第三方 SDK |
+| 落地页访问统计 | 可选、自托管 Umami（仅页面浏览、无 cookie、不采集文本），由 `UMAMI_*` env 开关、**默认关闭**；不进扩展产物 |
 
 **没有云、没有后端、没有账号体系。** 这是一个完全离线可用的本地工具——除了首次下载 AI 模型之外，断网状态下功能完整。
 
